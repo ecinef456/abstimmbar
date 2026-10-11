@@ -504,7 +504,7 @@ export default function MindmapSeedEditor({
           </button>
         </div>
       )}
-      {translateError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{translateError}</p>}
+      {translateError && <p className="mt-1 text-xs text-danger">{translateError}</p>}
     </div>
   );
 }

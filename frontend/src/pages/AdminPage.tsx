@@ -1017,7 +1017,7 @@ function LtiPlatformForm({
           />
           {t("Active")}
         </label>
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex gap-2">
           <Button variant="primary" onClick={() => void save()}>
             {t("Save")}
@@ -1154,7 +1154,7 @@ function PageForm({
             )}
           />
         </div>
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex gap-2">
           <Button variant="primary" onClick={() => void save()}>
             {t("Save")}

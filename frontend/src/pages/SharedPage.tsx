@@ -139,7 +139,7 @@ export default function SharedPage() {
           </>
         )}
       </div>
-      {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       <p className="mt-3 text-xs text-slate-400">
         {t(
           "The copy is independent of the original — later changes don't affect each other.",

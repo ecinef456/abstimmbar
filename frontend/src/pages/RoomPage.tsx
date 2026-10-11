@@ -476,7 +476,7 @@ function OwnersPanel({ roomId }: { roomId: number }) {
           "Suggestions only include people you have already added once by e-mail address; add new people via their e-mail.",
         )}
       </p>
-      {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-danger">{error}</p>}
       <p className="text-xs text-slate-400">
         {t(
           "Everyone listed here can fully edit and present the room and its question sets. The person must have signed in at least once.",
@@ -846,7 +846,7 @@ export default function RoomPage() {
             </Button>
           </div>
           {settingsError && (
-            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{settingsError}</p>
+            <p className="mt-1 text-sm text-danger">{settingsError}</p>
           )}
         </div>
       )}
@@ -876,7 +876,7 @@ export default function RoomPage() {
           </div>
         </div>
       </div>
-      {importError && <p className="mb-4 text-sm text-red-600 dark:text-red-400">{importError}</p>}
+      {importError && <p className="mb-4 text-sm text-danger">{importError}</p>}
 
       {newSet && (
         <div className="mb-6 max-w-2xl rounded-2xl border border-brand-200 bg-brand-50/50 p-4 dark:border-brand-900 dark:bg-brand-950/40">
