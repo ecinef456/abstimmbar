@@ -1,18 +1,21 @@
 /** axe accessibility smoke checks at phone width (#179), light and dark.
  *
- *  WCAG 2.0/2.1 A+AA rules except `color-contrast` (owned by the follow-up
- *  contrast PR). Uses the shared "E2E Mobile" seed for the management pages;
- *  the participant page creates its own small room and deletes it. */
+ *  All WCAG 2.0/2.1 A+AA rules, including `color-contrast` (#178). Uses the
+ *  shared "E2E Mobile" seed for the management pages; the participant pages
+ *  create their own small room and delete it. */
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { test as base, expect, API_BASE_URL, deleteRooms } from './fixtures';
 import {
   AUTH,
   apiClient,
+  castAnswers,
   control,
   createRoomWithQuestions,
+  joinParticipants,
   readSeed,
   startRun,
+  type Kind,
   type Seed,
 } from './helpers/seed';
 
@@ -37,16 +40,25 @@ const test = base.extend<{ _tourSeen: void }, { seed: Seed }>({
 
 async function expectNoAxeViolations(page: Page, where: string) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  // Let entrance animations (fade/pop of result badges, bars) finish: axe
+  // would otherwise measure a half-transparent badge as low contrast.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ).then(() => undefined),
+  );
   const { violations } = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
-    .disableRules(['color-contrast'])
     .analyze();
   expect(
     violations.map((v) => ({
       rule: v.id,
       impact: v.impact,
       help: v.help,
-      nodes: v.nodes.slice(0, 5).map((n) => n.target.join(' ')),
+      nodes: v.nodes.slice(0, 5).map((n) => `${n.target.join(' ')} — ${n.any[0]?.message ?? ''}`),
     })),
     `axe violations on ${where}`,
   ).toEqual([]);
@@ -90,6 +102,21 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await expect(page.locator('[data-tour="results.view"]')).toBeVisible();
         await expectNoAxeViolations(page, 'results page');
       });
+
+      // The danger button of every delete confirmation (C1); cancelled, so
+      // the shared seed stays intact.
+      test('delete confirmation dialog', async ({ page, seed }) => {
+        await page.goto(`/rooms/${seed.roomId}`);
+        await page
+          .getByRole('button', { name: /^(Fragenset .* löschen|Delete question set .*)$/ })
+          .first()
+          .click();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toBeVisible();
+        await expectNoAxeViolations(page, 'delete confirmation dialog');
+        await dialog.getByRole('button', { name: /^(Abbrechen|Cancel)$/ }).click();
+        await expect(dialog).toBeHidden();
+      });
     });
 
     test.describe('participant', () => {
@@ -115,6 +142,41 @@ for (const colorScheme of ['light', 'dark'] as const) {
           await demoApi.dispose();
         }
       });
+
+      // Results after answering: bars, correct badge, ordering ✓ (C7).
+      for (const kind of ['single_choice', 'ordering'] as Kind[]) {
+        test(`results (${kind})`, async ({ page, playwright }) => {
+          const demoApi = await playwright.request.newContext({ storageState: AUTH.demo });
+          const created: number[] = [];
+          try {
+            const room = await createRoomWithQuestions(demoApi, [kind], 'a11y', (id) =>
+              created.push(id),
+            );
+            const api = apiClient(demoApi);
+            const runId = await startRun(api, room.setId);
+            const question = room.questions[0];
+            await control(api, runId, 'open', question.id);
+            const tokens = await joinParticipants(demoApi, room.code, 3);
+            await castAnswers(demoApi, room.code, question, tokens);
+            await page.goto(`${API_BASE_URL}/p/${room.code}/`);
+            await expect(page.locator('#question')).toBeVisible();
+            if (kind === 'ordering') {
+              await expect(page.locator('.ordering-row').first()).toBeVisible();
+              await page.locator('#question button.primary:visible').last().click();
+            } else {
+              await page.locator('#options button').first().click();
+            }
+            await expect(page.locator('#done')).toBeVisible();
+            await control(api, runId, 'results', question.id);
+            await expect(page.locator('#resultsview')).toBeVisible();
+            await expectNoAxeViolations(page, `participant results ${kind}`);
+          } finally {
+            await page.close();
+            await deleteRooms(demoApi, created);
+            await demoApi.dispose();
+          }
+        });
+      }
     });
   });
 }

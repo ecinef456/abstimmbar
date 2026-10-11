@@ -25,8 +25,14 @@ Projects:
 - `mobile-setup` / `mobile-teardown` — log in once (storage states in
   `e2e/.auth/`, gitignored) and seed/delete one shared "E2E Mobile …" room.
 
-axe runs with the WCAG 2.0/2.1 A+AA tags; `color-contrast` is disabled until
-the contrast fixes land.
+axe runs with the WCAG 2.0/2.1 A+AA tags, `color-contrast` included (#178),
+in light and dark on: home, room page, set page, question editor, results,
+a delete confirmation dialog (opened, then cancelled), and the participant
+page with an open question and with results (single choice, ordering). It
+waits for finite entrance animations first, so fading/popping result badges
+are measured at full opacity. Form-control borders (WCAG 1.4.11) are not an
+axe rule; they come from one token (`border-field` in the management UI,
+`--field-line` on the participant page) — change those, not single inputs.
 
 Tests create rooms whose titles start with "E2E" and delete them afterwards.
 A loaded Docker host (e.g. colima with little RAM) makes runs slow and can

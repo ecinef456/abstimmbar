@@ -56,7 +56,7 @@ export function Pager({
           value={pageSize}
           onChange={(event) => onPageSize(Number(event.target.value))}
           aria-label={t("Entries per page")}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-slate-700 focus:border-brand-600 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+          className="rounded-md border border-field bg-white px-2 py-1 text-slate-700 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none dark:bg-slate-900 dark:text-slate-200"
         >
           {options.map((option) => (
             <option key={option} value={option}>
@@ -91,7 +91,7 @@ export function Pager({
               }
             }}
             aria-label={t("Jump to page")}
-            className="w-12 rounded-md border border-slate-300 px-1 py-1 text-center text-slate-900 focus:border-brand-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="w-12 rounded-md border border-field px-1 py-1 text-center text-slate-900 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none dark:bg-slate-800 dark:text-slate-100"
           />
           / {totalPages}
         </span>

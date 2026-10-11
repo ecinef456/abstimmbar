@@ -1270,7 +1270,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               onClick={() => void startAfterDialog("delete")}
             >
               {t("Delete")}
-              <span className="block text-sm font-normal text-red-500/80">
+              <span className="block text-sm font-normal text-red-700">
                 {selfPaced
                   ? t("All existing answers are discarded.")
                   : t("All existing results are discarded.")}
@@ -2491,7 +2491,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                             placeholder={t(
                               "Empty = AI finds themes itself. E.g. “positive / neutral / negative” or “by lecture topic”.",
                             )}
-                            className="w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none"
+                            className="w-full rounded-lg border border-field bg-white p-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
                           />
                           {isOpenText && modelSolution && (
                             <div className="mt-2">
@@ -3329,7 +3329,7 @@ function ModerationPanel({
                     if (e.target.value.trim() && e.target.value !== m.label)
                       onRename(m.keys, e.target.value.trim());
                   }}
-                  className="min-w-0 flex-1 rounded border border-slate-200 px-2 py-1"
+                  className="min-w-0 flex-1 rounded border border-field px-2 py-1"
                 />
                 <button
                   type="button"
@@ -3549,7 +3549,7 @@ function AnswerChips({ words, onModerate }: { words: ChipItem[]; onModerate?: Mo
               }}
             >
               {entry.text}
-              {entry.count > 1 && <span className="ml-2 text-sm opacity-70">×{entry.count}</span>}
+              {entry.count > 1 && <span className="ml-2 text-sm font-normal">×{entry.count}</span>}
               {can && (
                 <HideButton label={entry.text} onHide={() => onModerate!("hide", entry.keys ?? [])} />
               )}

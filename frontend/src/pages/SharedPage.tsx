@@ -124,7 +124,7 @@ export default function SharedPage() {
               <select
                 value={target ?? undefined}
                 onChange={(event) => setTarget(Number(event.target.value))}
-                className="w-64 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="w-64 rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
               >
                 {rooms.map((room) => (
                   <option key={room.id} value={room.id}>
@@ -139,7 +139,7 @@ export default function SharedPage() {
           </>
         )}
       </div>
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       <p className="mt-3 text-xs text-slate-400">
         {t(
           "The copy is independent of the original — later changes don't affect each other.",
