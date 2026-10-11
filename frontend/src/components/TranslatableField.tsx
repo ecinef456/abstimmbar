@@ -30,7 +30,7 @@ async function uploadEditorImage(file: File): Promise<string> {
 export type TranslatableFieldVariant = "input" | "rich";
 
 const INPUT_CLASS =
-  "w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-950 dark:bg-slate-900 dark:text-slate-100";
+  "w-full rounded-lg border border-field bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-950 dark:bg-slate-900 dark:text-slate-100";
 
 interface TranslatableFieldProps {
   /** The field's current value — a legacy plain string or a `{de, en}` map. */
@@ -90,13 +90,17 @@ export default function TranslatableField({
       renderInput={
         variant === "rich"
           ? ({ value: html, onChange: set, labelId, describedBy }) => (
-              <RichTextEditor
-                value={html}
-                onChange={set}
-                labelledBy={labelId}
-                describedBy={describedBy}
-                onUploadImage={uploadEditorImage}
-              />
+              // `ab-rte` hook: index.css gives the editor box the 3:1
+              // form-control border (#178) — the package hard-codes slate-300.
+              <div className="ab-rte">
+                <RichTextEditor
+                  value={html}
+                  onChange={set}
+                  labelledBy={labelId}
+                  describedBy={describedBy}
+                  onUploadImage={uploadEditorImage}
+                />
+              </div>
             )
           : undefined
       }

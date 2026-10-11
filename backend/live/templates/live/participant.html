@@ -79,7 +79,7 @@ multi-line note must use {% comment %} or it renders as text.)
   <form id="opentext" hidden>
     <textarea id="opentext-input" maxlength="500" rows="4"
               placeholder="{% trans 'Your answer …' %}" aria-label="{% trans 'Answer' %}"
-              style="font:inherit;width:100%;padding:14px 16px;margin-top:10px;border:1px solid var(--line);border-radius:14px"></textarea>
+              style="font:inherit;width:100%;padding:14px 16px;margin-top:10px;border:1px solid var(--field-line);border-radius:14px"></textarea>
     <button class="primary" type="submit">{% trans "Submit" %}</button>
   </form>
   <button class="primary" id="submit-multi" hidden>{% trans "Submit answer" %}</button>
@@ -183,7 +183,7 @@ survives the live updates.
   .mm-note{margin:2px 0 6px 36px;font-size:13px;color:var(--danger-strong)}
   .mm-form{margin:4px 0 10px 30px;padding:10px;border:1px solid var(--brand-strong);border-radius:12px;background:var(--surface)}
   .mm-form input[type=text]{margin-top:0}
-  .mm-form textarea{font:inherit;width:100%;margin-top:8px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);resize:vertical}
+  .mm-form textarea{font:inherit;width:100%;margin-top:8px;padding:10px 14px;border:1px solid var(--field-line);border-radius:12px;background:var(--surface);color:var(--ink);resize:vertical}
   .mm-form .mm-err{margin-top:6px;font-size:13px;color:var(--danger-strong)}
   .mm-actions{display:flex;flex-wrap:wrap;gap:8px}
   .mm-actions button{flex:1 1 auto;width:auto;overflow-wrap:normal;margin-top:8px;min-height:44px;padding:10px 12px;text-align:center}
@@ -216,7 +216,7 @@ survives the live updates.
   .rhead > :first-child { min-width: 0; }
   .rnums { flex-shrink: 0; white-space: nowrap; color: var(--ink-soft); }
   .rbadge { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 8px;
-            border-radius: 999px; background: var(--correct-strong); color: #fff;
+            border-radius: 999px; background: var(--correct-strong); color: var(--on-correct-strong);
             font-size: 12px; font-weight: 700; vertical-align: 1px; }
   @media (prefers-reduced-motion: reduce) { .rbar, .rline, .rcap { transition: none !important; } }
   .rline { position: absolute; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px;
@@ -259,7 +259,7 @@ survives the live updates.
            placeholder="{% trans 'Your term …' %}" aria-label="{% trans 'Answer' %}" hidden>
     <textarea id="quiz-textarea" maxlength="500" rows="4"
               placeholder="{% trans 'Your answer …' %}" aria-label="{% trans 'Answer' %}" hidden
-              style="font:inherit;width:100%;padding:14px 16px;margin-top:10px;border:1px solid var(--line);border-radius:14px"></textarea>
+              style="font:inherit;width:100%;padding:14px 16px;margin-top:10px;border:1px solid var(--field-line);border-radius:14px"></textarea>
     <button class="primary" type="submit">{% trans "Submit" %}</button>
   </form>
   <button class="primary" id="quiz-submit" hidden>{% trans "Submit answer" %}</button>
@@ -293,7 +293,7 @@ survives the live updates.
            placeholder="{% trans 'Your term …' %}" aria-label="{% trans 'Answer' %}" hidden>
     <textarea id="rec-textarea" maxlength="500" rows="4"
               placeholder="{% trans 'Your answer …' %}" aria-label="{% trans 'Answer' %}" hidden
-              style="font:inherit;width:100%;padding:14px 16px;margin-top:10px;border:1px solid var(--line);border-radius:14px"></textarea>
+              style="font:inherit;width:100%;padding:14px 16px;margin-top:10px;border:1px solid var(--field-line);border-radius:14px"></textarea>
     <button class="primary" type="submit">{% trans "Submit" %}</button>
   </form>
   {# Multi-term word cloud (#128): term chips, a per-person count and „Done". #}
@@ -322,7 +322,7 @@ survives the live updates.
            placeholder="{% trans 'Your term …' %}" aria-label="{% trans 'Answer' %}" hidden>
     <textarea id="check-textarea" maxlength="500" rows="4"
               placeholder="{% trans 'Your answer …' %}" aria-label="{% trans 'Answer' %}" hidden
-              style="font:inherit;width:100%;padding:14px 16px;margin-top:10px;border:1px solid var(--line);border-radius:14px"></textarea>
+              style="font:inherit;width:100%;padding:14px 16px;margin-top:10px;border:1px solid var(--field-line);border-radius:14px"></textarea>
     <button class="primary" type="submit" id="check-textsubmit">{% trans "Submit" %}</button>
   </form>
   <button class="primary" id="check-submit" hidden>{% trans "Submit answer" %}</button>
@@ -979,7 +979,7 @@ survives the live updates.
 
       if (own && own.length === correct.length && own.every((id, i) => id === correct[i])) {
         const ok = document.createElement("div");
-        ok.style.cssText = "margin:6px 0 12px;padding:10px 12px;border-radius:10px;background:var(--correct-strong);color:#fff;font-weight:600;text-align:center";
+        ok.style.cssText = "margin:6px 0 12px;padding:10px 12px;border-radius:10px;background:var(--correct-strong);color:var(--on-correct-strong);font-weight:600;text-align:center";
         ok.textContent = "✓ " + I18N.allCorrect;
         list.appendChild(ok);
       }

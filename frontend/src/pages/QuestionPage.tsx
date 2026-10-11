@@ -1091,7 +1091,7 @@ export default function QuestionPage() {
                 ))}
               </ul>
             )}
-            {aiError && <p className="mt-1 text-sm text-red-600">{aiError}</p>}
+            {aiError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{aiError}</p>}
           </AiAssistPanel>
         )}
 
@@ -1280,7 +1280,7 @@ export default function QuestionPage() {
                       onChange={(event) =>
                         setReveal(event.target.value as "inherit" | RevealAnswers)
                       }
-                      className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                      className="rounded-lg border border-field bg-white px-2 py-1 text-sm dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
                     >
                       <option value="inherit">
                         {t("As in the set")}
@@ -1336,7 +1336,7 @@ export default function QuestionPage() {
                       </ul>
                     )}
                     {aiDistractorError && (
-                      <p className="mt-1 text-sm text-red-600">{aiDistractorError}</p>
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">{aiDistractorError}</p>
                     )}
                   </AiAssistPanel>
                 </div>
@@ -1359,7 +1359,7 @@ export default function QuestionPage() {
                     if (preset?.left) setLikertLeft(preset.left);
                     if (preset?.right) setLikertRight(preset.right);
                   }}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                  className="w-full rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
                 >
                   {LIKERT_PRESETS.map((preset) => (
                     <option key={preset.key} value={preset.key}>
@@ -1457,7 +1457,7 @@ export default function QuestionPage() {
                   onChange={(event) =>
                     setMindmapDepth(Math.min(8, Math.max(1, Number(event.target.value) || 1)))
                   }
-                  className="w-16 rounded-lg border border-slate-300 dark:border-slate-700 bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                  className="w-16 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
                 />
                 <InfoHint
                   text={t(
@@ -1477,7 +1477,7 @@ export default function QuestionPage() {
                       Math.min(300, Math.max(0, Number(event.target.value) || 0)),
                     )
                   }
-                  className="w-20 rounded-lg border border-slate-300 dark:border-slate-700 bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                  className="w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
                 />
                 <span className="text-slate-400">{t("(0 = no limit)")}</span>
               </label>
@@ -1560,7 +1560,7 @@ export default function QuestionPage() {
                           Math.min(50, Math.max(1, Number(event.target.value) || 1)),
                         )
                       }
-                      className="w-16 rounded-lg border border-slate-300 dark:border-slate-700 bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                      className="w-16 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
                     />
                     <InfoHint
                       text={
@@ -1607,7 +1607,7 @@ export default function QuestionPage() {
                 onChange={(event) =>
                   setWordcloudMaxAnswers(Math.max(0, Number(event.target.value) || 0))
                 }
-                className="w-20 rounded-lg border border-slate-300 dark:border-slate-700 bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                className="w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
               />
               <span className="text-slate-400">{t("(0 = no limit, 1 = a single answer)")}</span>
             </label>
@@ -1700,7 +1700,7 @@ export default function QuestionPage() {
                 value={wordcloudGrouping}
                 onChange={(event) => setWordcloudGrouping(event.target.value)}
                 placeholder={t("e.g. “by topic area” — empty = automatic topics")}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="w-full rounded-lg border border-field bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
               />
               <span className="text-xs text-slate-400">
                 {t("Controls the “Grouped” AI view — works independently of merging above.")}
@@ -1736,7 +1736,7 @@ export default function QuestionPage() {
                   placeholder={t(
                     "Hints for evaluation – e.g. the expected answer or a rating criterion (optional)",
                   )}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  className="w-full rounded-lg border border-field bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
                 />
                 <p className="mt-1 text-xs text-slate-400">
                   {t("The AI assigns each answer to one category of the scale.")}
@@ -1748,7 +1748,7 @@ export default function QuestionPage() {
                     onChange={(event) => setModelSolution(event.target.value)}
                     rows={2}
                     placeholder={t("Model solution (optional)")}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="w-full rounded-lg border border-field bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
                   />
                   <p className="mt-1 text-xs text-slate-400">
                     {t("The AI scores answers against this reference.")}
@@ -1770,7 +1770,7 @@ export default function QuestionPage() {
                         setEvalCategories(["", ""]);
                       }
                     }}
-                    className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                    className="rounded-lg border border-field bg-white px-2 py-1 text-sm dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
                   >
                     {EVAL_PRESETS.map((p) => (
                       <option key={p.value} value={p.value}>
@@ -1793,7 +1793,7 @@ export default function QuestionPage() {
                             )
                           }
                           placeholder={t("Category {{n}}", { n: i + 1 })}
-                          className="w-56 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                          className="w-56 rounded-lg border border-field bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
                         />
                         {evalCategories.length > 2 && (
                           <button
@@ -1894,7 +1894,7 @@ export default function QuestionPage() {
                     rows={2}
                     maxLength={1000}
                     placeholder={t("e.g. “by advantage for students vs. teachers” — empty = automatic topics")}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="w-full rounded-lg border border-field bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
                   />
                   <span className="text-xs text-slate-400">
                     {t("Controls the “Grouped” view; the key statements stay the same.")}
@@ -1958,7 +1958,7 @@ export default function QuestionPage() {
           </Field>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         {confirmNoCorrect && missingSolutionForSelfCheck && (
           <div
             role="alert"
@@ -2060,7 +2060,7 @@ export default function QuestionPage() {
                   <select
                     value={moveRoom ?? undefined}
                     onChange={(event) => pickMoveRoom(Number(event.target.value))}
-                    className="w-56 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="w-56 rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
                   >
                     {moveRooms.map((room) => (
                       <option key={room.id} value={room.id}>
@@ -2073,7 +2073,7 @@ export default function QuestionPage() {
                   <select
                     value={moveTarget ?? undefined}
                     onChange={(event) => setMoveTarget(Number(event.target.value))}
-                    className="w-72 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="w-72 rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
                   >
                     {moveTargets
                       .filter((entry) => entry.room === moveRoom)
@@ -2086,7 +2086,7 @@ export default function QuestionPage() {
                 </Field>
               </div>
             )}
-            {moveError && <p className="mt-3 text-sm text-red-600">{moveError}</p>}
+            {moveError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{moveError}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setMoveTargets(null)}>
                 {t("Cancel")}

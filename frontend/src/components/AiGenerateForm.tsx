@@ -134,7 +134,7 @@ export default function AiGenerateForm({
               onChange={(event) => setText(event.target.value)}
               rows={4}
               placeholder={t("Paste material as text (alternative to upload)")}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              className="w-full rounded-lg border border-field bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
             />
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -155,7 +155,7 @@ export default function AiGenerateForm({
               <select
                 value={level}
                 onChange={(event) => setLevel(event.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="rounded-lg border border-field bg-white px-2 py-1.5 text-sm text-slate-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
               >
                 {LEVEL_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -244,7 +244,7 @@ export default function AiGenerateForm({
               placeholder={t(
                 "e.g. focus on understanding and application, use everyday examples, avoid dates and names",
               )}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              className="w-full rounded-lg border border-field bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -255,7 +255,7 @@ export default function AiGenerateForm({
               {t("Cancel")}
             </Button>
           </div>
-          {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
         </div>
       </AiAssistPanel>
     </div>

@@ -3,7 +3,7 @@
 
 /** Stored results per run (concept §7): the same bar charts as in the
  * presentation, viewable after the lecture; runs are deletable. */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { ChartColumnDecreasing, Download, Trash2 } from "lucide-react";
@@ -93,7 +93,7 @@ function WordCloudResult({
               className="mr-3 inline-block max-w-full rounded-lg px-2 py-0.5 [overflow-wrap:anywhere]"
               style={{ background: termColor(word.text), color: INK }}
             >
-              {word.text} <span className="opacity-60">×{word.count}</span>
+              {word.text} <span className="font-medium">×{word.count}</span>
             </span>
           ))}
           {words.length === 0 && <span className="text-slate-400">{t("No terms.")}</span>}
@@ -105,7 +105,7 @@ function WordCloudResult({
             <div key={cluster.label}>
               <div className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
                 {cluster.label}{" "}
-                <span className="text-slate-300 dark:text-slate-600">· {cluster.count}</span>
+                <span className="text-slate-400">· {cluster.count}</span>
               </div>
               <p className="text-sm leading-7">
                 {cluster.words.map((word) => (
@@ -119,7 +119,7 @@ function WordCloudResult({
                     className="mr-3 inline-block max-w-full rounded-lg px-2 py-0.5 [overflow-wrap:anywhere]"
                     style={{ background: termColor(word.text), color: INK }}
                   >
-                    {word.text} <span className="opacity-60">×{word.count}</span>
+                    {word.text} <span className="font-medium">×{word.count}</span>
                   </span>
                 ))}
               </p>
@@ -144,7 +144,7 @@ function WordCloudResult({
                 </Button>
               )}
             </div>
-            {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
           </AiAssistPanel>
         </div>
       )}
@@ -226,7 +226,7 @@ function FreeTextResult({
               className="mr-3 inline-block max-w-full rounded-lg px-2 py-0.5 [overflow-wrap:anywhere]"
               style={{ background: termColor(word.text), color: INK }}
             >
-              {word.text} <span className="opacity-60">×{word.count}</span>
+              {word.text} <span className="font-medium">×{word.count}</span>
             </span>
           ))}
           {words.length === 0 && <span className="text-slate-400">{t("No terms.")}</span>}
@@ -272,7 +272,7 @@ function FreeTextResult({
                       className="mr-3 inline-block max-w-full rounded-lg px-2 py-0.5 [overflow-wrap:anywhere]"
                       style={{ background: evalColor(i), color: INK }}
                     >
-                      {item.text} <span className="opacity-60">×{item.count}</span>
+                      {item.text} <span className="font-medium">×{item.count}</span>
                     </span>
                   ))}
                 </p>
@@ -309,7 +309,7 @@ function FreeTextResult({
                 )}
               </div>
             </div>
-            {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
           </AiAssistPanel>
         </div>
       )}
@@ -355,7 +355,7 @@ function RunReport({ runId, aiEnabled }: { runId: number; aiEnabled: boolean }) 
             <RichText html={report} />
           </div>
         )}
-        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
       </AiAssistPanel>
     </div>
   );
@@ -427,7 +427,7 @@ export default function ResultsPage() {
                 aria-label={t("Export scope")}
                 value={exportAll ? "all" : "one"}
                 onChange={(event) => setExportAll(event.target.value === "all")}
-                className="min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                className="min-w-0 max-w-full rounded-lg border border-field bg-white px-2 py-1 text-sm dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
               >
                 <option value="one">{t("only this session")}</option>
                 <option value="all">{t("all sessions (incl. archive)")}</option>
@@ -480,7 +480,7 @@ export default function ResultsPage() {
                     aria-label={t("Select session")}
                     value={run.run}
                     onChange={(event) => setSelected(Number(event.target.value))}
-                    className="min-w-0 max-w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-base font-semibold text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+                    className="min-w-0 max-w-full rounded-lg border border-field bg-white px-3 py-1.5 text-base font-semibold text-slate-900 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
                   >
                     {runs.map((r) => (
                       <option key={r.run} value={r.run}>
@@ -638,9 +638,10 @@ export default function ResultsPage() {
                                             className="col-start-1 flex items-center justify-center"
                                             style={{ gridRow: 2 * i + 2 }}
                                           >
+                                            {/* Rate → border strength, never text opacity (#178). */}
                                             <span
-                                              className="rounded-full bg-slate-100 px-1.5 text-xs tabular-nums text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                                              style={{ opacity: 0.4 + 0.6 * (link.rate / 100) }}
+                                              className="rounded-full border border-brand-600/[var(--rate)] bg-slate-100 px-1.5 text-xs tabular-nums text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                                              style={{ "--rate": 0.15 + 0.85 * (link.rate / 100) } as CSSProperties}
                                             >
                                               {t("{{pct}}% in a row", { pct: link.rate })}
                                             </span>

@@ -4,6 +4,7 @@
 /** Ordering result: the correct sequence with, between neighbours, how many
  * kept them in a row, plus brackets for the longest correct chains. Shared by
  * the live presenter view and the walkthrough. */
+import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { localizedText } from "@basicbar/ui";
 import type { OrderingResults } from "../api";
@@ -47,9 +48,11 @@ export default function OrderingResult({
                 className="ab-fade-in col-start-1 flex items-center justify-center py-1"
                 style={{ gridRow: 2 * i + 2, ...delay(i) }}
               >
+                {/* The rate drives the border strength only — fading the
+                    text would drop it below 4.5:1 (#178). */}
                 <span
-                  className="rounded-full bg-slate-100 px-2 py-0.5 text-xs tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                  style={{ opacity: 0.4 + 0.6 * (link.rate / 100) }}
+                  className="rounded-full border border-brand-600/[var(--rate)] bg-slate-100 px-2 py-0.5 text-xs tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  style={{ "--rate": 0.15 + 0.85 * (link.rate / 100) } as CSSProperties}
                 >
                   {t("{{pct}}% in a row", { pct: link.rate })}
                 </span>

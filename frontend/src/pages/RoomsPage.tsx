@@ -494,7 +494,7 @@ export default function RoomsPage() {
               {t("Cancel")}
             </Button>
           </div>
-          {createError && <p className="mt-1 text-sm text-red-600">{createError}</p>}
+          {createError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createError}</p>}
         </form>
       )}
 
@@ -566,7 +566,7 @@ export default function RoomsPage() {
                     setSortKey(event.target.value as SortKey);
                     setPage(1);
                   }}
-                  className="min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-slate-700 focus:border-brand-600 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                  className="min-w-0 max-w-full rounded-md border border-field bg-white px-2 py-1 text-slate-700 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none dark:bg-slate-900 dark:text-slate-200"
                 >
                   {SORT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>

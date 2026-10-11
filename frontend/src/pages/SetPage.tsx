@@ -1195,7 +1195,7 @@ export default function SetPage() {
               {t("Cancel")}
             </Button>
           </div>
-          {metaError && <p className="mt-1 text-sm text-red-600">{metaError}</p>}
+          {metaError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{metaError}</p>}
         </div>
       ) : (
         <div className="mb-8">
@@ -1379,7 +1379,7 @@ export default function SetPage() {
               {set.share_token && t(" · shareable via link")}
             </p>
           )}
-          {metaError && <p className="mt-1 text-sm text-red-600">{metaError}</p>}
+          {metaError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{metaError}</p>}
         </div>
       )}
 
@@ -1464,7 +1464,7 @@ export default function SetPage() {
             <select
               value={copyTarget ?? undefined}
               onChange={(event) => setCopyTarget(Number(event.target.value))}
-              className="w-64 rounded-lg border border-slate-300 dark:border-slate-700 bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
+              className="w-64 rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
             >
               {rooms.map((room) => (
                 <option key={room.id} value={room.id}>
@@ -1514,7 +1514,7 @@ export default function SetPage() {
             <select
               value={set.license}
               onChange={(event) => changeLicense(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:outline-none"
+              className="w-full rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
             >
               {LICENSE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -1549,7 +1549,7 @@ export default function SetPage() {
             </Button>
             <Button onClick={() => setSharePanelOpen(false)}>{t("Close")}</Button>
           </div>
-          {metaError && <p className="text-sm text-red-600">{metaError}</p>}
+          {metaError && <p className="text-sm text-red-600 dark:text-red-400">{metaError}</p>}
         </div>
       )}
 
@@ -2018,7 +2018,7 @@ export default function SetPage() {
                   <select
                     value={xferRoom ?? undefined}
                     onChange={(event) => pickXferRoom(Number(event.target.value))}
-                    className="w-56 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    className="w-56 rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
                   >
                     {xferRooms.map((room) => (
                       <option key={room.id} value={room.id}>
@@ -2047,7 +2047,7 @@ export default function SetPage() {
                         <select
                           value={xferTarget ?? ""}
                           onChange={(event) => setXferTarget(Number(event.target.value))}
-                          className="w-72 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                          className="w-72 rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
                         >
                           {xferTarget === null && (
                             <option value="" disabled>
@@ -2077,7 +2077,7 @@ export default function SetPage() {
                 </Field>
               </div>
             )}
-            {xferError && <p className="mt-3 text-sm text-red-600">{xferError}</p>}
+            {xferError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{xferError}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setXfer(null)}>
                 {t("Cancel")}
@@ -2119,7 +2119,7 @@ export default function SetPage() {
                     <select
                       value={pullRoom ?? undefined}
                       onChange={(event) => pickPullRoom(Number(event.target.value))}
-                      className="w-56 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      className="w-56 rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
                     >
                       {pullRooms.map((room) => (
                         <option key={room.id} value={room.id}>
@@ -2132,7 +2132,7 @@ export default function SetPage() {
                     <select
                       value={pullSourceSet ?? undefined}
                       onChange={(event) => pickPullSourceSet(Number(event.target.value))}
-                      className="w-64 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      className="w-64 rounded-lg border border-field bg-white px-3 py-2 text-sm dark:bg-slate-900 dark:text-slate-100"
                     >
                       {pullTargets
                         .filter((entry) => entry.room === pullRoom)
@@ -2227,7 +2227,7 @@ export default function SetPage() {
                 })()}
               </>
             )}
-            {pullError && <p className="mt-3 text-sm text-red-600">{pullError}</p>}
+            {pullError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{pullError}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setPullTargets(null)}>
                 {t("Cancel")}

@@ -18,18 +18,26 @@
 <style>
   :root {
     --ink: #26292b; --ink-soft: #6b7176; --line: #e4e7e9;
+    /* Text-field boundary: 3:1 against the page (WCAG 1.4.11, #178);
+       --line stays the soft divider/card border. */
+    --field-line: #858c92;
     --brand: #8fd6a2; --brand-strong: #2c7a45; --brand-soft: #eefaf1;
     --bg: #fff; --surface: #fff;
     --danger-soft: #fdeeee; --danger: #c4453e; --danger-strong: #a33630;
     --cat-0: oklch(0.80 0.095 250); --cat-1: oklch(0.80 0.095 60); --cat-2: oklch(0.80 0.095 305);
     --cat-3: oklch(0.80 0.095 220); --cat-4: oklch(0.80 0.095 85); --cat-5: oklch(0.80 0.095 335);
     --correct: oklch(0.70 0.14 150); --correct-strong: oklch(0.55 0.14 150);
+    --on-correct-strong: #fff;
     --wrong: oklch(0.88 0.045 20);
     --bar-ink: oklch(0.28 0.02 220);
     color-scheme: light;
   }
   :root[data-theme="dark"] {
     --ink: #e5e9ec; --ink-soft: #9aa2a8; --line: #2a3138; --bg: #0c1013; --surface: #161c22;
+    --field-line: #636b72;
+    /* Lighter so the ✓ text reaches 4.5:1 on the dark page (#178); text on
+       a --correct-strong fill switches to dark ink accordingly. */
+    --correct-strong: oklch(0.64 0.14 150); --on-correct-strong: #0c1013;
     --brand: #8fd6a2; --brand-strong: #9be0b1; --brand-soft: #17291e;
     --danger-soft: #3a1e1c; --danger: #d98a84; --danger-strong: #e8a39d;
     color-scheme: dark;
@@ -80,12 +88,12 @@
   button:disabled.correct, button:disabled.wrong { opacity: 1; }
   input[type=text] {
     font: inherit; width: 100%; padding: 14px 16px; margin-top: 10px;
-    border: 1px solid var(--line); border-radius: 14px; min-height: 52px;
+    border: 1px solid var(--field-line); border-radius: 14px; min-height: 52px;
     background: var(--surface); color: var(--ink);
   }
   input[type=text]:focus-visible { outline: 2px solid var(--brand-strong); }
   /* Same surface as text inputs (dark mode would otherwise use the UA grey). */
-  textarea { background: var(--surface); color: var(--ink); }
+  textarea { background: var(--surface); color: var(--ink); border: 1px solid var(--field-line); }
   .question-text { margin: 10px 0 6px; font-size: 18px; line-height: 1.45; }
   .question-text img { max-width: 100%; border-radius: 10px; }
   .question-text ul, .question-text ol { padding-left: 22px; }

@@ -342,7 +342,7 @@ function StatsSection() {
                 value={from}
                 max={to || undefined}
                 onChange={(e) => setFrom(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                className="rounded-lg border border-field bg-white px-2 py-1 text-sm dark:bg-slate-900"
               />
             </label>
             <label className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
@@ -352,7 +352,7 @@ function StatsSection() {
                 value={to}
                 min={from || undefined}
                 onChange={(e) => setTo(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                className="rounded-lg border border-field bg-white px-2 py-1 text-sm dark:bg-slate-900"
               />
             </label>
           </div>
@@ -1017,7 +1017,7 @@ function LtiPlatformForm({
           />
           {t("Active")}
         </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-2">
           <Button variant="primary" onClick={() => void save()}>
             {t("Save")}
@@ -1154,7 +1154,7 @@ function PageForm({
             )}
           />
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="flex gap-2">
           <Button variant="primary" onClick={() => void save()}>
             {t("Save")}

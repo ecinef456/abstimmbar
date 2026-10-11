@@ -1921,7 +1921,7 @@ function MindEditor({
     }
   };
   const field =
-    "w-64 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-base text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200";
+    "w-64 rounded-lg border border-field bg-white px-2.5 py-1.5 text-base text-slate-900 focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-200";
   return (
     <form
       className="absolute z-20 flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur"

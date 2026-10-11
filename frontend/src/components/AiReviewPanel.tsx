@@ -232,7 +232,7 @@ export default function AiReviewPanel({
     if (job.status === "failed") {
       return (
         <div className="space-y-3">
-          <p className="text-sm text-red-600">{job.error || t("Generation failed.")}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">{job.error || t("Generation failed.")}</p>
           <Button variant="ghost" onClick={() => void discard()}>
             {t("Discard")}
           </Button>
@@ -370,7 +370,7 @@ export default function AiReviewPanel({
       <AiAssistPanel title={t("Review generated questions")}>
         {renderBody()}
         {(error || pollError) && (
-          <p className="mt-2 text-sm text-red-600">{error || pollError}</p>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error || pollError}</p>
         )}
       </AiAssistPanel>
     </div>

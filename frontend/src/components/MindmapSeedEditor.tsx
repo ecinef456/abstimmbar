@@ -371,7 +371,7 @@ export default function MindmapSeedEditor({
                   addSiblingAfter(node.id);
                 }
               }}
-              className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              className="w-full rounded-lg border border-field bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-100"
             />
             {descriptions && (
               <input
@@ -384,7 +384,7 @@ export default function MindmapSeedEditor({
                 onChange={(event) =>
                   setText(node.id, "description", activeLang, event.target.value)
                 }
-                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                className="w-full rounded-lg border border-field bg-white px-2.5 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none dark:bg-slate-900 dark:text-slate-300"
               />
             )}
           </div>
@@ -504,7 +504,7 @@ export default function MindmapSeedEditor({
           </button>
         </div>
       )}
-      {translateError && <p className="mt-1 text-xs text-rose-500">{translateError}</p>}
+      {translateError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{translateError}</p>}
     </div>
   );
 }
