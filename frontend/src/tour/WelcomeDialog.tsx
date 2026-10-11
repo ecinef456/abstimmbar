@@ -54,7 +54,7 @@ export default function WelcomeDialog({
             {t("Start tour")}
           </Button>
         </div>
-        <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+        <p className="mt-3 text-xs text-slate-400">
           {t("You can restart it anytime from the ? in the header.")}
         </p>
       </div>

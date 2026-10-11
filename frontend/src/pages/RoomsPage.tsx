@@ -68,7 +68,7 @@ function RoomSetTypeBreakdown({ room }: { room: Room }) {
   const present = CREATABLE_SET_TYPES.filter((type) => (counts?.[type] ?? 0) > 0);
   if (!present.length) {
     return (
-      <p className="mt-1.5 text-sm text-slate-400 dark:text-slate-500">
+      <p className="mt-1.5 text-sm text-slate-400">
         {t("No question sets yet")}
       </p>
     );
@@ -173,7 +173,7 @@ function RoomCard({
             </p>
           )}
           {description && (
-            <p className="mt-1 line-clamp-2 text-sm text-slate-400 dark:text-slate-500">
+            <p className="mt-1 line-clamp-2 text-sm text-slate-400">
               {description}
             </p>
           )}

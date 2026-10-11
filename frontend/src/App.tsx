@@ -115,7 +115,7 @@ function UserMenu({ whoami }: { whoami: Whoami }) {
           // span the viewport (below the button) instead of hanging off it.
           className="absolute right-0 z-30 mt-2 w-56 overflow-hidden max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:w-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900"
         >
-          <div className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
+          <div className="px-3 py-2 text-xs text-slate-400">
             <p className="truncate">
               {t("Signed in as")}{" "}
               <span className="font-medium text-slate-600 dark:text-slate-300">

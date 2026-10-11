@@ -845,7 +845,7 @@ function LtiPlatformsSection() {
             </Field>
             <Field label={t("Icon URL")}>
               <TextInput readOnly value={toolInfo.icon_url} onFocus={(e) => e.target.select()} />
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              <p className="mt-1 text-xs text-slate-400">
                 {t("Enter as the tool's icon URL in your LMS.")}
               </p>
             </Field>

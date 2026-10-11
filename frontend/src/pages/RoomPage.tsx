@@ -113,7 +113,7 @@ function NewSetMenu({
                 }}
                 className="flex w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800"
               >
-                <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {t(SET_TYPES[st].label)}
@@ -1002,7 +1002,7 @@ export default function RoomPage() {
                     <h3 className="truncate font-semibold text-slate-900 dark:text-slate-100">
                       {localizedText(set.title)}
                     </h3>
-                    <p className="mt-1 text-xs font-medium text-slate-400 dark:text-slate-500">
+                    <p className="mt-1 text-xs font-medium text-slate-400">
                       {t(SET_TYPES[set.type].label)}
                     </p>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">

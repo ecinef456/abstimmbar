@@ -580,7 +580,7 @@ export default function ResultsPage() {
                                     />
                                     {/* Recording split (#53): on-site vs async. */}
                                     {run.recording_votes > 0 && (
-                                      <div className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+                                      <div className="mt-0.5 text-[11px] text-slate-400">
                                         {t("On-site")}: {option.onsite ?? 0} · {t("Recording")}: {option.recording ?? 0}
                                       </div>
                                     )}
