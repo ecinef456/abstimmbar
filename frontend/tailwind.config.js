@@ -37,9 +37,6 @@ export default {
           900: "oklch(0.215 0.011 220 / <alpha-value>)",
           950: "oklch(0.16 0.009 220 / <alpha-value>)",
         },
-        // Form-control borders (inputs/selects/textareas): 3:1 in both
-        // themes via a CSS variable (index.css, #178).
-        field: "oklch(var(--ab-field-border) / <alpha-value>)",
         brand: {
           50: "oklch(0.975 0.015 150 / <alpha-value>)",
           100: "oklch(0.945 0.04 150 / <alpha-value>)",

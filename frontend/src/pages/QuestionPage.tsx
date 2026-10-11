@@ -1060,7 +1060,7 @@ export default function QuestionPage() {
           />
         </div>
         {textMissing && (
-          <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+          <p className="mt-1 text-sm text-danger">
             {t("Question text is required.")}
           </p>
         )}
@@ -1091,7 +1091,7 @@ export default function QuestionPage() {
                 ))}
               </ul>
             )}
-            {aiError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{aiError}</p>}
+            {aiError && <p className="mt-1 text-sm text-danger">{aiError}</p>}
           </AiAssistPanel>
         )}
 
@@ -1246,7 +1246,7 @@ export default function QuestionPage() {
                 )}
               </div>
               {optionsMissing && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                <p className="mt-2 text-sm text-danger">
                   {t("Add at least two answer options, each with text.")}
                 </p>
               )}
@@ -1336,7 +1336,7 @@ export default function QuestionPage() {
                       </ul>
                     )}
                     {aiDistractorError && (
-                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">{aiDistractorError}</p>
+                      <p className="mt-1 text-sm text-danger">{aiDistractorError}</p>
                     )}
                   </AiAssistPanel>
                 </div>
@@ -1511,7 +1511,7 @@ export default function QuestionPage() {
                 rootLabel={localizedText(mindmapRoot) || stripHtml(localizedText(text)).slice(0, 60)}
               />
               {mindmapProblem && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                <p className="mt-2 text-sm text-danger">
                   {t(mindmapProblem.key, mindmapProblem.values)}
                 </p>
               )}
@@ -1542,7 +1542,7 @@ export default function QuestionPage() {
                 ]}
               />
               {ratingModeError && (
-                <p className="text-sm text-red-600 dark:text-red-400" data-testid="rating-mode-error">
+                <p className="text-sm text-danger" data-testid="rating-mode-error">
                   {ratingModeError}
                 </p>
               )}
@@ -1958,7 +1958,7 @@ export default function QuestionPage() {
           </Field>
         </div>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         {confirmNoCorrect && missingSolutionForSelfCheck && (
           <div
             role="alert"
@@ -2086,7 +2086,7 @@ export default function QuestionPage() {
                 </Field>
               </div>
             )}
-            {moveError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{moveError}</p>}
+            {moveError && <p className="mt-3 text-sm text-danger">{moveError}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setMoveTargets(null)}>
                 {t("Cancel")}

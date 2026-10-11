@@ -144,7 +144,7 @@ function WordCloudResult({
                 </Button>
               )}
             </div>
-            {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="mt-1 text-sm text-danger">{error}</p>}
           </AiAssistPanel>
         </div>
       )}
@@ -309,7 +309,7 @@ function FreeTextResult({
                 )}
               </div>
             </div>
-            {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
+            {error && <p className="mt-1 text-sm text-danger">{error}</p>}
           </AiAssistPanel>
         </div>
       )}
@@ -355,7 +355,7 @@ function RunReport({ runId, aiEnabled }: { runId: number; aiEnabled: boolean }) 
             <RichText html={report} />
           </div>
         )}
-        {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p className="mt-1 text-sm text-danger">{error}</p>}
       </AiAssistPanel>
     </div>
   );

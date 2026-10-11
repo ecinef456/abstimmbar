@@ -1195,7 +1195,7 @@ export default function SetPage() {
               {t("Cancel")}
             </Button>
           </div>
-          {metaError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{metaError}</p>}
+          {metaError && <p className="mt-1 text-sm text-danger">{metaError}</p>}
         </div>
       ) : (
         <div className="mb-8">
@@ -1379,7 +1379,7 @@ export default function SetPage() {
               {set.share_token && t(" · shareable via link")}
             </p>
           )}
-          {metaError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{metaError}</p>}
+          {metaError && <p className="mt-1 text-sm text-danger">{metaError}</p>}
         </div>
       )}
 
@@ -1549,7 +1549,7 @@ export default function SetPage() {
             </Button>
             <Button onClick={() => setSharePanelOpen(false)}>{t("Close")}</Button>
           </div>
-          {metaError && <p className="text-sm text-red-600 dark:text-red-400">{metaError}</p>}
+          {metaError && <p className="text-sm text-danger">{metaError}</p>}
         </div>
       )}
 
@@ -2077,7 +2077,7 @@ export default function SetPage() {
                 </Field>
               </div>
             )}
-            {xferError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{xferError}</p>}
+            {xferError && <p className="mt-3 text-sm text-danger">{xferError}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setXfer(null)}>
                 {t("Cancel")}
@@ -2227,7 +2227,7 @@ export default function SetPage() {
                 })()}
               </>
             )}
-            {pullError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{pullError}</p>}
+            {pullError && <p className="mt-3 text-sm text-danger">{pullError}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setPullTargets(null)}>
                 {t("Cancel")}

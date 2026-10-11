@@ -90,9 +90,7 @@ export default function TranslatableField({
       renderInput={
         variant === "rich"
           ? ({ value: html, onChange: set, labelId, describedBy }) => (
-              // `ab-rte` hook: index.css gives the editor box the 3:1
-              // form-control border (#178) — the package hard-codes slate-300.
-              <div className="ab-rte">
+              <div>
                 <RichTextEditor
                   value={html}
                   onChange={set}

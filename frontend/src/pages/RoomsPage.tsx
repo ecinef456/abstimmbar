@@ -494,7 +494,7 @@ export default function RoomsPage() {
               {t("Cancel")}
             </Button>
           </div>
-          {createError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{createError}</p>}
+          {createError && <p className="mt-1 text-sm text-danger">{createError}</p>}
         </form>
       )}
 

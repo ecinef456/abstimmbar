@@ -8,12 +8,12 @@
 :root { --ab-slate-400: 0.54 0.011 220; }
 .dark { --ab-slate-400: 0.66 0.011 220; }
 
-/* Form-control boundary (`border-field`, #178, WCAG 1.4.11): text inputs,
+/* Form-control boundary (`border-field`, from @basicbar/ui; tinted override, #178, WCAG 1.4.11): text inputs,
    selects and textareas need a 3:1 border against the surface they sit on —
    light: white/slate-50/100; dark: the page (slate-950) and cards (slate-900).
    Card and divider borders keep the softer slate-200/300/700. */
-:root { --ab-field-border: 0.62 0.011 220; }
-.dark { --ab-field-border: 0.56 0.011 220; }
+:root { --bb-field-border: 0.62 0.011 220; }
+:root.dark { --bb-field-border: 0.56 0.011 220; }
 
 @tailwind base;
 @tailwind components;
@@ -47,8 +47,3 @@
 }
 .ab-ring-flash { animation: ab-ring-flash 1100ms ease-out; }
 .ab-chip-in { animation: ab-chip-in 500ms cubic-bezier(.2, 1.4, .4, 1) both; }
-
-/* The shared RichTextEditor (@basicbar/ui) hard-codes border-slate-300/700 on
-   its box; give it the form-control border like the other inputs (#178).
-   Specificity (0,2,1) beats `.dark .dark:border-slate-700`. */
-.ab-rte > div.rounded-lg { border-color: oklch(var(--ab-field-border)); }
