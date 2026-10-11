@@ -38,7 +38,30 @@ type RoomCleanupFixtures = {
   trackRoom: (roomId: number | string) => void;
 };
 
-export const test = base.extend<RoomCleanupFixtures>({
+type ThemeFixtures = {
+  /** Playwright's Firefox ignores `colorScheme` (prefers-color-scheme stays
+   *  light), so "dark" Firefox runs silently tested the light theme. Both the
+   *  app and the participant page honour the stored `abstimmbar_theme`
+   *  choice, so set it from the test's colorScheme before any page script. */
+  themeFromColorScheme: void;
+};
+
+export const test = base.extend<RoomCleanupFixtures & ThemeFixtures>({
+  themeFromColorScheme: [
+    async ({ page, browserName, colorScheme }, use) => {
+      if (browserName === 'firefox' && (colorScheme === 'dark' || colorScheme === 'light')) {
+        await page.addInitScript((scheme) => {
+          try {
+            localStorage.setItem('abstimmbar_theme', scheme);
+          } catch {
+            /* storage unavailable: keep the default */
+          }
+        }, colorScheme);
+      }
+      await use();
+    },
+    { auto: true },
+  ],
   trackRoom: async ({ page }, use) => {
     const roomIds: (number | string)[] = [];
     await use((roomId) => roomIds.push(roomId));

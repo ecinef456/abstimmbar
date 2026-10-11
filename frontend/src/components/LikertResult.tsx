@@ -45,10 +45,14 @@ export default function LikertResult({
   summary,
   variant = "present",
   animate = false,
+  muted = false,
 }: {
   summary: LikertSummary;
   variant?: "present" | "compact";
   animate?: boolean;
+  /** Fade the bar colours (e.g. a "before" comparison) — the text and the
+   *  mean marker keep their full contrast (#178). */
+  muted?: boolean;
 }) {
   const { t } = useTranslation();
   const present = variant === "present";
@@ -83,7 +87,7 @@ export default function LikertResult({
               className="flex min-w-0 items-center justify-center overflow-hidden whitespace-nowrap tabular-nums"
               style={{
                 flex: `0 0 ${grown ? step.pct : 0}%`,
-                background: step.fill,
+                background: muted ? `color-mix(in oklch, ${step.fill} 55%, transparent)` : step.fill,
                 color: INK,
                 transition: `flex-basis 900ms ${EASE} ${entrance ? i * 90 : 0}ms`,
               }}
