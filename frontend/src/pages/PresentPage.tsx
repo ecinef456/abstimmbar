@@ -3549,7 +3549,7 @@ function AnswerChips({ words, onModerate }: { words: ChipItem[]; onModerate?: Mo
               }}
             >
               {entry.text}
-              {entry.count > 1 && <span className="ml-2 text-sm opacity-70">×{entry.count}</span>}
+              {entry.count > 1 && <span className="ml-2 text-sm font-normal">×{entry.count}</span>}
               {can && (
                 <HideButton label={entry.text} onHide={() => onModerate!("hide", entry.keys ?? [])} />
               )}

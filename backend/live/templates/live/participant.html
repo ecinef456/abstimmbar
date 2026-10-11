@@ -2273,7 +2273,7 @@ survives the live updates.
       // field fills the row next to the eraser button (#88 follow-up).
       // margin:0 — the base stylesheet gives form controls vertical margin,
       // which would skew the flex row and push the trash icon off-centre.
-      input.style.cssText = "flex:1 1 auto;min-width:0;margin:0;font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:12px";
+      input.style.cssText = "flex:1 1 auto;min-width:0;margin:0;font:inherit;padding:12px 14px;border:1px solid var(--field-line);border-radius:12px";
       input.addEventListener("input", updateWcBatchPending);
       input.addEventListener("keydown", (e) => {
         if (e.key !== "Enter") return;
