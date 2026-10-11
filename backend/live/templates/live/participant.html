@@ -132,6 +132,16 @@ survives the live updates.
   #closing h1,#closing h2,#closing h3{margin:.7em 0 .3em;line-height:1.25}
   #closing ul,#closing ol{padding-left:1.4em}
   /* Ordering (#72) sorter rows + drag feedback. */
+  /* Priorities sliders (#178/#179): a styled range so the track and thumb
+     reach 3:1 against the page in both themes (native ranges don't), with
+     the filled part in the accent (--pct, set from JS) and a big thumb. */
+  .pri-range{-webkit-appearance:none;appearance:none;display:block;width:100%;height:36px;margin:0;padding:0;background:transparent;cursor:pointer;--pct:0%}
+  .pri-range::-webkit-slider-runnable-track{height:10px;border-radius:999px;border:1px solid var(--field-line);background:linear-gradient(to right,var(--brand-strong) var(--pct),var(--surface) var(--pct))}
+  .pri-range::-moz-range-track{height:8px;border-radius:999px;border:1px solid var(--field-line);background:var(--surface)}
+  .pri-range::-moz-range-progress{height:8px;border-radius:999px 0 0 999px;background:var(--brand-strong)}
+  .pri-range::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:26px;height:26px;margin-top:-9px;border-radius:50%;background:var(--surface);border:2px solid var(--brand-strong);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .pri-range::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--surface);border:2px solid var(--brand-strong);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .pri-range:focus-visible{outline:2px solid var(--brand-strong);outline-offset:3px;border-radius:10px}
   .ordering-row{display:flex;align-items:center;gap:10px;padding:14px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);touch-action:none;user-select:none;transition:box-shadow .15s ease,border-color .15s ease,transform .12s ease}
   .ordering-row.dragging{border-color:var(--brand-strong);box-shadow:0 10px 26px rgba(0,0,0,.20);transform:scale(1.02);position:relative;z-index:5}
   .ord-handle{flex:none;cursor:grab;color:var(--ink-soft);font-size:18px;line-height:1}
@@ -1161,6 +1171,7 @@ survives the live updates.
       for (const r of rows) {
         const ui = uiById.get(r.id);
         ui.range.value = String(r.value);
+        ui.range.style.setProperty("--pct", (r.value / PRIORITIES_TOTAL) * 100 + "%");
         ui.num.textContent = String(r.value);
       }
       const used = total();
@@ -1202,8 +1213,8 @@ survives the live updates.
       range.min = "0";
       range.max = String(PRIORITIES_TOTAL);
       range.step = "1";
-      // Taller box = larger touch target around the thin track (#179 P6).
-      range.style.cssText = "display:block;width:100%;height:36px;margin:0;cursor:pointer";
+      // Taller box = larger touch target around the track (#179 P6).
+      range.className = "pri-range";
       range.addEventListener("input", () => setValue(i, Number(range.value)));
       wrap.append(head, range);
       container.appendChild(wrap);

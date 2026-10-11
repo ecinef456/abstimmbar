@@ -844,7 +844,8 @@ function BeforeAfterChoice({ before, after }: { before: ResultQuestion; after: R
   );
 }
 
-/** Before/after likert comparison (#54): before above after, before dimmed. */
+/** Before/after likert comparison (#54): before above after, before's bars
+ *  muted (not its text — #178). */
 function BeforeAfterLikert({ before, after }: { before: ResultQuestion; after: ResultQuestion }) {
   const { t } = useTranslation();
   return (
@@ -854,9 +855,7 @@ function BeforeAfterLikert({ before, after }: { before: ResultQuestion; after: R
           <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             {t("Before")}
           </span>
-          <div className="opacity-70">
-            <LikertResult summary={before.likert} variant="compact" />
-          </div>
+          <LikertResult summary={before.likert} variant="compact" muted />
         </div>
       )}
       {after.likert && (
