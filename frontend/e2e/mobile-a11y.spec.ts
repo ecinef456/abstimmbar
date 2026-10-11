@@ -143,6 +143,34 @@ for (const colorScheme of ['light', 'dark'] as const) {
         }
       });
 
+      // Priorities: the budget box in both states (green with points left,
+      // red once all 100 are allocated) and the styled sliders.
+      test('priorities budget box', async ({ page, playwright }) => {
+        const demoApi = await playwright.request.newContext({ storageState: AUTH.demo });
+        const created: number[] = [];
+        try {
+          const room = await createRoomWithQuestions(demoApi, ['priorities'], 'a11y', (id) =>
+            created.push(id),
+          );
+          const api = apiClient(demoApi);
+          const runId = await startRun(api, room.setId);
+          await control(api, runId, 'open', room.questions[0].id);
+          await page.goto(`${API_BASE_URL}/p/${room.code}/`);
+          const sliders = page.locator('#question input[type=range]');
+          await expect(sliders.first()).toBeVisible();
+          await sliders.first().fill('40');
+          await expect(page.locator('.pri-budget')).toContainText(/60/);
+          await expectNoAxeViolations(page, 'participant priorities, points left');
+          await sliders.nth(1).fill('60');
+          await expect(page.locator('.pri-budget')).toContainText(/100/);
+          await expectNoAxeViolations(page, 'participant priorities, budget spent');
+        } finally {
+          await page.close();
+          await deleteRooms(demoApi, created);
+          await demoApi.dispose();
+        }
+      });
+
       // Results after answering: bars, correct badge, ordering ✓ (C7).
       for (const kind of ['single_choice', 'ordering'] as Kind[]) {
         test(`results (${kind})`, async ({ page, playwright }) => {

@@ -1118,8 +1118,8 @@ survives the live updates.
   // Theme-safe tints: translucent so they work on light and dark backgrounds.
   const PRI_GREEN = { bg: "color-mix(in oklab, var(--brand) 12%, transparent)",
                       line: "var(--brand)", ink: "var(--brand-strong)" };
-  const PRI_RED = { bg: "color-mix(in oklab, #c0392b 13%, transparent)",
-                    line: "#c0392b", ink: "#a33630" };
+  const PRI_RED = { bg: "color-mix(in oklab, var(--danger) 13%, transparent)",
+                    line: "var(--danger)", ink: "var(--danger-strong)" };
 
   // Remove any budget box left in a section from an earlier render (the box
   // lives outside the options container, so it is not cleared by rebuilding
@@ -1134,9 +1134,9 @@ survives the live updates.
     clearPriBudget(section);
     const box = document.createElement("div");
     box.className = "pri-budget";
-    // Fixed two-line height, contents vertically centred: the redistribute
-    // line's space is reserved even while green, so switching to red never
-    // shifts the sliders below.
+    // Two lines, always both shown, so switching to red never shifts the
+    // sliders below: line 2 says how many points are left (green) or how to
+    // free some up (red) — no reserved blank line.
     box.style.cssText =
       "display:flex;flex-direction:column;justify-content:center;" +
       "box-sizing:border-box;min-height:72px;border:1px solid;" +
@@ -1144,9 +1144,9 @@ survives the live updates.
     // Above the question text, so the budget clearly belongs to this task.
     section.insertBefore(box, section.querySelector(".question-text"));
 
-    // Line 1 (always): "{used} von 100 Punkten vergeben", the count bold and
-    // counting UP. Line 2 (red only): prompt to free points up. Built once;
-    // refresh() only updates the number, colours and line-2 visibility.
+    // Line 1: "{used} von 100 Punkten vergeben", the count bold and counting
+    // UP. Line 2: "Noch {n} Punkte" while points are left, else the prompt to
+    // free points up. Built once; refresh() updates numbers, colours, line 2.
     const line1 = document.createElement("p");
     line1.style.cssText = "margin:0;line-height:1.35";
     const spentParts = I18N.pointsSpent
@@ -1156,8 +1156,7 @@ survives the live updates.
     line1.append(document.createTextNode(spentParts[0]), usedEl,
                  document.createTextNode(spentParts[1] || ""));
     const line2 = document.createElement("p");
-    line2.style.cssText = "margin:3px 0 0;line-height:1.35;visibility:hidden";
-    line2.textContent = "– " + I18N.pointsRedistribute;
+    line2.style.cssText = "margin:3px 0 0;line-height:1.35";
     box.append(line1, line2);
 
     const rows = question.options.map((o) => ({
@@ -1181,7 +1180,10 @@ survives the live updates.
       box.style.borderColor = c.line;
       box.style.color = c.ink;
       usedEl.textContent = String(used);
-      line2.style.visibility = spent ? "visible" : "hidden";
+      const left = PRIORITIES_TOTAL - used;
+      line2.textContent = spent
+        ? "– " + I18N.pointsRedistribute
+        : (left === 1 ? I18N.mmPointsLeftOne : I18N.mmPointsLeftMany.replace("{n}", String(left)));
     }
 
     function setValue(i, target) {
@@ -1201,9 +1203,11 @@ survives the live updates.
       wrap.style.cssText = "margin-bottom:16px" + (i === 0 ? ";margin-top:16px" : "");
       const head = document.createElement("div");
       head.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px";
-      const name = document.createElement("span");
+      // A <label> tied to the slider, so screen readers announce the option.
+      const name = document.createElement("label");
       name.textContent = row.text;
       name.style.minWidth = "0";
+      name.htmlFor = "pri-" + question.id + "-" + row.id;
       const num = document.createElement("strong");
       num.className = "tabular-nums";
       num.style.flexShrink = "0";
@@ -1215,6 +1219,7 @@ survives the live updates.
       range.step = "1";
       // Taller box = larger touch target around the track (#179 P6).
       range.className = "pri-range";
+      range.id = "pri-" + question.id + "-" + row.id;
       range.addEventListener("input", () => setValue(i, Number(range.value)));
       wrap.append(head, range);
       container.appendChild(wrap);
