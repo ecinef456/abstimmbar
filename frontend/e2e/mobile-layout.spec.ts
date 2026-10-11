@@ -246,31 +246,61 @@ for (const colorScheme of ['light', 'dark'] as const) {
         });
       }
 
-      test('question editor: floating translation controls do not cover content [T4]', async ({ page, seed }) => {
-        const q = seed.questions.find((x) => x.kind === 'single_choice')!;
-        await page.goto(`/sets/${seed.setId}/questions/${q.id}`);
-        await expect(page.locator('[data-tour="question.editor"]')).toBeVisible();
-        await settle(page);
-        await expectMode(page, 'pro');
-        // Our hook class on the TranslationFormProvider controls (main.tsx,
-        // controlsClassName). In Experte the editor registers translatable
-        // fields, so the controls must be there.
-        const controls = page.locator('.translation-controls');
-        await expect(controls, 'translation controls (.translation-controls) missing in Experte').toHaveCount(1);
-        await expect(controls).toBeVisible();
-        await expectOverlayNotCovering(page, controls, 'translation controls');
-        // …and never on top of the sticky Save/Cancel bar.
-        await page.evaluate(() => window.scrollTo(0, 0));
-        const saveBar = page.locator('[data-tour="question.editor"] > div.sticky.bottom-0');
-        const [c, b] = [await controls.boundingBox(), await saveBar.boundingBox()];
-        expect(c && b, 'controls or save bar not rendered').toBeTruthy();
-        const overlapX = Math.min(c!.x + c!.width, b!.x + b!.width) - Math.max(c!.x, b!.x);
-        const overlapY = Math.min(c!.y + c!.height, b!.y + b!.height) - Math.max(c!.y, b!.y);
-        expect(
-          overlapX > 0 && overlapY > 0,
-          `translation controls (x ${Math.round(c!.x)}–${Math.round(c!.x + c!.width)}, y ${Math.round(c!.y)}–${Math.round(c!.y + c!.height)}) overlap the save bar (x ${Math.round(b!.x)}–${Math.round(b!.x + b!.width)}, y ${Math.round(b!.y)}–${Math.round(b!.y + b!.height)})`,
-        ).toBe(false);
-      });
+      // T4: on phones the translation controls (DE · EN · translate all)
+      // dock into the <TranslationControlsSlot /> at the top of each form
+      // with translatable fields — in the flow, never floating over it.
+      const T4_FORMS: {
+        name: string;
+        open: (page: Page, seed: Seed) => Promise<void>;
+      }[] = [
+        {
+          name: 'question editor',
+          open: async (page, seed) => {
+            const q = seed.questions.find((x) => x.kind === 'single_choice')!;
+            await page.goto(`/sets/${seed.setId}/questions/${q.id}`);
+            await expect(page.locator('[data-tour="question.editor"]')).toBeVisible();
+          },
+        },
+        {
+          name: 'room settings',
+          open: async (page, seed) => {
+            await page.goto(`/rooms/${seed.roomId}`);
+            await page.getByRole('button', { name: /^(Room actions|Raum-Aktionen)$/ }).click();
+            await page.getByRole('menuitem', { name: /^(Settings|Einstellungen)$/ }).click();
+            await expect(page.locator('.ProseMirror').first()).toBeVisible();
+          },
+        },
+        {
+          name: 'set settings',
+          open: async (page, seed) => {
+            await page.goto(`/sets/${seed.setId}`);
+            await page.getByRole('button', { name: /^(Set actions|Set-Aktionen)$/ }).click();
+            await page.getByRole('menuitem', { name: /^(Settings|Einstellungen)$/ }).click();
+            await expect(page.locator('.ProseMirror').first()).toBeVisible();
+          },
+        },
+      ];
+      for (const form of T4_FORMS) {
+        test(`${form.name}: translation controls dock in the flow, not over content [T4]`, async ({ page, seed }) => {
+          await form.open(page, seed);
+          await settle(page);
+          await expectMode(page, 'pro');
+          // Our hook class on both controls variants (main.tsx,
+          // controlsClassName + slotControlsClassName). In Experte the form
+          // registers translatable fields, so the controls must be there.
+          const controls = page.locator('.translation-controls');
+          await expect(controls, `translation controls (.translation-controls) missing in ${form.name}`).toHaveCount(1);
+          await expect(controls).toBeVisible();
+          const position = await controls.evaluate((el) => getComputedStyle(el).position);
+          expect(position, `translation controls in ${form.name} should be docked in the flow`).toBe('static');
+          // Docked = no drag handle (it only exists on the floating pill).
+          await expect(
+            controls.getByRole('button', { name: /^(Move translation controls|Übersetzungsleiste verschieben)$/ }),
+          ).toHaveCount(0);
+          await expectNoHorizontalOverflow(page, `${form.name} with docked translation controls`);
+          await expectOverlayNotCovering(page, controls, `translation controls (${form.name})`);
+        });
+      }
 
       test('Impressum fits the screen', async ({ page }) => {
         await page.goto('/pages/impressum');

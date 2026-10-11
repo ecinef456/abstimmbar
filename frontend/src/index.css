@@ -34,14 +34,3 @@
 }
 .ab-ring-flash { animation: ab-ring-flash 1100ms ease-out; }
 .ab-chip-in { animation: ab-chip-in 500ms cubic-bezier(.2, 1.4, .4, 1) both; }
-
-/* Phone layout (#179) — local overrides on @basicbar/ui markup (the package
-   exposes no className for these parts; `ab-tf` is set by our
-   TranslatableField wrapper). */
-/* Rich-text toolbar: wrap onto a second row instead of a horizontal scroller
-   whose hidden buttons had no affordance. No effect where the row fits. */
-.ab-tf .flex-nowrap.overflow-x-auto { flex-wrap: wrap; }
-/* DE/EN language tabs are 21px tall: extend the hit area to 25px (WCAG
-   2.5.8) without changing their look. */
-.ab-tf [role="tab"] { position: relative; }
-.ab-tf [role="tab"]::after { content: ""; position: absolute; inset: -2px 0; }

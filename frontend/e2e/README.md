@@ -17,7 +17,8 @@ npx playwright test --ui                   # interactive runner
 
 Projects:
 
-- `firefox` — desktop, the original specs (`create-question-set.spec.ts`).
+- `firefox` — desktop, the original specs (`create-question-set.spec.ts`)
+  and the translation-controls drag smoke test (`translation-controls.spec.ts`).
 - `phone-chromium` / `phone-firefox` — 324×756 px (Galaxy Z Fold7 front
   screen), `mobile-*.spec.ts` only: layout checks (`mobile-layout.spec.ts`) and
   axe accessibility smoke checks (`mobile-a11y.spec.ts`), each in light and dark.

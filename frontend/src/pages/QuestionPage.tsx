@@ -25,6 +25,7 @@ import {
   RichText,
   isEmptyHtml,
   stripHtml,
+  TranslationControlsSlot,
 } from "@basicbar/ui";
 import AiAssistPanel from "../components/AiAssistPanel";
 import MindmapSeedEditor, {
@@ -36,7 +37,6 @@ import MindmapSeedEditor, {
 import HomeCrumb from "../components/HomeCrumb";
 import SortableList from "../components/SortableList";
 import TranslatableField from "../components/TranslatableField";
-import TranslationScope from "../components/TranslationScope";
 import { Button, Field, InfoHint, MenuItem, MoreMenu, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
 import { KIND_LABEL, REVEAL_LABEL } from "./SetPage";
 
@@ -1030,9 +1030,9 @@ export default function QuestionPage() {
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5" data-tour="question.editor">
         {/* minmax(0,1fr): an implicit `auto` track grows to its widest
             child's min-content (the rich-text toolbar) and overflowed phones
-            (#179). TranslationScope docks the translation controls into the
-            editor on phones instead of floating over it. */}
-        <TranslationScope>
+            (#179). On phones the translation controls dock into the slot,
+            first grid item, instead of floating over the editor. */}
+        <TranslationControlsSlot />
         <div data-tour="question.lang-tabs">
           <TranslatableField
             variant="rich"
@@ -1997,7 +1997,6 @@ export default function QuestionPage() {
           </Button>
           <Button onClick={() => navigate(`/sets/${setId}`)}>{t("Cancel")}</Button>
         </div>
-        </TranslationScope>
       </div>
       )}
 

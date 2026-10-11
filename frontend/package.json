@@ -11,7 +11,7 @@
     "e2e:mobile": "playwright test --project=phone-chromium --project=phone-firefox"
   },
   "dependencies": {
-    "@basicbar/ui": "https://github.com/virtUOS/basicbar/releases/download/ui/v0.7.0/basicbar-ui-0.7.0.tgz",
+    "@basicbar/ui": "https://github.com/virtUOS/basicbar/releases/download/ui/v0.8.0/basicbar-ui-0.8.0.tgz",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",

@@ -10,7 +10,7 @@ import { useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronUp, FileText, Lock, Radio, Trash2 } from "lucide-react";
 import { api, type AdminStats, type LtiPlatform, type LtiToolInfo, type ManagePage, type ManageSite } from "../api";
 import { useApp } from "../App";
-import { localizedText, type LocalizedText } from "@basicbar/ui";
+import { localizedText, type LocalizedText, TranslationControlsSlot } from "@basicbar/ui";
 import Donut, { type DonutSegment } from "../components/Donut";
 import HomeCrumb from "../components/HomeCrumb";
 import MiniChart, { type ChartSeries } from "../components/MiniChart";
@@ -487,6 +487,8 @@ function AppearanceSettings() {
         </label>
         {betaEnabled && (
           <div className="mt-3">
+            {/* Phones: the translation controls dock here instead of floating. */}
+            <TranslationControlsSlot className="mb-2" />
             <TranslatableField
               label={t("Beta label notice (optional)")}
               value={betaNotice}
@@ -531,6 +533,7 @@ function TextsSettings() {
       <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
         {t("Texts shown before login and to participants after every vote.")}
       </p>
+      <TranslationControlsSlot className="mb-4" />
       <div className="max-w-2xl">
         <div className="mb-4">
           <TranslatableField
@@ -593,6 +596,7 @@ function AiSettings() {
       <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
         {t("Privacy notice and limits for the AI features.")}
       </p>
+      <TranslationControlsSlot className="mb-4" />
       <div className="max-w-2xl">
         <TranslatableField
           label={t("AI privacy notice")}
@@ -1098,6 +1102,7 @@ function PageForm({
     <div className="mb-6 max-w-2xl rounded-2xl border border-brand-200 bg-brand-50/50 p-4 dark:border-brand-900 dark:bg-brand-950/40">
       <h3 className="mb-3 font-semibold">{page ? t("Edit page") : t("New page")}</h3>
       <div className="grid gap-3">
+        <TranslationControlsSlot />
         <TranslatableField
           label={t("Title")}
           required

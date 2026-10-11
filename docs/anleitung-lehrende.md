@@ -164,6 +164,11 @@ Weitere Einstellungen je Frage:
   Ziehen) Bilder in den Fragetext ein; auch jede Antwort kann ein eigenes Bild
   erhalten.
 
+**Zweisprachige Inhalte** (Experten-Funktion): Die Leiste **DE · EN** unten
+rechts zeigt alle Felder in einer Sprache und füllt, falls eingerichtet, fehlende
+Übersetzungen aus. Verdeckt sie etwas, verschieben Sie sie an ihrem Griff
+(Doppelklick setzt sie zurück); auf dem Smartphone steht sie oben im Formular.
+
 ### Vorher-Nachher-Fragen (Experten-Funktion)
 
 Zu einer Auswahl- oder Likert-Frage können Sie eine **Nachher-Frage** hinzufügen

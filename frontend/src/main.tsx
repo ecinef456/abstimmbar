@@ -18,7 +18,7 @@ import RoomPage from "./pages/RoomPage";
 import SetPage from "./pages/SetPage";
 import SharedPage from "./pages/SharedPage";
 import { TranslationFormProvider } from "@basicbar/ui";
-import { TRANSLATION_CONTROLS_HOOK, translateContent } from "./components/TranslationScope";
+import { TRANSLATION_CONTROLS_HOOK, translateContent } from "./translation";
 import { TourHost } from "./tour/TourController";
 
 const router = createBrowserRouter([
@@ -63,10 +63,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ThemeProvider storageKey="abstimmbar_theme">
       <TranslationFormProvider
         translate={translateContent}
-        // Fallback for fields outside a form-level <TranslationScope> (which
-        // docks the controls into the form on phones, #179). Lifted on narrow
-        // screens to stay clear of sticky action bars.
+        // Floating pill (movable by its handle). On phones, forms with
+        // translatable fields put a <TranslationControlsSlot /> at the top,
+        // so the controls dock into the flow there instead of covering the
+        // form (#179); where no slot is mounted the pill floats, lifted on
+        // narrow screens to stay clear of sticky action bars.
         controlsClassName={`${TRANSLATION_CONTROLS_HOOK} fixed bottom-6 right-6 z-40 max-md:bottom-[5.5rem]`}
+        slotControlsClassName={`${TRANSLATION_CONTROLS_HOOK} flex justify-end`}
       >
         <RouterProvider router={router} />
       </TranslationFormProvider>

@@ -75,8 +75,7 @@ export default function TranslatableField({
       {...rest}
       // Space the label/language-tab row off the input so the input's focus
       // ring doesn't crowd the DE/EN tags above it.
-      // `ab-tf`: local hooks in index.css (toolbar wrapping, tab hit area).
-      className={`ab-tf space-y-1.5 ${className}`.trim()}
+      className={`space-y-1.5 ${className}`.trim()}
       values={localizedMap(value)}
       onChange={(lang, text) => onChange(setLocalizedLang(value, lang, text))}
       singleLanguage={easyMode}
@@ -90,11 +89,12 @@ export default function TranslatableField({
       }
       renderInput={
         variant === "rich"
-          ? ({ value: html, onChange: set, labelId }) => (
+          ? ({ value: html, onChange: set, labelId, describedBy }) => (
               <RichTextEditor
                 value={html}
                 onChange={set}
                 labelledBy={labelId}
+                describedBy={describedBy}
                 onUploadImage={uploadEditorImage}
               />
             )

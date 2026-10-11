@@ -25,7 +25,7 @@ import HomeCrumb from "../components/HomeCrumb";
 import SortableOutline from "../components/SortableOutline";
 import TranslatableField from "../components/TranslatableField";
 import { allowedKindsFor, SET_TYPES, type SetType } from "../setTypes";
-import { localizedText, type LocalizedText, RichText, stripHtml } from "@basicbar/ui";
+import { localizedText, type LocalizedText, RichText, stripHtml, TranslationControlsSlot } from "@basicbar/ui";
 import {
   Button,
   ConfirmInline,
@@ -141,6 +141,8 @@ export function SetSettingsForm({
   const { t } = useTranslation();
   return (
     <div className="grid max-w-2xl gap-8">
+      {/* Phones: the translation controls dock here instead of floating. */}
+      <TranslationControlsSlot />
       {/* #75: the set type is picked once (at creation, via the "New question
        * set" menu) and immutable after — shown here read-only as a badge. */}
       <div>
@@ -1724,6 +1726,9 @@ export default function SetPage() {
           )}
         </p>
       )}
+      {/* Section names are translatable: dock the controls above the outline
+          on phones while sections are being edited. */}
+      {editingSections && <TranslationControlsSlot className="mb-3" />}
 
       {rows.length === 0 ? (
         <EmptyState icon={CircleHelp} title={t("No questions yet")}>

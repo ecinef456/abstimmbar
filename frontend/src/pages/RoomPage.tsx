@@ -31,7 +31,7 @@ import {
 } from "../components/ui";
 import HomeCrumb from "../components/HomeCrumb";
 import TranslatableField from "../components/TranslatableField";
-import { localizedText, type LocalizedText, RichText } from "@basicbar/ui";
+import { localizedText, type LocalizedText, RichText, TranslationControlsSlot } from "@basicbar/ui";
 import { SetSettingsForm, type SetSettings } from "./SetPage";
 import { CREATABLE_SET_TYPES, SET_TYPES, type SetType } from "../setTypes";
 
@@ -233,6 +233,8 @@ export function RoomSettingsForm({
   );
   return (
     <div className="grid max-w-2xl gap-8">
+      {/* Phones: the translation controls dock here instead of floating. */}
+      <TranslationControlsSlot />
       {titleAnchor ? <div data-tour={titleAnchor}>{titleField}</div> : titleField}
       <TranslatableField
         variant="rich"
