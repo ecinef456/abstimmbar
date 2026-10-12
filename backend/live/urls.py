@@ -74,6 +74,22 @@ api_urlpatterns = [
         views.mindmap_rename,
     ),
     path(
+        "runs/<int:run_id>/mindmap/<int:question_id>/ai-optimize",
+        views.mindmap_ai_optimize,
+    ),
+    path(
+        "runs/<int:run_id>/mindmap/<int:question_id>/ai-preview",
+        views.mindmap_ai_preview,
+    ),
+    path(
+        "runs/<int:run_id>/mindmap/<int:question_id>/ai-apply",
+        views.mindmap_ai_apply,
+    ),
+    path(
+        "runs/<int:run_id>/mindmap/<int:question_id>/ai-undo",
+        views.mindmap_ai_undo,
+    ),
+    path(
         "runs/<int:run_id>/wordcloud/<int:question_id>/ai-settings",
         views.wordcloud_ai_settings,
     ),

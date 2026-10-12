@@ -432,6 +432,17 @@ class Question(TimeStampedModel):
     # Show the scores while rating (beamer + participant totals); off = the
     # scores stay hidden until the results phase (reveal).
     mindmap_rating_live = models.BooleanField(default=False)
+    # AI optimisation (stage 3, live/ai_mindmap.py) — only meaningful while
+    # wordcloud_ai_enabled (the question's AI switch) is on: merge duplicates/
+    # synonyms, unify the language via renames into ``mindmap_ai_target_lang``
+    # ("" = the canonical content language), restructure (move + new parent
+    # terms). The presenter can change them on the beamer before optimising.
+    mindmap_ai_merge = models.BooleanField(default=True)
+    mindmap_ai_translate = models.BooleanField(default=True)
+    mindmap_ai_target_lang = models.CharField(
+        max_length=8, choices=settings.LANGUAGES, blank=True, default=""
+    )
+    mindmap_ai_restructure = models.BooleanField(default=True)
 
     class RevealAnswers(models.TextChoices):
         # Per-question override of when correct answers are highlighted (#28).

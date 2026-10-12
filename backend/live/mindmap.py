@@ -563,6 +563,17 @@ def _node_or_404(tree, node_id, detail="Unknown term."):
     return node_id
 
 
+def _check_add(tree, question, parent_id):
+    """A new term below ``parent_id`` (None = main branch): the parent exists
+    and is visible, the new level fits the depth."""
+    if parent_id is not None:
+        _node_or_404(tree, parent_id, "Unknown parent.")
+        if _effectively_hidden(tree, parent_id):
+            raise MindmapError("This branch is hidden.", 409)
+    if _level(tree, parent_id) + 1 > question.mindmap_depth:
+        raise MindmapError("Maximum depth reached.")
+
+
 def teacher_add(run, question, parent_id, text, description=""):
     """The presenter adds a term (no contribution, no quota). A term that
     already exists under ``parent_id`` is returned as is. ``(node, merged)``."""
@@ -576,12 +587,7 @@ def teacher_add(run, question, parent_id, text, description=""):
         _lock_run(run)
         _refuse_while_rating(run, question)
         tree = _load_tree(run, question)
-        if parent_id is not None:
-            _node_or_404(tree, parent_id, "Unknown parent.")
-            if _effectively_hidden(tree, parent_id):
-                raise MindmapError("This branch is hidden.", 409)
-        if _level(tree, parent_id) + 1 > question.mindmap_depth:
-            raise MindmapError("Maximum depth reached.")
+        _check_add(tree, question, parent_id)
         node = MindmapNode.objects.filter(
             run=run, question=question, parent_id=parent_id, text_key=key
         ).first()
@@ -750,22 +756,26 @@ def _merge(source, target, question):
     return undo
 
 
-def _check_nested_hidden(source_id, target_id):
+def _db_children(node_id):
+    """``[(text_key, id, hidden)]`` of a node's children (database)."""
+    return list(
+        MindmapNode.objects.filter(parent_id=node_id).values_list("text_key", "id", "hidden")
+    )
+
+
+def _check_nested_hidden(source_id, target_id, children_of=_db_children):
     """Same-named children merge recursively; a pair whose hidden state
     differs would re-expose moderated content (or hide live content), so the
-    whole merge is refused."""
+    whole merge is refused. ``children_of`` reads ``[(text_key, id, hidden)]``
+    (the database, or the AI simulation's in-memory tree)."""
     pairs = [(source_id, target_id)]
     while pairs:
         source, target = pairs.pop()
-        twins = dict(
-            MindmapNode.objects.filter(parent_id=target).values_list("text_key", "id")
-        )
-        hidden = dict(
-            MindmapNode.objects.filter(parent_id=target).values_list("id", "hidden")
-        )
-        for key, child, child_hidden in MindmapNode.objects.filter(
-            parent_id=source
-        ).values_list("text_key", "id", "hidden"):
+        twins, hidden = {}, {}
+        for key, child, child_hidden in children_of(target):
+            twins[key] = child
+            hidden[child] = child_hidden
+        for key, child, child_hidden in children_of(source):
             twin = twins.get(key)
             if twin is None:
                 continue
@@ -777,7 +787,7 @@ def _check_nested_hidden(source_id, target_id):
             pairs.append((child, twin))
 
 
-def _check_merge(tree, question, source_id, target_id):
+def _check_merge(tree, question, source_id, target_id, children_of=_db_children):
     _node_or_404(tree, source_id)
     _node_or_404(tree, target_id)
     if source_id == target_id:
@@ -788,7 +798,7 @@ def _check_merge(tree, question, source_id, target_id):
         raise MindmapError("This branch is hidden.", 409)
     if _level(tree, target_id) + _height(tree, source_id) - 1 > question.mindmap_depth:
         raise MindmapError("Maximum depth reached.", 409)
-    _check_nested_hidden(source_id, target_id)
+    _check_nested_hidden(source_id, target_id, children_of)
 
 
 def merge_nodes(run, question, source_id, target_id):
@@ -804,6 +814,25 @@ def merge_nodes(run, question, source_id, target_id):
     return _sign(run, question, {"op": "merge", "merge": undo})
 
 
+def _check_move(tree, question, node_id, parent_id):
+    """Moving ``node_id`` below ``parent_id`` (None = main branch): returns
+    the old parent. Not checked here: the name clash at the destination
+    (callers look up keys) — and a move to the same parent is a no-op."""
+    _node_or_404(tree, node_id)
+    old_parent = tree[node_id][0]
+    if parent_id is not None:
+        _node_or_404(tree, parent_id, "Unknown parent.")
+        if node_id in _path(tree, parent_id):
+            raise MindmapError("A term cannot be moved into its own branch.", 409)
+        if _effectively_hidden(tree, parent_id):
+            raise MindmapError("This branch is hidden.", 409)
+    if parent_id != old_parent and (
+        _level(tree, parent_id) + _height(tree, node_id) > question.mindmap_depth
+    ):
+        raise MindmapError("Maximum depth reached.", 409)
+    return old_parent
+
+
 def move_node(run, question, node_id, parent_id):
     """Re-attach a node (with its subtree) below ``parent_id`` (None = main
     branch). Returns the plain undo ``{node, parent}`` (the old parent)."""
@@ -811,19 +840,10 @@ def move_node(run, question, node_id, parent_id):
         _lock_run(run)
         _refuse_while_rating(run, question)
         tree = _load_tree(run, question)
-        _node_or_404(tree, node_id)
-        old_parent = tree[node_id][0]
-        if parent_id is not None:
-            _node_or_404(tree, parent_id, "Unknown parent.")
-            if node_id in _path(tree, parent_id):
-                raise MindmapError("A term cannot be moved into its own branch.", 409)
-            if _effectively_hidden(tree, parent_id):
-                raise MindmapError("This branch is hidden.", 409)
+        old_parent = _check_move(tree, question, node_id, parent_id)
         undo = {"node": node_id, "parent": old_parent}
         if parent_id == old_parent:
             return undo
-        if _level(tree, parent_id) + _height(tree, node_id) > question.mindmap_depth:
-            raise MindmapError("Maximum depth reached.", 409)
         node = MindmapNode.objects.get(pk=node_id)
         clash = (
             MindmapNode.objects.filter(
@@ -1054,3 +1074,513 @@ def csv_rows(tree):
 
     walk(tree["nodes"], "")
     return rows
+
+
+# --- Stage 3: AI optimisation (live/ai_mindmap.py builds the prompt) --------
+#
+# The LLM proposes a list of operations (merge / rename / add / move). They
+# are checked one by one, in order, against an in-memory copy of the map
+# (``_SimTree``) with the SAME rule helpers as the manual moderation above
+# (``_check_add``, ``_check_merge``, ``_check_move``, ``_clean_term``) plus the
+# AI-only rules (``_check_ai_op``): nothing is deleted or hidden, hidden
+# branches stay untouched, presenter-added and predefined terms ("fixed") are
+# never merged away, renamed or moved. Unfit operations drop out silently
+# (counted). Applying re-checks every selected operation against the live map
+# under the run lock and runs it through the manual primitives, collecting
+# their undo data; operations that no longer fit are skipped (counted).
+
+AI_OP_TYPES = ("merge", "rename", "add", "move")
+AI_OPS_MAX = 100
+PROPOSAL_SALT = "live.mindmap.ai-proposal"
+
+
+def ai_settings(question):
+    """The question's AI optimisation settings (``target_lang`` resolved to
+    the canonical content language when blank)."""
+    canonical, _ = seed_langs()
+    return {
+        "merge": question.mindmap_ai_merge,
+        "translate": question.mindmap_ai_translate,
+        "target_lang": question.mindmap_ai_target_lang or canonical,
+        "restructure": question.mindmap_ai_restructure,
+    }
+
+
+def _op_enabled(op_type, options):
+    if op_type == "merge":
+        return bool(options.get("merge"))
+    if op_type == "rename":
+        return bool(options.get("translate"))
+    return bool(options.get("restructure"))  # add, move
+
+
+class _SimTree:
+    """In-memory copy of a run's map for checking (and previewing) AI
+    operations. ``nodes``: id → {parent, hidden, text, key, seeded, teacher}
+    (+ payload data when built for the preview)."""
+
+    def __init__(self, nodes, order):
+        self.nodes = nodes
+        self.order = order  # ids in created order (siblings sort by it)
+        self.next_new = 0
+
+    @classmethod
+    def load(cls, run, question):
+        rows = MindmapNode.objects.filter(run=run, question=question).order_by(
+            "created_at", "pk"
+        ).values_list("id", "parent_id", "hidden", "text", "text_key", "seeded", "teacher")
+        nodes, order = {}, []
+        for node_id, parent, hidden, text, key, seeded, teacher in rows:
+            nodes[node_id] = {
+                "parent": parent, "hidden": hidden, "text": text, "key": key,
+                "seeded": seeded, "teacher": teacher,
+            }
+            order.append(node_id)
+        return cls(nodes, order)
+
+    @classmethod
+    def for_preview(cls, run, question):
+        """With the presenter payload per node and the contributing token ids
+        (counts after a merge = distinct participants; never exposed)."""
+        sim = cls.load(run, question)
+        payload = build_tree(run, question, presenter=True)
+
+        def walk(entries):
+            for entry in entries:
+                children = entry.pop("children")
+                sim.nodes[entry["id"]]["payload"] = entry
+                walk(children)
+
+        walk(payload["nodes"])
+        for node in sim.nodes.values():
+            node["tokens"] = set()
+        for node_id, token_id in MindmapContribution.objects.filter(
+            node__run=run, node__question=question
+        ).values_list("node_id", "token_id"):
+            sim.nodes[node_id]["tokens"].add(token_id)
+        sim.payload = payload
+        return sim
+
+    # Views the shared rule helpers read.
+    @property
+    def tree(self):
+        return {nid: (n["parent"], n["hidden"]) for nid, n in self.nodes.items()}
+
+    def children_of(self, node_id):
+        return [
+            (n["key"], nid, n["hidden"])
+            for nid in self.order
+            if (n := self.nodes[nid])["parent"] == node_id
+        ]
+
+    def clash(self, parent_id, key, exclude=None):
+        for nid in self.order:
+            n = self.nodes[nid]
+            if n["parent"] == parent_id and n["key"] == key and nid != exclude:
+                return nid
+        return None
+
+    def fixed(self, node_id):
+        n = self.nodes[node_id]
+        return n["seeded"] or n["teacher"]
+
+    def label(self, node_id):
+        return None if node_id is None else self.nodes[node_id]["text"]
+
+    # Mutations mirroring the primitives (preview only).
+    def _payload(self, node_id):
+        return self.nodes[node_id].get("payload")
+
+    def merge(self, source_id, target_id):
+        source, target = self.nodes[source_id], self.nodes[target_id]
+        for key, child, _hidden in self.children_of(source_id):
+            twin = self.clash(target_id, key)
+            if twin is not None:
+                self.merge(child, twin)
+            else:
+                self.nodes[child]["parent"] = target_id
+        target["seeded"] = target["seeded"] or source["seeded"]
+        target["teacher"] = target["teacher"] or source["teacher"]
+        src_p, tgt_p = self._payload(source_id), self._payload(target_id)
+        if tgt_p is not None:
+            target["tokens"] |= source["tokens"]
+            tgt_p["count"] = len(target["tokens"])
+            seen = {d.casefold() for d in tgt_p["descriptions"]}
+            for desc in src_p["descriptions"]:
+                if desc.casefold() not in seen and len(tgt_p["descriptions"]) < MINDMAP_MAX_DESCRIPTIONS:
+                    seen.add(desc.casefold())
+                    tgt_p["descriptions"].append(desc)
+            if target["teacher"]:
+                tgt_p["teacher"] = True
+            tgt_p["merged_from"] = [
+                *tgt_p.get("merged_from", []),
+                src_p["text"],
+                *src_p.get("merged_from", []),
+            ]
+        del self.nodes[source_id]
+        self.order.remove(source_id)
+
+    def rename(self, node_id, text, key):
+        node = self.nodes[node_id]
+        payload = self._payload(node_id)
+        if payload is not None:
+            payload.setdefault("renamed_from", node["text"])
+            payload["text"] = text
+            payload["key"] = key
+        node["text"], node["key"] = text, key
+
+    def move(self, node_id, parent_id):
+        self.nodes[node_id]["parent"] = parent_id
+        payload = self._payload(node_id)
+        if payload is not None and not payload.get("new"):
+            payload["moved"] = True
+
+    def add(self, parent_id, text, key):
+        self.next_new -= 1
+        node_id = self.next_new
+        self.nodes[node_id] = {
+            "parent": parent_id, "hidden": False, "text": text, "key": key,
+            "seeded": False, "teacher": True, "tokens": set(),
+            "payload": {
+                "id": node_id, "text": text, "count": 0, "descriptions": [],
+                "seeded": False, "teacher": True, "key": key, "hidden": False,
+                "new": True,
+            },
+        }
+        self.order.append(node_id)
+        return node_id
+
+    def preview(self):
+        def walk(parent_id):
+            result = []
+            for nid in self.order:
+                node = self.nodes[nid]
+                if node["parent"] == parent_id:
+                    result.append({**node["payload"], "children": walk(nid)})
+            return result
+
+        nodes = walk(None)
+        return {**self.payload, "total": len(self.nodes), "nodes": nodes}
+
+
+def _resolve(value, refs):
+    """A node reference of an AI op: an int id, a temp ref of an earlier
+    ``add`` (str), or None (main branch). Raises for an unresolved ref."""
+    if isinstance(value, str):
+        if value not in refs:
+            raise MindmapError("Unknown term.", 404)
+        return refs[value]
+    return value
+
+
+def _check_ai_op(sim, question, op, refs):
+    """Validate one AI op against ``sim`` (shared rules + AI-only rules) and
+    return it resolved (temp refs → ids, ``text``/``key`` cleaned) plus the
+    names for its label. Raises MindmapError when it does not fit."""
+    tree = sim.tree
+    kind = op["type"]
+    if kind == "merge":
+        source, target = op["source"], op["target"]
+        _check_merge(tree, question, source, target, sim.children_of)
+        if sim.fixed(source):
+            raise MindmapError("Presenter and predefined terms keep their names.", 409)
+        return {"source": source, "target": target}
+    if kind == "rename":
+        node = op["node"]
+        _node_or_404(tree, node)
+        if _effectively_hidden(tree, node):
+            raise MindmapError("This branch is hidden.", 409)
+        if sim.fixed(node):
+            raise MindmapError("Presenter and predefined terms keep their names.", 409)
+        text = _clean_term(op["text"])
+        key = text_key(text)
+        if text == sim.nodes[node]["text"]:
+            raise MindmapError("Nothing to change.")
+        clash = sim.clash(sim.nodes[node]["parent"], key, exclude=node)
+        if clash is not None:
+            # Like a manual rename: the name exists there → merge into it.
+            _check_merge(tree, question, node, clash, sim.children_of)
+        return {"node": node, "text": text, "key": key, "clash": clash}
+    if kind == "move":
+        node = op["node"]
+        parent = _resolve(op["parent"], refs)
+        _node_or_404(tree, node)
+        if _effectively_hidden(tree, node):
+            raise MindmapError("This branch is hidden.", 409)
+        if sim.fixed(node):
+            raise MindmapError("Presenter and predefined terms stay where they are.", 409)
+        old_parent = _check_move(tree, question, node, parent)
+        if parent == old_parent:
+            raise MindmapError("Nothing to change.")
+        if sim.clash(parent, sim.nodes[node]["key"], exclude=node) is not None:
+            raise MindmapError("A term with this name already exists there — merge instead.", 409)
+        return {"node": node, "parent": parent, "old_parent": old_parent}
+    # add
+    parent = _resolve(op["parent"], refs)
+    _check_add(tree, question, parent)
+    text = _clean_term(op["text"])
+    key = text_key(text)
+    existing = sim.clash(parent, key)
+    if existing is not None:
+        if sim.nodes[existing]["hidden"]:
+            raise MindmapError("This term already exists there but is hidden.", 409)
+        return {"parent": parent, "text": text, "key": key, "existing": existing}
+    if len(sim.nodes) >= MINDMAP_MAX_NODES:
+        raise MindmapError("The mind map is full.", 409)
+    return {"parent": parent, "text": text, "key": key, "existing": None}
+
+
+def _describe(sim, op, resolved, ref_index):
+    """Client entry for a valid op: index, type, ids, names, reason, label,
+    ``requires`` (indices of the ``add`` ops whose new term it uses)."""
+
+    def name(node_id):
+        return None if node_id is None else sim.label(node_id)
+
+    kind = op["type"]
+    entry = {"index": op["index"], "type": kind, "reason": op.get("reason", "")}
+    if kind == "merge":
+        source, target = name(resolved["source"]), name(resolved["target"])
+        entry.update(source=resolved["source"], target=resolved["target"],
+                     source_text=source, target_text=target,
+                     label=f"{source} → {target}")
+    elif kind == "rename":
+        old = name(resolved["node"])
+        entry.update(node=resolved["node"], text=resolved["text"], old_text=old,
+                     merges_into=resolved["clash"],
+                     label=f"{old} → {resolved['text']}")
+    elif kind == "move":
+        node, parent = name(resolved["node"]), name(resolved["parent"])
+        entry.update(node=resolved["node"], parent=op["parent"], node_text=node,
+                     parent_text=parent, old_parent_text=name(resolved["old_parent"]),
+                     label=f"{node} → {parent if parent is not None else '⌂'}")
+    else:
+        entry.update(ref=op["ref"], parent=op["parent"], text=resolved["text"],
+                     parent_text=name(resolved["parent"]), label=f"+ {resolved['text']}")
+    parent = op.get("parent")
+    entry["requires"] = (
+        [ref_index[parent]] if isinstance(parent, str) and parent in ref_index else []
+    )
+    return entry
+
+
+def _sim_apply(sim, op, resolved, refs):
+    kind = op["type"]
+    if kind == "merge":
+        sim.merge(resolved["source"], resolved["target"])
+    elif kind == "rename":
+        if resolved["clash"] is not None:
+            sim.merge(resolved["node"], resolved["clash"])
+        else:
+            sim.rename(resolved["node"], resolved["text"], resolved["key"])
+    elif kind == "move":
+        sim.move(resolved["node"], resolved["parent"])
+    else:
+        refs[op["ref"]] = sim.add(resolved["parent"], resolved["text"], resolved["key"])
+
+
+def _run_ops(sim, question, ops, options, selected=None):
+    """Walk ``ops`` in order on ``sim``: check each (``_check_ai_op``) and
+    apply it in memory. ``selected`` (indices; None = all) limits what is
+    applied — an unselected ``add`` leaves its temp ref unresolved, so the
+    ops below it drop. An ``add`` of a term that already exists (visible)
+    there changes nothing; its ref just points to that term.
+
+    Returns ``(entries, failed, applied)``: client entries of the applied
+    ops, the number of selected ops that did not fit, applied indices."""
+    refs, ref_index = {}, {}
+    entries, failed, applied = [], 0, []
+    for op in ops:
+        chosen = selected is None or op["index"] in selected
+        if not chosen and op["type"] != "add":
+            continue
+        try:
+            if not _op_enabled(op["type"], options):
+                raise MindmapError("Switched off.")
+            resolved = _check_ai_op(sim, question, op, refs)
+        except MindmapError:
+            failed += chosen
+            continue
+        if op["type"] == "add" and resolved["existing"] is not None:
+            refs[op["ref"]] = resolved["existing"]
+            continue
+        if not chosen:
+            continue
+        entries.append(_describe(sim, op, resolved, ref_index))
+        if op["type"] == "add":
+            ref_index[op["ref"]] = op["index"]
+        _sim_apply(sim, op, resolved, refs)
+        applied.append(op["index"])
+    return entries, failed, applied
+
+
+def simulate_ops(run, question, ops, options, selected=None):
+    """Check ``ops`` (``ai_mindmap.parse_ops`` output) in order against an
+    in-memory copy of the map and preview the result.
+
+    Returns ``{ops, dropped, preview, active}``: ``ops`` = the ops that fit
+    when all are applied (``{index, type, …, label, reason, requires}``);
+    ``dropped`` = how many fell out; ``preview`` = ``build_tree(presenter=
+    True)`` after applying the ``selected`` indices (None = all), changed
+    nodes marked with ``merged_from`` [texts], ``renamed_from``, ``moved``
+    or ``new`` (negative id); ``active`` = the indices in that preview (a
+    selected op can drop when an op it depends on is deselected)."""
+    sim = _SimTree.for_preview(run, question)
+    entries, dropped, applied = _run_ops(sim, question, ops, options)
+    if selected is not None and set(selected) != set(applied):
+        sim = _SimTree.for_preview(run, question)
+        _entries, _failed, applied = _run_ops(
+            sim, question, ops, options, set(selected) & set(applied)
+        )
+    return {"ops": entries, "dropped": dropped, "preview": sim.preview(), "active": applied}
+
+
+def apply_ops(run, question, ops, options, selected):
+    """Apply the ``selected`` ops (indices) in order, each re-checked against
+    the live map (``_check_ai_op`` on a fresh copy) and run through the
+    manual primitives. Returns ``{applied, skipped, undo}``: ``undo`` =
+    ``[{type, data}]`` in application order — merge/rename: the signed undo
+    string; move: ``{node, parent}`` (old parent); add: ``{node}`` (inverse =
+    ``teacher_delete``). All under one transaction and the run lock; 409
+    (nothing applied) during the rating stage."""
+    selected = set(selected)
+    applied, skipped, undo = 0, 0, []
+    ensure_seed(run, question)
+    with transaction.atomic():
+        _lock_run(run)
+        _refuse_while_rating(run, question)
+        refs = {}
+        for op in ops:
+            chosen = op["index"] in selected
+            if not chosen and op["type"] != "add":
+                continue
+            try:
+                if not _op_enabled(op["type"], options):
+                    raise MindmapError("Switched off.")
+                resolved = _check_ai_op(_SimTree.load(run, question), question, op, refs)
+            except MindmapError:
+                skipped += chosen
+                continue
+            if op["type"] == "add" and resolved["existing"] is not None:
+                refs[op["ref"]] = resolved["existing"]
+                continue
+            if not chosen:
+                continue
+            try:
+                with transaction.atomic():
+                    item = _apply_one(run, question, op, resolved, refs)
+            except (MindmapError, IntegrityError):
+                skipped += 1
+                continue
+            undo.append(item)
+            applied += 1
+    return {"applied": applied, "skipped": skipped, "undo": undo}
+
+
+def _apply_one(run, question, op, resolved, refs):
+    kind = op["type"]
+    if kind == "merge":
+        blob = merge_nodes(run, question, resolved["source"], resolved["target"])
+        return {"type": "merge", "data": blob}
+    if kind == "rename":
+        _node_id, merged, blob = rename_node(run, question, resolved["node"], resolved["text"])
+        return {"type": "merge" if merged else "rename", "data": blob}
+    if kind == "move":
+        data = move_node(run, question, resolved["node"], resolved["parent"])
+        return {"type": "move", "data": data}
+    node, merged = teacher_add(run, question, resolved["parent"], resolved["text"])
+    refs[op["ref"]] = node.pk
+    if merged:  # appeared in between: nothing to undo
+        raise MindmapError("Already there.")
+    return {"type": "add", "data": {"node": node.pk}}
+
+
+def sign_proposal(run, question, ops, options, malformed=0):
+    """Signed (not encrypted) proposal for ai-preview/ai-apply: the parsed
+    ops, the options they were made for and how many reply entries were
+    malformed — bound to run + question, valid for UNDO_MAX_AGE."""
+    return signing.dumps(
+        {"run": run.pk, "question": question.pk, "ops": ops, "options": options,
+         "malformed": malformed},
+        salt=PROPOSAL_SALT, compress=True,
+    )
+
+
+def unsign_proposal(run, question, blob):
+    """``(ops, options, malformed)`` of a signed proposal; MindmapError
+    otherwise."""
+    if not isinstance(blob, str):
+        raise MindmapError("Invalid proposal.")
+    try:
+        data = signing.loads(blob, salt=PROPOSAL_SALT, max_age=UNDO_MAX_AGE)
+    except signing.SignatureExpired as error:
+        raise MindmapError("This proposal has expired.", 409) from error
+    except signing.BadSignature as error:
+        raise MindmapError("Invalid proposal.") from error
+    if data.get("run") != run.pk or data.get("question") != question.pk:
+        raise MindmapError("Invalid proposal.")
+    return data["ops"], data["options"], data.get("malformed", 0)
+
+
+def _undo_item(item):
+    """Validate one undo item of ``apply_ops``; MindmapError (400) else."""
+    if not isinstance(item, dict) or item.get("type") not in AI_OP_TYPES:
+        raise MindmapError("Invalid undo data.")
+    data = item.get("data")
+    kind = item["type"]
+    if kind in ("merge", "rename"):
+        if not isinstance(data, str):
+            raise MindmapError("Invalid undo data.")
+        return kind, data
+
+    def is_id(value):
+        return isinstance(value, int) and not isinstance(value, bool)
+
+    if not isinstance(data, dict) or not is_id(data.get("node")):
+        raise MindmapError("Invalid undo data.")
+    if kind == "move" and not (
+        "parent" in data and (data["parent"] is None or is_id(data["parent"]))
+    ):
+        raise MindmapError("Invalid undo data.")
+    return kind, data
+
+
+def undo_ops(run, question, items):
+    """Reverse an ``apply_ops`` batch (its ``undo`` list) in reverse order —
+    all or nothing: 409 + rollback when the map changed in a way that makes
+    exact restoration impossible (like ``restore``)."""
+    if not isinstance(items, list) or not items or len(items) > AI_OPS_MAX:
+        raise MindmapError("Invalid undo data.")
+    steps = [_undo_item(item) for item in items]
+    signed = {
+        index: _unsign(run, question, data)
+        for index, (kind, data) in enumerate(steps)
+        if kind in ("merge", "rename")
+    }
+    try:
+        with transaction.atomic():
+            _lock_run(run)
+            _refuse_while_rating(run, question)
+            for index in reversed(range(len(steps))):
+                kind, data = steps[index]
+                try:
+                    if kind in ("merge", "rename"):
+                        blob = signed[index]
+                        if blob["op"] == "merge":
+                            _restore_merge(run, question, blob["merge"])
+                        else:
+                            _restore_rename(run, question, blob)
+                    elif kind == "move":
+                        node = MindmapNode.objects.filter(
+                            pk=data["node"], run=run, question=question
+                        ).first()
+                        if node is None:
+                            raise MindmapError(_CHANGED, 409)
+                        move_node(run, question, data["node"], data["parent"])
+                    else:
+                        teacher_delete(run, question, data["node"])
+                except MindmapError as error:
+                    raise MindmapError(_CHANGED, 409) from error
+            _check_restored_tree(_load_tree(run, question), question.mindmap_depth)
+    except IntegrityError as error:
+        raise MindmapError(_CHANGED, 409) from error

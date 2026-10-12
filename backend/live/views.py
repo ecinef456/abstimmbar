@@ -39,6 +39,7 @@ from . import (
     mindmap,
     ai_freetext,
     ai_freetext_summary,
+    ai_mindmap,
     ai_report,
     ai_wordcloud,
     ai_wordcloud_live,
@@ -1923,6 +1924,143 @@ def mindmap_rename(request, run_id, question_id):
         text = _strict_str(data, "text")
         node_id, merged, undo = mindmap.rename_node(run, question, node, text)
         return {"node_id": node_id, "merged": merged, "undo": undo}
+
+    return _mindmap_moderate(request, run_id, question_id, action)
+
+
+MINDMAP_AI_FLAGS = ("merge", "translate", "restructure")
+
+
+def _mindmap_ai_overrides(data):
+    """Validated ``{field: value}`` of the optional settings overrides in an
+    ai-optimize body (``merge``/``translate``/``restructure`` booleans,
+    ``target_lang`` a content language code or "")."""
+    updates = {}
+    for key in MINDMAP_AI_FLAGS:
+        if key in data:
+            if not isinstance(data[key], bool):
+                raise _BadField(f"{key} must be true or false.")
+            updates[f"mindmap_ai_{key}"] = data[key]
+    if "target_lang" in data:
+        lang = data["target_lang"]
+        if not isinstance(lang, str) or lang not in ("", *(c for c, _ in settings.LANGUAGES)):
+            raise _BadField("target_lang must be a content language.")
+        updates["mindmap_ai_target_lang"] = lang
+    return updates
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mindmap_ai_optimize(request, run_id, question_id):
+    """Presenter (expert mode): ask the LLM for an optimisation proposal of
+    the live mind map. Body: optional settings overrides ``{merge?,
+    translate?, target_lang?, restructure?}`` — saved on the question. →
+    200 ``{ops, dropped, preview, active, proposal, settings}`` (see
+    ``mindmap.simulate_ops``; ``proposal`` = signed ops for ai-preview/
+    ai-apply, 24 h). Nothing in the map changes. 503 AI not configured,
+    400 AI switch off / nothing selected / fewer than 3 visible terms,
+    409 rating stage, 502 AI error."""
+    run, room, question = _mindmap_moderation(request, run_id, question_id)
+    data = request.data
+    if not isinstance(data, dict):
+        return Response({"detail": "Invalid request."}, status=400)
+    try:
+        updates = _mindmap_ai_overrides(data)
+    except _BadField as error:
+        return Response({"detail": str(error)}, status=400)
+    if not ai.is_enabled():
+        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+    if not question.wordcloud_ai_enabled:
+        return Response(
+            {"detail": "KI-Funktionen sind für diese Frage nicht aktiviert."}, status=400
+        )
+    changed = [f for f, v in updates.items() if v != getattr(question, f)]
+    for field in changed:
+        setattr(question, field, updates[field])
+    options = mindmap.ai_settings(question)
+    if not any(options[key] for key in MINDMAP_AI_FLAGS):
+        return Response({"detail": "Select at least one optimisation."}, status=400)
+    if mindmap.is_rating(run, question):
+        return Response({"detail": mindmap.MODERATION_WHILE_RATING}, status=409)
+    mindmap.ensure_seed(run, question)
+    tree = mindmap.build_tree(run, question, presenter=True)
+    if len(ai_mindmap.visible_nodes(tree)) < 3:
+        return Response({"detail": "At least 3 terms are needed."}, status=400)
+    if changed:
+        question.save(update_fields=changed)
+        broadcast(room)  # presenter payload carries the settings
+    system, user = ai_mindmap.build_prompt(tree, question, options)
+    try:
+        reply = ai.chat_json(system, user)
+    except ai.AIError as exc:
+        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+    ops = ai_mindmap.parse_ops(reply)
+    malformed = ai_mindmap.raw_count(reply) - len(ops)
+    result = mindmap.simulate_ops(run, question, ops, options)
+    result["dropped"] += malformed
+    result["proposal"] = mindmap.sign_proposal(run, question, ops, options, malformed)
+    result["settings"] = options
+    return Response(result)
+
+
+def _strict_indices(data):
+    selected = data.get("selected")
+    if not isinstance(selected, list) or len(selected) > mindmap.AI_OPS_MAX or not all(
+        isinstance(i, int) and not isinstance(i, bool) for i in selected
+    ):
+        raise _BadField("selected must be a list of proposal indices.")
+    return selected
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mindmap_ai_preview(request, run_id, question_id):
+    """Re-simulate a proposal for a selection (no LLM call, no change):
+    ``{proposal, selected: [index]}`` → 200 ``{ops, dropped, preview,
+    active}`` (same shapes as ai-optimize)."""
+    run, _room, question = _mindmap_moderation(request, run_id, question_id)
+    data = request.data
+    if not isinstance(data, dict):
+        return Response({"detail": "Invalid request."}, status=400)
+    try:
+        selected = _strict_indices(data)
+        ops, options, malformed = mindmap.unsign_proposal(run, question, data.get("proposal"))
+    except _BadField as error:
+        return Response({"detail": str(error)}, status=400)
+    except mindmap.MindmapError as error:
+        return Response(error.body(), status=error.status)
+    result = mindmap.simulate_ops(run, question, ops, options, selected)
+    result["dropped"] += malformed
+    return Response(result)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mindmap_ai_apply(request, run_id, question_id):
+    """Apply the selected ops of a proposal as one batch: ``{proposal,
+    selected: [index]}`` → 200 ``{applied, skipped, undo: [{type, data}]}``
+    (``skipped`` = selected ops that no longer fit the map). One broadcast."""
+
+    def action(run, question, data):
+        selected = _strict_indices(data)
+        ops, options, _malformed = mindmap.unsign_proposal(run, question, data.get("proposal"))
+        if any(not 0 <= index < len(ops) for index in selected):
+            raise _BadField("selected must be a list of proposal indices.")
+        return mindmap.apply_ops(run, question, ops, options, selected)
+
+    return _mindmap_moderate(request, run_id, question_id, action)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mindmap_ai_undo(request, run_id, question_id):
+    """Undo an applied batch: ``{undo: [{type, data}]}`` (from ai-apply) →
+    200 ``{status: "ok"}``; 409 ``{detail}`` (nothing changed) when the map
+    changed in a way that makes exact restoration impossible."""
+
+    def action(run, question, data):
+        mindmap.undo_ops(run, question, data.get("undo"))
+        return {"status": "ok"}
 
     return _mindmap_moderate(request, run_id, question_id, action)
 

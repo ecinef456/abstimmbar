@@ -113,6 +113,10 @@ QUESTION_CONTENT_FIELDS = (
     "mindmap_rating_budget",
     "mindmap_rating_multi",
     "mindmap_rating_live",
+    "mindmap_ai_merge",
+    "mindmap_ai_translate",
+    "mindmap_ai_target_lang",
+    "mindmap_ai_restructure",
 )
 # Translatable Question fields copied column by column (never the bare
 # accessor): the question text and the mindmap root label.
@@ -290,6 +294,10 @@ def export_set(question_set):
                 "mindmap_rating_budget": question.mindmap_rating_budget,
                 "mindmap_rating_multi": question.mindmap_rating_multi,
                 "mindmap_rating_live": question.mindmap_rating_live,
+                "mindmap_ai_merge": question.mindmap_ai_merge,
+                "mindmap_ai_translate": question.mindmap_ai_translate,
+                "mindmap_ai_target_lang": question.mindmap_ai_target_lang,
+                "mindmap_ai_restructure": question.mindmap_ai_restructure,
                 "section": section_index.get(question.section_id),
                 "options": [
                     {
@@ -449,6 +457,12 @@ def import_set(room, data):
             ),
             mindmap_rating_multi=bool(item.get("mindmap_rating_multi", True)),
             mindmap_rating_live=bool(item.get("mindmap_rating_live", False)),
+            mindmap_ai_merge=bool(item.get("mindmap_ai_merge", True)),
+            mindmap_ai_translate=bool(item.get("mindmap_ai_translate", True)),
+            mindmap_ai_target_lang=mindmap.clamp_target_lang(
+                item.get("mindmap_ai_target_lang")
+            ),
+            mindmap_ai_restructure=bool(item.get("mindmap_ai_restructure", True)),
             shuffle_options=bool(item.get("shuffle_options")),
             binary_choice=bool(item.get("binary_choice")),
             time_limit=time_limit,
