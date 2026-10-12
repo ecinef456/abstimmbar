@@ -405,7 +405,8 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
             "mindmap_root", "mindmap_depth", "mindmap_max_per_person",
             "mindmap_descriptions", "mindmap_highlight_duplicates", "mindmap_seed",
             "mindmap_rating_mode", "mindmap_rating_budget", "mindmap_rating_multi",
-            "mindmap_rating_live",
+            "mindmap_rating_live", "mindmap_ai_merge", "mindmap_ai_translate",
+            "mindmap_ai_target_lang", "mindmap_ai_restructure",
             "reveal_answers", "before_question", "after_question", "is_after",
             "created_at", "updated_at",
         ]

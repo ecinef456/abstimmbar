@@ -9,16 +9,22 @@
  * after another (a promise queue) and the stacks are only touched inside the
  * queue, so quick Ctrl+Z presses can't race an action still in flight.
  * Redoing an add creates the term anew under a new id — later entries are
- * remapped to it. Stacks are kept per run + question. */
+ * remapped to it. Stacks are kept per run + question.
+ *
+ * An applied AI optimisation is one entry ("ai"): undo reverts the whole
+ * batch on the server; it can't be redone (and undoing it drops the redo
+ * stack, whose entries were made on top of the optimised map). */
 import { useRef, useState } from "react";
 import { live } from "../api";
+import type { MindmapAiUndo } from "../api";
 
 type Entry =
   | { kind: "add"; parent: number | null; text: string; description?: string; node: number }
   | { kind: "merge"; source: number; target: number; undo: string }
   | { kind: "move"; node: number; from: number | null; to: number | null }
   | { kind: "rename"; node: number; text: string; undo: string }
-  | { kind: "hide"; node: number; hidden: boolean };
+  | { kind: "hide"; node: number; hidden: boolean }
+  | { kind: "ai"; undo: MindmapAiUndo };
 
 interface Stacks {
   undo: Entry[];
@@ -55,6 +61,8 @@ function remap(entry: Entry, from: number, to: number): Entry {
     case "rename":
     case "hide":
       return { ...entry, node: r(entry.node) };
+    case "ai":
+      return entry;
   }
 }
 
@@ -151,6 +159,9 @@ export function useMindmapModeration(
       case "hide":
         await live.mindmapHide(rid, qid, e.node, e.hidden);
         return e;
+      case "ai":
+        // Not redoable (a fresh proposal is one click away).
+        return null;
     }
   };
 
@@ -168,6 +179,9 @@ export function useMindmapModeration(
         return;
       case "hide":
         await live.mindmapHide(rid, qid, e.node, !e.hidden);
+        return;
+      case "ai":
+        await live.mindmapAiUndo(rid, qid, e.undo);
         return;
     }
   };
@@ -198,7 +212,8 @@ export function useMindmapModeration(
       // A failed undo (the map changed in between) is dropped: its detail
       // goes to the toast and the entry can't be redone either.
       await revert(rid, qid, e);
-      stacks.redo.push(e);
+      if (e.kind === "ai") stacks.redo = [];
+      else stacks.redo.push(e);
     });
 
   const redo = (onlyHide = false) =>
@@ -210,8 +225,28 @@ export function useMindmapModeration(
       if (done) stacks.undo.push(done);
     });
 
+  /** Applies the selected entries of an AI proposal as one batch (queued
+   *  like any action) → one undo entry. Resolves with the server's counts,
+   *  or null when the request failed (the error went to `onError`). */
+  const applyAi = (proposal: string, selected: number[]) =>
+    new Promise<{ applied: number; skipped: number } | null>((resolve) => {
+      if (runId == null || questionId == null) return resolve(null);
+      cbs.current.onAction?.();
+      let result: { applied: number; skipped: number } | null = null;
+      enqueue(async (rid, qid, stacks) => {
+        const res = await live.mindmapAiApply(rid, qid, proposal, selected);
+        result = { applied: res.applied, skipped: res.skipped };
+        if (res.undo.length > 0) {
+          stacks.undo.push({ kind: "ai", undo: res.undo });
+          stacks.redo = [];
+        }
+      });
+      void queue.current.then(() => resolve(result));
+    });
+
   const current = key ? all.current.get(key) : undefined;
   return {
+    applyAi,
     add: (parent: number | null, text: string, description?: string) =>
       act({ kind: "add", parent, text, description, node: 0 }),
     merge: (source: number, target: number) => act({ kind: "merge", source, target, undo: "" }),

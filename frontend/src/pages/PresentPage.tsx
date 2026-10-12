@@ -29,9 +29,10 @@ import VoteRing from "../results/VoteRing";
 import PriorityBar from "../results/PriorityBar";
 import OrderingResult from "../results/OrderingResult";
 import { useReducedMotion } from "../results/motion";
-import MindMap, { hiddenMindmapNodes, mindmapBranchHues } from "../results/MindMap";
+import MindMap, { AI_MARK, hiddenMindmapNodes, mindmapBranchHues } from "../results/MindMap";
 import MindmapRanking, { rankMindmap } from "../results/MindmapRanking";
 import { requestDetail, useMindmapModeration } from "../results/mindmapModeration";
+import { MindmapAiDrawer, useMindmapAi } from "../results/mindmapAi";
 import { INK, evalColor, categoryColor, categoryDeep, categoryHue, termColor } from "../results/palette";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -651,6 +652,43 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   };
   const mmModRef = useRef(mmMod);
   mmModRef.current = mmMod;
+  // AI optimisation (expert mode, AI configured, the question's AI switch
+  // on): star below the pencil → drawer with settings, proposal checklist
+  // and a preview of the optimised map; applying is one undo entry.
+  const showMmAi =
+    expert && mmShown && whoAi.ai && state?.question?.wordcloud_ai_enabled === true;
+  const mmAi = useMindmapAi({
+    runId,
+    questionId: activeKind === "mindmap" ? activeId : null,
+    mindmap,
+    settings: state?.question?.mindmap_ai,
+    rating: !!mmRate,
+    applyBatch: mmMod.applyAi,
+    onApplied: ({ applied, skipped }) =>
+      setMmToast((p) => ({
+        text: [
+          t("{{count}} changes applied — Ctrl/Cmd+Z undoes them.", { count: applied }),
+          skipped > 0
+            ? t("{{count}} no longer fitted the map and were skipped.", { count: skipped })
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+        n: (p?.n ?? 0) + 1,
+      })),
+  });
+  // The star going away (switch off, question change) closes the drawer.
+  useEffect(() => {
+    if (!showMmAi && mmAi.open) mmAi.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMmAi]);
+  const mmAiRef = useRef(mmAi);
+  mmAiRef.current = mmAi;
+  // With the AI drawer (w-96) open the map fits beside it, so every
+  // (marked) term stays visible next to the checklist.
+  const mmPreview = mmAi.proposal?.preview;
+  const mmPreviewRef = useRef(false);
+  mmPreviewRef.current = !!mmPreview;
   useEffect(() => {
     if (!(expert && mmShown)) return;
     const onKey = (e: KeyboardEvent) => {
@@ -658,6 +696,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       // Don't hijack native undo while the presenter types in a field.
       if (isTextField(e.target)) return;
       e.preventDefault();
+      // While a preview is shown, the map isn't the live one: no undo.
+      if (mmPreviewRef.current) return;
       if (e.shiftKey) mmModRef.current.redo(mmRateRef.current);
       else mmModRef.current.undo(mmRateRef.current);
     };
@@ -668,10 +708,14 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // Right-edge handle column: pencil, then sparkles (word clouds) or the
   // zoom handle (mind map), placed clear of the logo / right QR corner.
   const handleColumnTop = useHandleColumn(
-    (showModHandle || showMmHandle ? 1 : 0) + (showAiButton || mmShown ? 1 : 0),
+    (showModHandle || showMmHandle ? 1 : 0) +
+      (showAiButton || mmShown ? 1 : 0) +
+      (showMmAi ? 1 : 0),
   );
   const aiHandleTop = handleColumnTop + (showModHandle ? HANDLE_STEP : 0);
-  const mmZoomTop = handleColumnTop + (showMmHandle ? HANDLE_STEP : 0);
+  // Mind map: pencil, AI star, zoom.
+  const mmAiTop = handleColumnTop + (showMmHandle ? HANDLE_STEP : 0);
+  const mmZoomTop = mmAiTop + (showMmAi ? HANDLE_STEP : 0);
   // Full-width mind map: its title and hint stay centred but clear of the
   // QR boxes top-left (same margin on both sides). `rem` = the usual cap.
   const topLeftRight = useTopLeftExtent(mmShown);
@@ -1158,9 +1202,10 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         return;
       }
       // Likewise an open word-cloud drawer (AI panel / moderation).
-      if (key === "escape" && (showAiPanel || showModPanel)) {
+      if (key === "escape" && (showAiPanel || showModPanel || mmAiRef.current.open)) {
         setShowAiPanel(false);
         setShowModPanel(false);
+        if (mmAiRef.current.open) mmAiRef.current.close();
         return;
       }
       if (key === "q") {
@@ -1807,8 +1852,40 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               <MindmapRanking entries={mmRanking} mode={mmRating.mode} limit={8} animate hues={mmHues} />
             </div>
           )}
-          {mmShown && mindmap && wcView !== "ranking" && (
-            <div className="-mx-8 -mb-6 mt-3 min-h-0 flex-1">
+          {mmShown && mmPreview && (
+            <p
+              style={{ ...mmClear(48), borderColor: AI_MARK, color: AI_MARK }}
+              className="mx-auto mt-2 flex items-center justify-center gap-2 rounded-lg border-2 bg-white px-3 py-1.5 text-sm font-medium"
+              data-testid="mm-ai-preview-banner"
+            >
+              <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+              {t("Preview of the AI proposal — nothing has been changed yet.")}
+            </p>
+          )}
+          {mmShown && mmPreview && (
+            <div
+              className="-mx-8 -mb-6 mt-3 min-h-0 flex-1"
+              style={mmAi.open ? { marginRight: "22rem" } : undefined}
+              data-testid="mm-ai-preview"
+            >
+              <MindMap
+                rootLabel={localizedText(mmPreview.root.label)}
+                nodes={mmPreview.nodes}
+                detailed={wcView === "detailed"}
+                highlightDuplicates={mmPreview.highlight_duplicates}
+                maxDepth={mmPreview.depth}
+                withDescriptions={mmPreview.descriptions}
+                zoomHandleTop={mmZoomTop}
+                memoryKey={`${runId}:${question.id}`}
+                previewMarks
+              />
+            </div>
+          )}
+          {mmShown && mindmap && !mmPreview && wcView !== "ranking" && (
+            <div
+              className="-mx-8 -mb-6 mt-3 min-h-0 flex-1"
+              style={mmAi.open ? { marginRight: "22rem" } : undefined}
+            >
               <MindMap
                 rootLabel={localizedText(mindmap.root.label)}
                 nodes={mindmap.nodes}
@@ -2206,6 +2283,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 {...{ [WC_DRAWER_ATTR]: "" }}
                 onClick={(e) => {
                   e.currentTarget.blur();
+                  if (mmAi.open) mmAi.close();
                   setShowModPanel((s) => !s);
                 }}
                 aria-label={t("Moderate")}
@@ -2296,6 +2374,31 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   )}
                 </div>
               </div>
+            </>
+          )}
+
+          {showMmAi && (
+            <>
+              <button
+                type="button"
+                {...{ [WC_DRAWER_ATTR]: "" }}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  setShowModPanel(false);
+                  if (mmAi.open) mmAi.close();
+                  else mmAi.setOpen(true);
+                }}
+                aria-label={t("AI mind map")}
+                title={t("AI mind map")}
+                style={{ top: mmAiTop }}
+                data-beamer-inset=""
+                className={`fixed right-0 z-30 rounded-l-xl border border-r-0 border-slate-200 bg-white/95 p-3 text-slate-500 shadow-md transition-opacity hover:text-slate-800 ${
+                  mmAi.open ? "pointer-events-none opacity-0" : "opacity-100"
+                }`}
+              >
+                <Sparkles className="h-5 w-5" />
+              </button>
+              <MindmapAiDrawer ai={mmAi} drawerAttr={WC_DRAWER_ATTR} onClick={blurClickedButton} />
             </>
           )}
 

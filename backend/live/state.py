@@ -220,6 +220,8 @@ def build_payloads(room):
                 presenter["mindmap"]["rating"] = rating
             # "votes" of a mind map = distinct contributing participants.
             presenter["votes"] = mindmap.contributor_count(run, question)
+            # Presenter-only: the AI optimisation settings (beamer star panel).
+            presenter["question"]["mindmap_ai"] = mindmap.ai_settings(question)
         elif question.kind in Question.TEXT_KINDS:
             presenter["words"] = words_with_counts(run, question)
             mod = WordCloudModeration.objects.filter(run=run, question=question).first()

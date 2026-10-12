@@ -210,6 +210,15 @@ def clamp_rating_mode(value):
     return value if value in (RATING_POINTS, RATING_UPDOWN) else ""
 
 
+def clamp_target_lang(value):
+    """AI target language from foreign input: a content language code, else
+    "" (= the canonical content language)."""
+    from django.conf import settings
+
+    codes = {code for code, _ in settings.LANGUAGES}
+    return value if isinstance(value, str) and value in codes else ""
+
+
 def clamp_rating_budget(value):
     """Rating budget from foreign input: an int in 1–50, else the default."""
     if isinstance(value, int) and not isinstance(value, bool) and (

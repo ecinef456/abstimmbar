@@ -26,7 +26,19 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, CornerDownRight, Maximize2, Minus, Plus, X, ZoomIn } from "lucide-react";
+import {
+  ChevronRight,
+  CornerDownRight,
+  FolderPlus,
+  Languages,
+  Maximize2,
+  Merge,
+  Minus,
+  MoveRight,
+  Plus,
+  X,
+  ZoomIn,
+} from "lucide-react";
 import { localizedText } from "@basicbar/ui";
 import type { LiveMindmapNode, MindmapRating } from "../api";
 import { CORRECT, CORRECT_STRONG, CORRECT_TINT, INK, MINUS, MINUS_INK, MINUS_TINT, NEUTRAL_TILE } from "./palette";
@@ -593,6 +605,13 @@ export function branchHues(
  * `memoryKey` (small LRU, like the branch sides). */
 const hueMemory = new Map<string, Map<number, number>>();
 
+/** Id order for the stable branch-colour rank. Terms that exist only in an
+ * AI preview have negative ids (-1, -2, … in creation order): they rank
+ * after the real ones, as they will once applied, so existing branches keep
+ * their colour between preview and live map. */
+const byStableId = (a: number, b: number) =>
+  (a < 0 ? 2 ** 40 - a : a) - (b < 0 ? 2 ** 40 - b : b);
+
 /** Hue (degrees) of each visible main branch, as the map colours it: what
  * the map with `memoryKey` last drew, otherwise the same rule without the
  * display order (stable rank by id, neighbours in tree order differ) — e.g.
@@ -603,7 +622,7 @@ export function mindmapBranchHues(
 ): Map<number, number> {
   const remembered = memoryKey ? hueMemory.get(memoryKey) : undefined;
   const stable = new Map(
-    nodes.map((n) => n.id).sort((a, b) => a - b).map((id, i) => [id, i] as const),
+    nodes.map((n) => n.id).sort(byStableId).map((id, i) => [id, i] as const),
   );
   const ids = nodes.filter((n) => !n.hidden).map((n) => n.id);
   const fallback = branchHues(ids, stable);
@@ -678,6 +697,7 @@ export default function MindMap({
   memoryKey,
   rating,
   lockedNote,
+  previewMarks = false,
 }: {
   rootLabel: string;
   /** Presenter-form tree (hidden nodes are skipped with their subtree). */
@@ -712,6 +732,9 @@ export default function MindMap({
   rating?: MindmapRating;
   /** Why add/merge/move/rename are switched off right now (tooltip). */
   lockedNote?: string;
+  /** AI preview: terms changed by the proposal get a ring and small marks
+   *  (merged / renamed / moved / new parent term) with a tooltip. */
+  previewMarks?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   // Seeded terms resolve to the UI language (mindmapNodeText): re-measure on
@@ -861,7 +884,7 @@ export default function MindMap({
   // clockwise display order never share a hue.
   const branchHue = useMemo(() => {
     const stable = new Map(
-      [...allNodes].map((n) => n.id).sort((a, b) => a - b).map((id, i) => [id, i] as const),
+      [...allNodes].map((n) => n.id).sort(byStableId).map((id, i) => [id, i] as const),
     );
     const mains = layout.nodes.filter((p) => p.depth === 1);
     const clockwise = [
@@ -1294,16 +1317,20 @@ export default function MindMap({
         ? t("{{count}} points", { count: Number(rl.badges[0].text) })
         : rl.badges.map((b) => b.text).join(" ")
       : "";
+    const marks = previewMarks ? previewMarksOf(n, t) : [];
     const nodeTitle =
-      [n.count > 1 ? `${n.count}×` : "", scoreTitle, lockedNote ?? ""].filter(Boolean).join(" · ") ||
-      undefined;
+      [n.count > 1 ? `${n.count}×` : "", scoreTitle, lockedNote ?? "", ...marks.map((m) => m.title)]
+        .filter(Boolean)
+        .join(" · ") || undefined;
     const target =
       nodeDrag?.target?.kind === "merge" && nodeDrag.target.id === p.id ? nodeDrag.target : null;
     const ring = target
       ? `3px solid ${target.problem ? BAD : GOOD}`
-      : repeated
-        ? `2px dashed ${deep(hue)}`
-        : undefined;
+      : marks.length > 0
+        ? `3px solid ${AI_MARK}`
+        : repeated
+          ? `2px dashed ${deep(hue)}`
+          : undefined;
     return (
       <div
         key={p.id}
@@ -1425,6 +1452,25 @@ export default function MindMap({
                 </div>
               ))}
             </div>
+          )}
+          {marks.length > 0 && (
+            <span
+              className="absolute -left-3 -top-3.5 flex gap-0.5"
+              data-mm-mark={marks.map((m) => m.kind).join(" ")}
+            >
+              {marks.map((m) => (
+                <span
+                  key={m.kind}
+                  title={m.title}
+                  aria-label={m.title}
+                  role="img"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-white shadow-sm"
+                  style={{ background: AI_MARK }}
+                >
+                  <m.Icon className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
+                </span>
+              ))}
+            </span>
           )}
           {onHide && !nodeDrag && (
             <button
@@ -1831,6 +1877,36 @@ export default function MindMap({
       )}
     </div>
   );
+}
+
+/** Accent of the AI preview marks (violet, clear of the pastel branch fills
+ *  and of the green/red drag feedback; white icons pass 4.5:1). */
+export const AI_MARK = "oklch(0.48 0.17 290)";
+
+type MarkKind = "merged" | "renamed" | "moved" | "new";
+/** The preview marks of a term, in a fixed order. */
+function previewMarksOf(
+  n: LiveMindmapNode,
+  t: ReturnType<typeof useTranslation>["t"],
+): { kind: MarkKind; title: string; Icon: typeof Merge }[] {
+  const out: { kind: MarkKind; title: string; Icon: typeof Merge }[] = [];
+  if (n.new) out.push({ kind: "new", title: t("New parent term"), Icon: FolderPlus });
+  if (n.merged_from?.length)
+    out.push({
+      kind: "merged",
+      title: t("Merged from {{terms}}", {
+        terms: n.merged_from.join(", "),
+      }),
+      Icon: Merge,
+    });
+  if (n.renamed_from)
+    out.push({
+      kind: "renamed",
+      title: t("Renamed: {{old}} → {{new}}", { old: n.renamed_from, new: mindmapNodeText(n) }),
+      Icon: Languages,
+    });
+  if (n.moved) out.push({ kind: "moved", title: t("Moved here"), Icon: MoveRight });
+  return out;
 }
 
 /** One rating badge on a term: points as a dark dot-voting pill, plus/minus

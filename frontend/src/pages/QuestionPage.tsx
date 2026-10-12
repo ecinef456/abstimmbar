@@ -255,6 +255,11 @@ export default function QuestionPage() {
   const [mindmapRatingBudget, setMindmapRatingBudget] = useState(5);
   const [mindmapRatingMulti, setMindmapRatingMulti] = useState(true);
   const [mindmapRatingLive, setMindmapRatingLive] = useState(false);
+  // "Optimise mind map" (AI, beamer): what the AI may do (backend defaults).
+  const [mindmapAiMerge, setMindmapAiMerge] = useState(true);
+  const [mindmapAiTranslate, setMindmapAiTranslate] = useState(true);
+  const [mindmapAiTargetLang, setMindmapAiTargetLang] = useState<"" | "de" | "en">("");
+  const [mindmapAiRestructure, setMindmapAiRestructure] = useState(true);
   // Server refusal for the rating mode (locked while a running session has
   // ratings), shown at the field.
   const [ratingModeError, setRatingModeError] = useState("");
@@ -351,6 +356,10 @@ export default function QuestionPage() {
       setMindmapRatingBudget(data.mindmap_rating_budget ?? 5);
       setMindmapRatingMulti(data.mindmap_rating_multi ?? true);
       setMindmapRatingLive(data.mindmap_rating_live ?? false);
+      setMindmapAiMerge(data.mindmap_ai_merge ?? true);
+      setMindmapAiTranslate(data.mindmap_ai_translate ?? true);
+      setMindmapAiTargetLang(data.mindmap_ai_target_lang ?? "");
+      setMindmapAiRestructure(data.mindmap_ai_restructure ?? true);
       setTimeLimit(data.time_limit ? String(data.time_limit) : "");
       // Options keep the full {de, en} map so each can be edited bilingually
       // (#33 MR2 Task 9).
@@ -549,8 +558,9 @@ export default function QuestionPage() {
           wordcloudBatchSubmit,
         wordcloud_live: question.kind !== "word_cloud" || wordcloudLive,
         // Word clouds (AI cleanup) and free text (AI key statements) share
-        // these fields; other kinds reset them.
-        wordcloud_ai_enabled: textKind && wordcloudAiEnabled,
+        // these fields; the mind map uses the switch for its AI optimisation;
+        // other kinds reset them.
+        wordcloud_ai_enabled: (textKind || question.kind === "mindmap") && wordcloudAiEnabled,
         wordcloud_grouping: textKind ? wordcloudGrouping : "",
         wordcloud_grouping_use_solution: groupingUseSolution,
         wordcloud_merge_variants: wordcloudMergeVariants,
@@ -569,6 +579,10 @@ export default function QuestionPage() {
               mindmap_rating_budget: mindmapRatingBudget,
               mindmap_rating_multi: mindmapRatingMulti,
               mindmap_rating_live: mindmapRatingLive,
+              mindmap_ai_merge: mindmapAiMerge,
+              mindmap_ai_translate: mindmapAiTranslate,
+              mindmap_ai_target_lang: mindmapAiTargetLang,
+              mindmap_ai_restructure: mindmapAiRestructure,
             }
           : {}),
         time_limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : null,
@@ -809,6 +823,7 @@ export default function QuestionPage() {
       mindmapRoot, mindmapDepth, mindmapMaxPerPerson, mindmapDescriptions,
       mindmapHighlight, mindmapSeed: fromEditableSeed(mindmapSeed),
       mindmapRatingMode, mindmapRatingBudget, mindmapRatingMulti, mindmapRatingLive,
+      mindmapAiMerge, mindmapAiTranslate, mindmapAiTargetLang, mindmapAiRestructure,
     });
   }
 
@@ -1588,6 +1603,72 @@ export default function QuestionPage() {
               )}
             </div>
           </div>
+        )}
+        {question.kind === "mindmap" && aiEnabled && (
+          <AiAssistPanel title={t("Optimise mind map with AI (presentation)")}>
+            <ToggleSwitch
+              checked={wordcloudAiEnabled}
+              onChange={setWordcloudAiEnabled}
+              label={t("Enable AI features")}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              {t(
+                "In presentation mode, the star below the pencil asks the AI for a proposal. You see a preview and decide which changes to apply.",
+              )}
+            </p>
+            {wordcloudAiEnabled && (
+              <fieldset className="mt-3">
+                <legend className="text-sm text-slate-700 dark:text-slate-300">{t("The AI may:")}</legend>
+                <div className="mt-1 grid gap-1 pl-1">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={mindmapAiMerge}
+                      onChange={(event) => setMindmapAiMerge(event.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 accent-brand-600"
+                    />
+                    {t("Merge duplicates and synonyms")}
+                  </label>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={mindmapAiTranslate}
+                        onChange={(event) => setMindmapAiTranslate(event.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 accent-brand-600"
+                      />
+                      {t("Unify the language")}
+                    </label>
+                    {mindmapAiTranslate && (
+                      <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        {t("Target language")}
+                        <select
+                          value={mindmapAiTargetLang}
+                          onChange={(event) =>
+                            setMindmapAiTargetLang(event.target.value as "" | "de" | "en")
+                          }
+                          className="rounded-lg border border-field bg-white px-2 py-1 text-sm dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
+                        >
+                          <option value="">{t("Content language (default)")}</option>
+                          <option value="de">{t("German")}</option>
+                          <option value="en">{t("English")}</option>
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={mindmapAiRestructure}
+                      onChange={(event) => setMindmapAiRestructure(event.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 accent-brand-600"
+                    />
+                    {t("Restructure (move terms, new parent terms)")}
+                  </label>
+                </div>
+              </fieldset>
+            )}
+          </AiAssistPanel>
         )}
 
         {question.kind === "word_cloud" && (

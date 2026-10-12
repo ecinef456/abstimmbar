@@ -5136,3 +5136,96 @@ class MindmapSeedHelperTests(SimpleTestCase):
         from .mindmap import text_key
 
         self.assertEqual(text_key("  Klima   Schutz "), text_key("klima schutz"))
+
+
+class MindmapAiSettingsTests(ApiTestCase):
+    """Mindmap AI optimisation (stage 3): the four question settings and the
+    AI switch (``wordcloud_ai_enabled``) on mindmap questions."""
+
+    def setUp(self):
+        super().setUp()
+        self.question_set = QuestionSet.objects.create(room=self.room, title_de="Live")
+
+    def _create(self, **overrides):
+        payload = {
+            "question_set": self.question_set.pk,
+            "kind": "mindmap",
+            "text": {"de": "<p>Q?</p>", "en": ""},
+            "options": [],
+        }
+        payload.update(overrides)
+        return self.client.post("/api/questions/", payload, content_type="application/json")
+
+    def test_defaults(self):
+        data = self._create().json()
+        self.assertTrue(data["mindmap_ai_merge"])
+        self.assertTrue(data["mindmap_ai_translate"])
+        self.assertEqual(data["mindmap_ai_target_lang"], "")
+        self.assertTrue(data["mindmap_ai_restructure"])
+        self.assertFalse(data["wordcloud_ai_enabled"])
+
+    def test_settings_saved_incl_ai_switch(self):
+        response = self._create(
+            wordcloud_ai_enabled=True, mindmap_ai_merge=False, mindmap_ai_translate=False,
+            mindmap_ai_target_lang="en", mindmap_ai_restructure=False,
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        question = Question.objects.get(pk=response.json()["id"])
+        self.assertTrue(question.wordcloud_ai_enabled)
+        self.assertFalse(question.mindmap_ai_merge)
+        self.assertFalse(question.mindmap_ai_translate)
+        self.assertEqual(question.mindmap_ai_target_lang, "en")
+        self.assertFalse(question.mindmap_ai_restructure)
+
+    def test_target_lang_choices(self):
+        for ok in ("", "de", "en"):
+            self.assertEqual(self._create(mindmap_ai_target_lang=ok).status_code, 201, ok)
+        response = self._create(mindmap_ai_target_lang="fr")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("mindmap_ai_target_lang", response.json())
+
+    def _ai_question(self):
+        return Question.objects.create(
+            question_set=self.question_set, kind="mindmap", text_de="<p>Q</p>",
+            wordcloud_ai_enabled=True, mindmap_ai_merge=False, mindmap_ai_translate=True,
+            mindmap_ai_target_lang="en", mindmap_ai_restructure=False,
+        )
+
+    def _assert_ai(self, question):
+        self.assertTrue(question.wordcloud_ai_enabled)
+        self.assertFalse(question.mindmap_ai_merge)
+        self.assertTrue(question.mindmap_ai_translate)
+        self.assertEqual(question.mindmap_ai_target_lang, "en")
+        self.assertFalse(question.mindmap_ai_restructure)
+
+    def test_duplicate_copies_ai_settings(self):
+        from .transfer import duplicate_set
+
+        self._ai_question()
+        self._assert_ai(duplicate_set(self.question_set, self.room).questions.get())
+
+    def test_export_import_roundtrip(self):
+        from .transfer import export_set, import_set
+
+        self._ai_question()
+        data = export_set(self.question_set)
+        self.assertEqual(data["questions"][0]["mindmap_ai_target_lang"], "en")
+        self._assert_ai(import_set(self.room, data).questions.get())
+
+    def test_import_sanitises_and_defaults(self):
+        from .transfer import import_set
+
+        imported = import_set(self.room, {
+            "format": "abstimmbar-set-v2",
+            "title": {"de": "Fremd", "en": ""},
+            "questions": [{
+                "kind": "mindmap",
+                "text": {"de": "<p>Q</p>", "en": ""},
+                "mindmap_ai_target_lang": "xx",
+            }],
+        })
+        question = imported.questions.get()
+        self.assertEqual(question.mindmap_ai_target_lang, "")
+        self.assertTrue(question.mindmap_ai_merge)
+        self.assertTrue(question.mindmap_ai_translate)
+        self.assertTrue(question.mindmap_ai_restructure)
