@@ -1119,13 +1119,15 @@ class _SimTree:
     operations. ``nodes``: id → {parent, hidden, text, key, seeded, teacher}
     (+ payload data when built for the preview)."""
 
-    def __init__(self, nodes, order):
+    def __init__(self, nodes, order, created=()):
         self.nodes = nodes
         self.order = order  # ids in created order (siblings sort by it)
         self.next_new = 0
+        # Terms this AI batch added itself: not "fixed" for its later ops.
+        self.created = set(created)
 
     @classmethod
-    def load(cls, run, question):
+    def load(cls, run, question, created=()):
         rows = MindmapNode.objects.filter(run=run, question=question).order_by(
             "created_at", "pk"
         ).values_list("id", "parent_id", "hidden", "text", "text_key", "seeded", "teacher")
@@ -1136,28 +1138,55 @@ class _SimTree:
                 "seeded": seeded, "teacher": teacher,
             }
             order.append(node_id)
-        return cls(nodes, order)
+        return cls(nodes, order, created)
 
     @classmethod
     def for_preview(cls, run, question):
         """With the presenter payload per node and the contributing token ids
-        (counts after a merge = distinct participants; never exposed)."""
-        sim = cls.load(run, question)
-        payload = build_tree(run, question, presenter=True)
+        (counts after a merge = distinct participants; never exposed).
+
+        Read under the run lock (participants' add/withdraw take it too, so
+        the reads agree; held only for these reads, never during the LLM
+        call) — and tolerant anyway: only nodes present in both the node
+        rows and the presenter tree are kept, with their whole path."""
+        with transaction.atomic():
+            _lock_run(run)
+            sim = cls.load(run, question)
+            payload = build_tree(run, question, presenter=True)
+            contributions = list(
+                MindmapContribution.objects.filter(
+                    node__run=run, node__question=question
+                ).values_list("node_id", "token_id")
+            )
 
         def walk(entries):
+            kept = []
             for entry in entries:
                 children = entry.pop("children")
+                if entry["id"] not in sim.nodes:
+                    continue  # appeared between the reads: left out
                 sim.nodes[entry["id"]]["payload"] = entry
+                kept.append(entry)
                 walk(children)
+            return kept
 
-        walk(payload["nodes"])
+        payload["nodes"] = walk(payload["nodes"])
+        changed = True
+        while changed:  # drop rows without payload, then orphans below them
+            changed = False
+            for node_id in list(sim.order):
+                node = sim.nodes[node_id]
+                if "payload" not in node or (
+                    node["parent"] is not None and node["parent"] not in sim.nodes
+                ):
+                    del sim.nodes[node_id]
+                    sim.order.remove(node_id)
+                    changed = True
         for node in sim.nodes.values():
             node["tokens"] = set()
-        for node_id, token_id in MindmapContribution.objects.filter(
-            node__run=run, node__question=question
-        ).values_list("node_id", "token_id"):
-            sim.nodes[node_id]["tokens"].add(token_id)
+        for node_id, token_id in contributions:
+            if node_id in sim.nodes:
+                sim.nodes[node_id]["tokens"].add(token_id)
         sim.payload = payload
         return sim
 
@@ -1181,6 +1210,8 @@ class _SimTree:
         return None
 
     def fixed(self, node_id):
+        if node_id in self.created:
+            return False
         n = self.nodes[node_id]
         return n["seeded"] or n["teacher"]
 
@@ -1248,6 +1279,7 @@ class _SimTree:
             },
         }
         self.order.append(node_id)
+        self.created.add(node_id)
         return node_id
 
     def preview(self):
@@ -1280,13 +1312,13 @@ def _check_ai_op(sim, question, op, refs):
     tree = sim.tree
     kind = op["type"]
     if kind == "merge":
-        source, target = op["source"], op["target"]
+        source, target = _resolve(op["source"], refs), _resolve(op["target"], refs)
         _check_merge(tree, question, source, target, sim.children_of)
         if sim.fixed(source):
             raise MindmapError("Presenter and predefined terms keep their names.", 409)
         return {"source": source, "target": target}
     if kind == "rename":
-        node = op["node"]
+        node = _resolve(op["node"], refs)
         _node_or_404(tree, node)
         if _effectively_hidden(tree, node):
             raise MindmapError("This branch is hidden.", 409)
@@ -1302,7 +1334,7 @@ def _check_ai_op(sim, question, op, refs):
             _check_merge(tree, question, node, clash, sim.children_of)
         return {"node": node, "text": text, "key": key, "clash": clash}
     if kind == "move":
-        node = op["node"]
+        node = _resolve(op["node"], refs)
         parent = _resolve(op["parent"], refs)
         _node_or_404(tree, node)
         if _effectively_hidden(tree, node):
@@ -1330,9 +1362,13 @@ def _check_ai_op(sim, question, op, refs):
     return {"parent": parent, "text": text, "key": key, "existing": None}
 
 
+REF_FIELDS = ("source", "target", "node", "parent")
+
+
 def _describe(sim, op, resolved, ref_index):
-    """Client entry for a valid op: index, type, ids, names, reason, label,
-    ``requires`` (indices of the ``add`` ops whose new term it uses)."""
+    """Client entry for a valid op: index, type, the op's own references
+    (node id, or the temp ref of an earlier ``add``), names, reason, label,
+    ``requires`` (indices of ALL ``add`` ops it builds on, transitively)."""
 
     def name(node_id):
         return None if node_id is None else sim.label(node_id)
@@ -1341,26 +1377,29 @@ def _describe(sim, op, resolved, ref_index):
     entry = {"index": op["index"], "type": kind, "reason": op.get("reason", "")}
     if kind == "merge":
         source, target = name(resolved["source"]), name(resolved["target"])
-        entry.update(source=resolved["source"], target=resolved["target"],
+        entry.update(source=op["source"], target=op["target"],
                      source_text=source, target_text=target,
                      label=f"{source} → {target}")
     elif kind == "rename":
         old = name(resolved["node"])
-        entry.update(node=resolved["node"], text=resolved["text"], old_text=old,
+        entry.update(node=op["node"], text=resolved["text"], old_text=old,
                      merges_into=resolved["clash"],
                      label=f"{old} → {resolved['text']}")
     elif kind == "move":
         node, parent = name(resolved["node"]), name(resolved["parent"])
-        entry.update(node=resolved["node"], parent=op["parent"], node_text=node,
+        entry.update(node=op["node"], parent=op["parent"], node_text=node,
                      parent_text=parent, old_parent_text=name(resolved["old_parent"]),
                      label=f"{node} → {parent if parent is not None else '⌂'}")
     else:
         entry.update(ref=op["ref"], parent=op["parent"], text=resolved["text"],
                      parent_text=name(resolved["parent"]), label=f"+ {resolved['text']}")
-    parent = op.get("parent")
-    entry["requires"] = (
-        [ref_index[parent]] if isinstance(parent, str) and parent in ref_index else []
-    )
+    requires = set()
+    for field in REF_FIELDS:
+        value = op.get(field)
+        if isinstance(value, str) and value in ref_index:
+            index, inherited = ref_index[value]
+            requires |= {index, *inherited}
+    entry["requires"] = sorted(requires)
     return entry
 
 
@@ -1390,6 +1429,7 @@ def _run_ops(sim, question, ops, options, selected=None):
     ops, the number of selected ops that did not fit, applied indices."""
     refs, ref_index = {}, {}
     entries, failed, applied = [], 0, []
+    sim.aliased = set()  # adds of a term that exists there (no change)
     for op in ops:
         chosen = selected is None or op["index"] in selected
         if not chosen and op["type"] != "add":
@@ -1403,12 +1443,14 @@ def _run_ops(sim, question, ops, options, selected=None):
             continue
         if op["type"] == "add" and resolved["existing"] is not None:
             refs[op["ref"]] = resolved["existing"]
+            sim.aliased.add(op["index"])
             continue
         if not chosen:
             continue
-        entries.append(_describe(sim, op, resolved, ref_index))
+        entry = _describe(sim, op, resolved, ref_index)
+        entries.append(entry)
         if op["type"] == "add":
-            ref_index[op["ref"]] = op["index"]
+            ref_index[op["ref"]] = (op["index"], entry["requires"])
         _sim_apply(sim, op, resolved, refs)
         applied.append(op["index"])
     return entries, failed, applied
@@ -1438,18 +1480,25 @@ def simulate_ops(run, question, ops, options, selected=None):
 def apply_ops(run, question, ops, options, selected):
     """Apply the ``selected`` ops (indices) in order, each re-checked against
     the live map (``_check_ai_op`` on a fresh copy) and run through the
-    manual primitives. Returns ``{applied, skipped, undo}``: ``undo`` =
-    ``[{type, data}]`` in application order — merge/rename: the signed undo
-    string; move: ``{node, parent}`` (old parent); add: ``{node}`` (inverse =
+    manual primitives. Like ``simulate_ops``, only ops that fit when the
+    whole proposal is applied to the current map can be selected (preview
+    and apply agree). Returns ``{applied, skipped, undo}``: ``skipped`` =
+    selected ops that do not fit (any more); ``undo`` = ``[{type, data}]``
+    in application order — merge/rename: the signed undo string; move:
+    ``{node, parent}`` (old parent); add: ``{node}`` (inverse =
     ``teacher_delete``). All under one transaction and the run lock; 409
     (nothing applied) during the rating stage."""
-    selected = set(selected)
     applied, skipped, undo = 0, 0, []
     ensure_seed(run, question)
     with transaction.atomic():
         _lock_run(run)
         _refuse_while_rating(run, question)
-        refs = {}
+        full = _SimTree.load(run, question)
+        _entries, _failed, fitting = _run_ops(full, question, ops, options)
+        # An add whose term exists by now is neither applied nor skipped.
+        skipped = len(set(selected) - set(fitting) - full.aliased)
+        selected = set(selected) & set(fitting)
+        refs, created = {}, set()
         for op in ops:
             chosen = op["index"] in selected
             if not chosen and op["type"] != "add":
@@ -1457,7 +1506,8 @@ def apply_ops(run, question, ops, options, selected):
             try:
                 if not _op_enabled(op["type"], options):
                     raise MindmapError("Switched off.")
-                resolved = _check_ai_op(_SimTree.load(run, question), question, op, refs)
+                sim = _SimTree.load(run, question, created)
+                resolved = _check_ai_op(sim, question, op, refs)
             except MindmapError:
                 skipped += chosen
                 continue
@@ -1472,12 +1522,18 @@ def apply_ops(run, question, ops, options, selected):
             except (MindmapError, IntegrityError):
                 skipped += 1
                 continue
+            if item is None:
+                continue  # the term was already there: its ref points to it
+            if item["type"] == "add":
+                created.add(item["data"]["node"])
             undo.append(item)
             applied += 1
     return {"applied": applied, "skipped": skipped, "undo": undo}
 
 
 def _apply_one(run, question, op, resolved, refs):
+    """Run one checked op through its manual primitive; the undo item, or
+    None for an ``add`` whose term exists already (nothing to undo)."""
     kind = op["type"]
     if kind == "merge":
         blob = merge_nodes(run, question, resolved["source"], resolved["target"])
@@ -1490,9 +1546,7 @@ def _apply_one(run, question, op, resolved, refs):
         return {"type": "move", "data": data}
     node, merged = teacher_add(run, question, resolved["parent"], resolved["text"])
     refs[op["ref"]] = node.pk
-    if merged:  # appeared in between: nothing to undo
-        raise MindmapError("Already there.")
-    return {"type": "add", "data": {"node": node.pk}}
+    return None if merged else {"type": "add", "data": {"node": node.pk}}
 
 
 def sign_proposal(run, question, ops, options, malformed=0):

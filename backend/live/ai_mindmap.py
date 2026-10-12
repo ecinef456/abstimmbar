@@ -87,7 +87,8 @@ def build_prompt(tree, question, options):
         allowed.append(
             '- "add" {"ref", "parent", "text"}: neuer Oberbegriff unter '
             '"parent" (Begriffs-id oder null = Hauptast); "ref" ist eine neue '
-            'Kennung wie "n1", auf die sich spätere Operationen beziehen.'
+            'Kennung wie "n1", die spätere Operationen statt einer id '
+            'verwenden (als "parent" oder "node").'
         )
         allowed.append(
             '- "move" {"node", "parent"}: Begriff (mit seinen Unterbegriffen) '
@@ -155,46 +156,61 @@ def _text(value):
 def raw_count(data):
     """How many entries the reply's ``ops`` list had (for the dropped count)."""
     raw = data.get("ops") if isinstance(data, dict) else None
-    return min(len(raw), AI_OPS_MAX) if isinstance(raw, list) else 0
+    return len(raw) if isinstance(raw, list) else 0
+
+
+_INVALID = object()
 
 
 def parse_ops(data):
     """Well-formed ops of the model's reply, numbered (``index``) in order:
     ``merge {source, target}``, ``rename {node, text}``, ``add {ref, parent,
-    text}``, ``move {node, parent}`` (+ ``reason``). ``parent`` is a node id,
-    an earlier ``add``'s ref or None. Malformed entries are dropped; a ref
-    used twice keeps its first ``add``."""
+    text}``, ``move {node, parent}`` (+ ``reason``). Every node reference is
+    a node id or the ref of an EARLIER ``add`` (so the AI's own new parent
+    terms can be used by later ops); ``parent`` may also be None (main
+    branch). Malformed entries are dropped; a ref used twice keeps its
+    first ``add``."""
     raw = data.get("ops") if isinstance(data, dict) else None
     if not isinstance(raw, list):
         return []
     ops, refs = [], set()
+
+    def node_ref(value, *, nullable=False):
+        if value is None and nullable:
+            return None
+        if _is_id(value):
+            return value
+        if _is_ref(value) and value.strip() in refs:
+            return value.strip()
+        return _INVALID
+
     for item in raw[:AI_OPS_MAX]:
         if not isinstance(item, dict):
             continue
         kind = item.get("type")
         op = None
         if kind == "merge":
-            if _is_id(item.get("source")) and _is_id(item.get("target")):
-                op = {"type": kind, "source": item["source"], "target": item["target"]}
+            source, target = node_ref(item.get("source")), node_ref(item.get("target"))
+            if _INVALID not in (source, target):
+                op = {"type": kind, "source": source, "target": target}
         elif kind == "rename":
-            if _is_id(item.get("node")) and _text(item.get("text")):
-                op = {"type": kind, "node": item["node"], "text": item["text"]}
+            node = node_ref(item.get("node"))
+            if node is not _INVALID and _text(item.get("text")):
+                op = {"type": kind, "node": node, "text": item["text"]}
         elif kind in ("add", "move"):
-            parent = item.get("parent")
-            if not (parent is None or _is_id(parent) or _is_ref(parent)):
+            parent = node_ref(item.get("parent"), nullable=True)
+            if parent is _INVALID:
                 continue
-            if isinstance(parent, str):
-                parent = parent.strip()
-                if parent not in refs:  # must name an EARLIER add
-                    continue
             if kind == "add":
                 ref = item.get("ref")
                 if _is_ref(ref) and ref.strip() not in refs and _text(item.get("text")):
                     refs.add(ref.strip())
                     op = {"type": kind, "ref": ref.strip(), "parent": parent,
                           "text": item["text"]}
-            elif _is_id(item.get("node")):
-                op = {"type": kind, "node": item["node"], "parent": parent}
+            else:
+                node = node_ref(item.get("node"))
+                if node is not _INVALID:
+                    op = {"type": kind, "node": node, "parent": parent}
         if op is None:
             continue
         reason = item.get("reason")

@@ -438,3 +438,104 @@ class MindmapAiEndpointTests(MindmapAiTestCase):
             {"merge": True, "translate": True, "target_lang": "de", "restructure": True},
         )
         self.assertNotIn("mindmap_ai", base.build_payloads(self.room)["participant"]["question"])
+
+
+class MindmapAiFixRoundTests(MindmapAiTestCase):
+    """Review fix round 1: consistent preview reads, AI-added terms usable
+    by later ops, apply/preview agreement, skipped counts."""
+
+    def ops(self):
+        return [
+            {"type": "add", "ref": "n1", "parent": None, "text": "Erneuerbare"},
+            {"type": "move", "node": self.wind, "parent": "n1"},
+            {"type": "rename", "node": self.energy, "text": "Energie"},
+        ]
+
+    def _preview_with_change_between_reads(self, change):
+        body = self.optimize(self.ops()).json()
+        real = mindmap.build_tree
+
+        def racing_build_tree(*args, **kwargs):
+            change()
+            return real(*args, **kwargs)
+
+        with patch("live.mindmap.build_tree", side_effect=racing_build_tree):
+            return self.post("ai-preview", {"proposal": body["proposal"], "selected": [0, 1, 2]})
+
+    def test_preview_survives_term_added_between_reads(self):
+        def add():
+            node = MindmapNode.objects.create(
+                run=self.run, question=self.mq, text="Neu", text_key="neu"
+            )
+            MindmapContribution.objects.create(
+                node=node, token=ParticipantToken.objects.get(key=self.t1)
+            )
+
+        response = self._preview_with_change_between_reads(add)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["active"], [0, 1, 2])
+
+    def test_preview_survives_term_withdrawn_between_reads(self):
+        def withdraw():
+            MindmapNode.objects.filter(pk=self.solar).delete()
+
+        response = self._preview_with_change_between_reads(withdraw)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIsNone(self.preview_node(response.json()["preview"], "Solar"))
+
+    def test_ai_added_terms_stay_usable_by_later_ops(self):
+        ops = [
+            {"type": "add", "ref": "n1", "parent": None, "text": "Erneuerbare"},
+            {"type": "add", "ref": "n2", "parent": None, "text": "Energiequellen"},
+            {"type": "move", "node": "n1", "parent": "n2"},
+            {"type": "move", "node": self.wind, "parent": "n1"},
+            {"type": "move", "node": self.speicher, "parent": "n2"},  # fixed: drops
+        ]
+        result = self.simulate(ops)
+        self.assertEqual([op["index"] for op in result["ops"]], [0, 1, 2, 3])
+        self.assertEqual(result["dropped"], 1)
+        self.assertEqual(result["ops"][2]["node"], "n1")
+        self.assertEqual(result["ops"][3]["requires"], [0])
+        sources = self.preview_node(result["preview"], "Energiequellen")
+        self.assertEqual([c["text"] for c in sources["children"]], ["Erneuerbare"])
+
+        before = self.shape()
+        body = self.optimize(ops).json()
+        result = self.post("ai-apply", {"proposal": body["proposal"], "selected": [0, 1, 2, 3]}).json()
+        self.assertEqual((result["applied"], result["skipped"]), (4, 0))
+        n1 = MindmapNode.objects.get(run=self.run, text="Erneuerbare")
+        self.assertEqual(n1.parent.text, "Energiequellen")
+        self.assertEqual(MindmapNode.objects.get(pk=self.wind).parent_id, n1.pk)
+        self.assertEqual(self.post("ai-undo", {"undo": result["undo"]}).status_code, 200)
+        self.assertEqual(self.shape(), before)
+
+    def test_requires_is_transitive(self):
+        result = self.simulate([
+            {"type": "add", "ref": "n1", "parent": None, "text": "Erneuerbare"},
+            {"type": "add", "ref": "n2", "parent": "n1", "text": "Wetter"},
+            {"type": "move", "node": self.wind, "parent": "n2"},
+        ])
+        self.assertEqual([op["requires"] for op in result["ops"]], [[], [0], [0, 1]])
+
+    def test_add_of_term_that_appeared_meanwhile_is_not_skipped(self):
+        body = self.optimize(self.ops()).json()
+        existing = self.owner_mod("add", parent=None, text="Erneuerbare").json()["node_id"]
+        result = self.post("ai-apply", {"proposal": body["proposal"], "selected": [0, 1, 2]}).json()
+        self.assertEqual((result["applied"], result["skipped"]), (2, 0))
+        self.assertEqual([item["type"] for item in result["undo"]], ["move", "rename"])
+        self.assertEqual(MindmapNode.objects.get(pk=self.wind).parent_id, existing)
+
+    def test_apply_ignores_ops_the_full_simulation_dropped(self):
+        ops = [
+            {"type": "add", "ref": "n1", "parent": None, "text": "Solar"},  # exists → alias
+            {"type": "merge", "source": self.speicher, "target": self.wind},  # fixed: drops
+        ]
+        body = self.optimize(ops).json()
+        self.assertEqual(body["ops"], [])
+        result = self.post("ai-apply", {"proposal": body["proposal"], "selected": [1]}).json()
+        self.assertEqual((result["applied"], result["skipped"]), (0, 1))
+        self.assertTrue(MindmapNode.objects.filter(pk=self.speicher).exists())
+
+    def test_dropped_counts_entries_beyond_the_cap(self):
+        ops = [{"type": "explode"}] * (mindmap.AI_OPS_MAX + 5)
+        self.assertEqual(self.optimize(ops).json()["dropped"], mindmap.AI_OPS_MAX + 5)
