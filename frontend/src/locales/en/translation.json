@@ -30,5 +30,13 @@
   "Rate the terms on your device: {{count}} points per person_one": "Rate the terms on your device: {{count}} point per person",
   "Rate the terms on your device: {{count}} points per person_other": "Rate the terms on your device: {{count}} points per person",
   "{{count}} points_one": "{{count}} point",
-  "{{count}} points_other": "{{count}} points"
+  "{{count}} points_other": "{{count}} points",
+  "{{count}} changes proposed — the map shows the result. Untick what you don't want._one": "{{count}} change proposed — the map shows the result. Untick what you don't want.",
+  "{{count}} changes proposed — the map shows the result. Untick what you don't want._other": "{{count}} changes proposed — the map shows the result. Untick what you don't want.",
+  "{{count}} unsuitable suggestions of the AI were left out._one": "{{count}} unsuitable suggestion of the AI was left out.",
+  "{{count}} unsuitable suggestions of the AI were left out._other": "{{count}} unsuitable suggestions of the AI were left out.",
+  "{{count}} changes applied — Ctrl/Cmd+Z undoes them._one": "{{count}} change applied — Ctrl/Cmd+Z undoes it.",
+  "{{count}} changes applied — Ctrl/Cmd+Z undoes them._other": "{{count}} changes applied — Ctrl/Cmd+Z undoes them.",
+  "{{count}} no longer fitted the map and were skipped._one": "{{count}} no longer fitted the map and was skipped.",
+  "{{count}} no longer fitted the map and were skipped._other": "{{count}} no longer fitted the map and were skipped."
 }

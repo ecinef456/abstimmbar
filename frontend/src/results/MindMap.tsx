@@ -26,7 +26,19 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, CornerDownRight, Maximize2, Minus, Plus, X, ZoomIn } from "lucide-react";
+import {
+  ChevronRight,
+  CornerDownRight,
+  FolderPlus,
+  Languages,
+  Maximize2,
+  Merge,
+  Minus,
+  MoveRight,
+  Plus,
+  X,
+  ZoomIn,
+} from "lucide-react";
 import { localizedText } from "@basicbar/ui";
 import type { LiveMindmapNode, MindmapRating } from "../api";
 import { CORRECT, CORRECT_STRONG, CORRECT_TINT, INK, MINUS, MINUS_INK, MINUS_TINT, NEUTRAL_TILE } from "./palette";
@@ -678,6 +690,7 @@ export default function MindMap({
   memoryKey,
   rating,
   lockedNote,
+  previewMarks = false,
 }: {
   rootLabel: string;
   /** Presenter-form tree (hidden nodes are skipped with their subtree). */
@@ -712,6 +725,9 @@ export default function MindMap({
   rating?: MindmapRating;
   /** Why add/merge/move/rename are switched off right now (tooltip). */
   lockedNote?: string;
+  /** AI preview: terms changed by the proposal get a ring and small marks
+   *  (merged / renamed / moved / new parent term) with a tooltip. */
+  previewMarks?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   // Seeded terms resolve to the UI language (mindmapNodeText): re-measure on
@@ -1294,16 +1310,20 @@ export default function MindMap({
         ? t("{{count}} points", { count: Number(rl.badges[0].text) })
         : rl.badges.map((b) => b.text).join(" ")
       : "";
+    const marks = previewMarks ? previewMarksOf(n, t) : [];
     const nodeTitle =
-      [n.count > 1 ? `${n.count}×` : "", scoreTitle, lockedNote ?? ""].filter(Boolean).join(" · ") ||
-      undefined;
+      [n.count > 1 ? `${n.count}×` : "", scoreTitle, lockedNote ?? "", ...marks.map((m) => m.title)]
+        .filter(Boolean)
+        .join(" · ") || undefined;
     const target =
       nodeDrag?.target?.kind === "merge" && nodeDrag.target.id === p.id ? nodeDrag.target : null;
     const ring = target
       ? `3px solid ${target.problem ? BAD : GOOD}`
-      : repeated
-        ? `2px dashed ${deep(hue)}`
-        : undefined;
+      : marks.length > 0
+        ? `3px solid ${AI_MARK}`
+        : repeated
+          ? `2px dashed ${deep(hue)}`
+          : undefined;
     return (
       <div
         key={p.id}
@@ -1425,6 +1445,25 @@ export default function MindMap({
                 </div>
               ))}
             </div>
+          )}
+          {marks.length > 0 && (
+            <span
+              className="absolute -left-3 -top-3.5 flex gap-0.5"
+              data-mm-mark={marks.map((m) => m.kind).join(" ")}
+            >
+              {marks.map((m) => (
+                <span
+                  key={m.kind}
+                  title={m.title}
+                  aria-label={m.title}
+                  role="img"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-white shadow-sm"
+                  style={{ background: AI_MARK }}
+                >
+                  <m.Icon className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
+                </span>
+              ))}
+            </span>
           )}
           {onHide && !nodeDrag && (
             <button
@@ -1831,6 +1870,36 @@ export default function MindMap({
       )}
     </div>
   );
+}
+
+/** Accent of the AI preview marks (violet, clear of the pastel branch fills
+ *  and of the green/red drag feedback; white icons pass 4.5:1). */
+export const AI_MARK = "oklch(0.48 0.17 290)";
+
+type MarkKind = "merged" | "renamed" | "moved" | "new";
+/** The preview marks of a term, in a fixed order. */
+function previewMarksOf(
+  n: LiveMindmapNode,
+  t: ReturnType<typeof useTranslation>["t"],
+): { kind: MarkKind; title: string; Icon: typeof Merge }[] {
+  const out: { kind: MarkKind; title: string; Icon: typeof Merge }[] = [];
+  if (n.new) out.push({ kind: "new", title: t("New parent term"), Icon: FolderPlus });
+  if (n.merged_from?.length)
+    out.push({
+      kind: "merged",
+      title: t("Merged from {{terms}}", {
+        terms: n.merged_from.join(", "),
+      }),
+      Icon: Merge,
+    });
+  if (n.renamed_from)
+    out.push({
+      kind: "renamed",
+      title: t("Renamed: {{old}} → {{new}}", { old: n.renamed_from, new: mindmapNodeText(n) }),
+      Icon: Languages,
+    });
+  if (n.moved) out.push({ kind: "moved", title: t("Moved here"), Icon: MoveRight });
+  return out;
 }
 
 /** One rating badge on a term: points as a dark dot-voting pill, plus/minus

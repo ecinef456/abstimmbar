@@ -221,6 +221,14 @@ export interface Question {
   /** mindmap only: scores are shown live while rating (default: hidden
    *  until the results). */
   mindmap_rating_live: boolean;
+  /** mindmap only: what "Optimise mind map" (AI, beamer) may do — merge
+   *  duplicates, unify the language (rename into `mindmap_ai_target_lang`,
+   *  "" = canonical content language) and restructure (new parent terms,
+   *  moves). The AI switch itself is `wordcloud_ai_enabled`. */
+  mindmap_ai_merge: boolean;
+  mindmap_ai_translate: boolean;
+  mindmap_ai_target_lang: "" | "de" | "en";
+  mindmap_ai_restructure: boolean;
   /** Per-question reveal override; "inherit" uses the set default (#28). */
   reveal_answers: "inherit" | RevealAnswers;
   /** Before/after pair (#54): the before-question this one mirrors (null if
@@ -982,6 +990,9 @@ export interface LiveState {
     wordcloud_merge_variants?: boolean;
     wordcloud_merge_synonyms?: boolean;
     wordcloud_merge_concepts?: boolean;
+    /** mindmap, presenter only: the AI optimisation settings
+     *  (`target_lang` already resolved to a language code). */
+    mindmap_ai?: MindmapAiSettings;
     options: LiveOption[];
   };
   results?: LiveOption[];
@@ -1031,8 +1042,58 @@ export interface LiveMindmapNode {
    *  description in all languages (`descriptions[0]` = canonical). */
   description_i18n?: LocalizedText;
   hidden?: boolean;
+  /** AI preview marks (only in an `ai-optimize`/`ai-preview` tree): target of
+   *  a merge (the merged terms), old name, moved here, new parent term
+   *  (negative id). */
+  merged_from?: string[];
+  renamed_from?: string;
+  moved?: boolean;
+  new?: boolean;
   children: LiveMindmapNode[];
 }
+
+export interface MindmapAiSettings {
+  merge: boolean;
+  translate: boolean;
+  target_lang: "" | "de" | "en";
+  restructure: boolean;
+}
+
+/** One proposed AI operation of a mind-map optimisation. `index` is the
+ *  stable id for the selection; `requires` = the indices of the new parent
+ *  terms (adds) it builds on, transitively. Node fields carry an id or the
+ *  temp ref of an add ("n1"). */
+export interface MindmapAiOp {
+  index: number;
+  type: "merge" | "rename" | "move" | "add";
+  label: string;
+  reason: string;
+  requires: number[];
+  source?: number | string;
+  target?: number | string;
+  node?: number | string;
+  parent?: number | string | null;
+  text?: string;
+  source_text?: string;
+  target_text?: string;
+  old_text?: string;
+  node_text?: string;
+  parent_text?: string | null;
+  old_parent_text?: string | null;
+  ref?: string;
+}
+
+/** A simulated AI proposal: the checklist, the preview tree for the current
+ *  selection (`active` = indices it contains) and how many entries fell out. */
+export interface MindmapAiSimulation {
+  ops: MindmapAiOp[];
+  dropped: number;
+  preview: LiveMindmap;
+  active: number[];
+}
+
+/** Undo data of an applied batch — passed back verbatim to `ai-undo`. */
+export type MindmapAiUndo = { type: string; data: unknown }[];
 
 export type MindmapRatingMode = "" | "points" | "updown";
 
@@ -1364,6 +1425,32 @@ export const live = {
       `/api/runs/${runId}/mindmap/${questionId}/rename`,
       { method: "POST", body: JSON.stringify({ node, text }) },
     ),
+  /** AI optimisation proposal of the live mind map (no change yet). The
+   *  optional settings are saved on the question. 503 AI off, 400 switch
+   *  off / < 3 terms, 409 rating, 502 AI error. */
+  mindmapAiOptimize: (runId: number, questionId: number, settings: Partial<MindmapAiSettings>) =>
+    request<MindmapAiSimulation & { proposal: string; settings: MindmapAiSettings }>(
+      `/api/runs/${runId}/mindmap/${questionId}/ai-optimize`,
+      { method: "POST", body: JSON.stringify(settings) },
+    ),
+  /** Re-simulates a proposal for a selection (no LLM call, no change). */
+  mindmapAiPreview: (runId: number, questionId: number, proposal: string, selected: number[]) =>
+    request<MindmapAiSimulation>(`/api/runs/${runId}/mindmap/${questionId}/ai-preview`, {
+      method: "POST",
+      body: JSON.stringify({ proposal, selected }),
+    }),
+  /** Applies the selected proposal entries as one batch. */
+  mindmapAiApply: (runId: number, questionId: number, proposal: string, selected: number[]) =>
+    request<{ applied: number; skipped: number; undo: MindmapAiUndo }>(
+      `/api/runs/${runId}/mindmap/${questionId}/ai-apply`,
+      { method: "POST", body: JSON.stringify({ proposal, selected }) },
+    ),
+  /** Reverts an applied batch (409 when the map changed in between). */
+  mindmapAiUndo: (runId: number, questionId: number, undo: MindmapAiUndo) =>
+    request<{ status: string }>(`/api/runs/${runId}/mindmap/${questionId}/ai-undo`, {
+      method: "POST",
+      body: JSON.stringify({ undo }),
+    }),
   /** Presenter word-cloud moderation (#Wortwolke): hide/unhide a term, merge
    *  several keys under one label, unmerge, or rename a merge's label. */
   wordcloudModeration: (

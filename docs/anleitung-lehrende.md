@@ -248,6 +248,24 @@ Im Präsentationsmodus steuern Sie die Sitzung über die Leiste am unteren Rand
   auf die Zone **„hier anhängen“** daneben, wird er samt Teilbaum dorthin
   verschoben. Ein Doppelklick benennt einen Begriff um, × blendet ihn samt
   Teilbaum aus. Mit Strg/Cmd+Z machen Sie den letzten Schritt rückgängig.
+- **Mindmap mit KI optimieren:** Ist die KI an Ihrer Hochschule eingerichtet
+  und haben Sie im Editor bei der Mindmap **KI-Funktionen aktivieren**
+  eingeschaltet, erscheint im Experten-Modus unter dem Stift ein **Stern**. Dort
+  legen Sie fest, was die KI darf – doppelte Begriffe und Synonyme
+  **zusammenführen**, die **Sprache vereinheitlichen** (Zielsprache Deutsch oder
+  Englisch) und **umstrukturieren** (Begriffe unter passendere Äste verschieben,
+  neue Oberbegriffe anlegen) – und klicken auf **Mindmap optimieren** (ab drei
+  Begriffen, nicht während der Bewertung). An das KI-Modell gehen nur die
+  Frage, die Begriffe und ihre Beschreibungen. Der Beamer zeigt dann eine
+  **Vorschau** des optimierten Baums: Geänderte Begriffe sind violett umrandet,
+  ein Symbol mit Tooltip verrät, was passiert ist (zusammengeführt, umbenannt,
+  verschoben, neuer Oberbegriff). Rechts stehen alle Vorschläge mit Häkchen;
+  entfernen Sie ein Häkchen, fallen auch die Vorschläge weg, die darauf
+  aufbauen, und die Vorschau passt sich an. **Übernehmen** wendet die
+  ausgewählten Änderungen in einem Rutsch an – alle sehen sofort den neuen
+  Baum –, **Verwerfen** lässt alles, wie es war. Strg/Cmd+Z nimmt die ganze
+  Übernahme auf einmal zurück. Von Ihnen angelegte oder vorgegebene Begriffe
+  behält die KI bei; gelöscht oder ausgeblendet wird nichts.
 - **Mindmap-Bewertung:** Haben Sie im Editor eine **Bewertungsphase**
   eingestellt, stoppen Sie zunächst das Sammeln und klicken dann unten auf
   **Bewertung starten**. Ihre Teilnehmenden bewerten die Begriffe nun auf ihrem
