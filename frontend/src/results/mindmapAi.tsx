@@ -303,7 +303,7 @@ export function MindmapAiDrawer({
               )}
               <p className="mt-3 text-xs text-slate-500">
                 {t(
-                  "The question, the terms and their descriptions are sent to the local AI model — no names or other participant data. Nothing changes until you apply the proposal.",
+                  "The question, the terms and their descriptions are sent to the AI model — no names or other participant data. Nothing changes until you apply the proposal.",
                 )}
               </p>
             </div>

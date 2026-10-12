@@ -605,6 +605,13 @@ export function branchHues(
  * `memoryKey` (small LRU, like the branch sides). */
 const hueMemory = new Map<string, Map<number, number>>();
 
+/** Id order for the stable branch-colour rank. Terms that exist only in an
+ * AI preview have negative ids (-1, -2, … in creation order): they rank
+ * after the real ones, as they will once applied, so existing branches keep
+ * their colour between preview and live map. */
+const byStableId = (a: number, b: number) =>
+  (a < 0 ? 2 ** 40 - a : a) - (b < 0 ? 2 ** 40 - b : b);
+
 /** Hue (degrees) of each visible main branch, as the map colours it: what
  * the map with `memoryKey` last drew, otherwise the same rule without the
  * display order (stable rank by id, neighbours in tree order differ) — e.g.
@@ -615,7 +622,7 @@ export function mindmapBranchHues(
 ): Map<number, number> {
   const remembered = memoryKey ? hueMemory.get(memoryKey) : undefined;
   const stable = new Map(
-    nodes.map((n) => n.id).sort((a, b) => a - b).map((id, i) => [id, i] as const),
+    nodes.map((n) => n.id).sort(byStableId).map((id, i) => [id, i] as const),
   );
   const ids = nodes.filter((n) => !n.hidden).map((n) => n.id);
   const fallback = branchHues(ids, stable);
@@ -877,7 +884,7 @@ export default function MindMap({
   // clockwise display order never share a hue.
   const branchHue = useMemo(() => {
     const stable = new Map(
-      [...allNodes].map((n) => n.id).sort((a, b) => a - b).map((id, i) => [id, i] as const),
+      [...allNodes].map((n) => n.id).sort(byStableId).map((id, i) => [id, i] as const),
     );
     const mains = layout.nodes.filter((p) => p.depth === 1);
     const clockwise = [

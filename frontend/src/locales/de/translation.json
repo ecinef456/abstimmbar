@@ -1014,7 +1014,7 @@
   "At least 3 terms are needed.": "Dafür sind mindestens 3 Begriffe nötig.",
   "Select at least one optimisation.": "Wählen Sie mindestens eine Optimierung aus.",
   "The AI is preparing a proposal … this can take a moment.": "Die KI erstellt einen Vorschlag … das kann einen Moment dauern.",
-  "The question, the terms and their descriptions are sent to the local AI model — no names or other participant data. Nothing changes until you apply the proposal.": "Die Frage, die Begriffe und ihre Beschreibungen gehen an das lokale KI-Modell – keine Namen oder sonstigen Daten der Teilnehmenden. Es ändert sich nichts, bis Sie den Vorschlag übernehmen.",
+  "The question, the terms and their descriptions are sent to the AI model — no names or other participant data. Nothing changes until you apply the proposal.": "Die Frage, die Begriffe und ihre Beschreibungen gehen an das KI-Modell – keine Namen oder sonstigen Daten der Teilnehmenden. Es ändert sich nichts, bis Sie den Vorschlag übernehmen.",
   "Proposal": "Vorschlag",
   "The AI found nothing to improve.": "Die KI hat nichts zu verbessern gefunden.",
   "Proposed changes": "Vorgeschlagene Änderungen",
