@@ -8,7 +8,10 @@
  *
  *  v3: the tour is a deterministic walkthrough of the user's seeded example
  *  room (one step per question type). It never creates content — the only
- *  write is re-creating a missing example room (RESTORE_STEP). */
+ *  write is re-creating a missing example room (RESTORE_STEP).
+ *
+ *  v4: steps belong to sections (header "<Section> · n of m", "Skip
+ *  section"); Back walks the controller's history of shown steps. */
 
 import type { QuestionKind } from "../api";
 import type { TourSignal } from "./signals";
@@ -57,6 +60,27 @@ export const PAGE_PATTERNS: Record<TourPage, string> = {
  *  app's own APIs (never simulated clicks). */
 export type AutoPerform = { kind: "restoreExample" };
 
+/** Sections group the steps (popover header "<Section> · n of m", "Skip
+ *  section"). The restore and final steps have none. */
+export type TourSection = "rooms" | "sets" | "types" | "present" | "results";
+
+/** English source labels (i18next keys) of the sections. */
+export const SECTION_LABELS: Record<TourSection, string> = {
+  rooms: "Rooms",
+  sets: "Question sets",
+  types: "Question types",
+  present: "Presenting",
+  results: "Results",
+};
+
+/** A sentence appended to a step's body when it applies to this run (mode /
+ *  AI) — keeps each sentence a separate, translatable key. */
+export interface BodyExtra {
+  key: string;
+  modes?: TourMode[];
+  requiresAi?: boolean;
+}
+
 export interface TourStep {
   id: string;
   /** data-tour value to spotlight, or null for a centered modal-style step. */
@@ -91,10 +115,19 @@ export interface TourStep {
   /** The target only exists with data (e.g. more than one run): if it doesn't
    *  appear shortly, skip the step instead of pausing the tour. */
   optional?: boolean;
+  /** Section the step belongs to (assigned via `inSection`). */
+  section?: TourSection;
+  /** Sentences appended to the body for some modes / with AI. */
+  bodyExtras?: BodyExtra[];
 }
 
 /** One walkthrough step per question kind, on that kind's example question. */
-const q = (k: QuestionKind, titleKey: string, bodyKey: string): TourStep => ({
+const q = (
+  k: QuestionKind,
+  titleKey: string,
+  bodyKey: string,
+  bodyExtras?: BodyExtra[],
+): TourStep => ({
   id: `q.${k}`,
   page: "question",
   target: "question.editor",
@@ -102,7 +135,15 @@ const q = (k: QuestionKind, titleKey: string, bodyKey: string): TourStep => ({
   navigateTo: { kind: "exampleQuestion", questionKind: k },
   titleKey,
   bodyKey,
+  ...(bodyExtras ? { bodyExtras } : {}),
 });
+
+const inSection = (section: TourSection, steps: TourStep[]): TourStep[] =>
+  steps.map((s) => ({ ...s, section }));
+
+/** AI features in the editor/presenter are Expert-only (QuestionPage:
+ *  `ai_enabled && !easyMode`). */
+const PRO_AI = { modes: ["pro"] as TourMode[], requiresAi: true };
 
 /** Prepended by the controller when the example room (or its set) is missing:
  *  "Next" re-creates it (idempotent POST /api/whoami/example-room/), then the
@@ -118,6 +159,7 @@ export const RESTORE_STEP: TourStep = {
 };
 
 export const proTour: TourStep[] = [
+  ...inSection("rooms", [
   { id: "header.mode", page: "rooms", target: "header.mode", kind: "info",
     titleKey: "Simple or Expert", bodyKey: "Switch modes up here — Expert shows every option." },
   { id: "rooms.list", page: "rooms", target: "rooms.list", kind: "info",
@@ -129,15 +171,17 @@ export const proTour: TourStep[] = [
   { id: "rooms.new-room", page: "rooms", target: "rooms.new-room", kind: "info",
     titleKey: "Create your own room",
     bodyKey: "Click ‘New room’, enter a name and create it. Every room gets a fixed join code for participants." },
+  ]),
+  ...inSection("sets", [
   { id: "room.sets", page: "room", target: "room.new-set", kind: "info", navigateTo: "exampleRoom",
     titleKey: "Sets and their types",
     bodyKey: "A room holds question sets. Each set has a type — Live poll (presenter-driven), Self-paced quiz (own pace in class) or Self-check (a standing self-study link)." },
   { id: "room.set-actions", page: "room", target: "room.set-actions", kind: "info", modes: ["pro"],
     titleKey: "Archive results or delete a set",
-    bodyKey: "The box icon archives only the set’s results — the next presentation starts empty, the old run stays available under Results. The bin deletes the set with all its questions and results for good." },
+    bodyKey: "The chart and play icons open the results and the presentation directly. The box icon archives only the set’s results — the next presentation starts empty, the old run stays available under Results. The bin deletes the set with all its questions and results for good." },
   { id: "room.set-delete", page: "room", target: "room.set-actions", kind: "info", modes: ["easy"],
     titleKey: "Delete a set",
-    bodyKey: "The bin deletes a set with all its questions and results for good. When you present again on another day, the previous results are archived automatically." },
+    bodyKey: "The chart and play icons open the results and the presentation directly. The bin deletes a set with all its questions and results for good. When you present again on another day, the previous results are archived automatically." },
   { id: "set.editor", page: "set", target: "set.questions", kind: "info", navigateTo: "exampleSet",
     titleKey: "The set editor", bodyKey: "This example set holds one question of every type — let’s look at each." },
   // The copy invites opening the type menu, so the page stays clickable and the
@@ -149,10 +193,13 @@ export const proTour: TourStep[] = [
   { id: "set.type-list", page: "set", target: "set.type-list", kind: "info",
     signal: "open-question-menu", side: "left",
     titleKey: "Question types",
-    bodyKey: "Pick the type here. The types differ in whether there is a correct answer and in how results are shown — next we’ll look at each one." },
+    bodyKey: "The menu groups the types by what participants do: choose from answers, rate & order, or answer openly. Next we’ll look at each one." },
   { id: "set.ai-generate", page: "set", target: "set.ai-generate", kind: "info", modes: ["pro"], requiresAi: true,
-    titleKey: "Shortcuts", bodyKey: "Generate draft questions from your slides with AI, or copy from another set." },
-  q("single_choice", "Single Choice", "Exactly one answer is correct — its checkbox marks it. Below you choose when the correct answer is revealed."),
+    titleKey: "Shortcuts",
+    bodyKey: "‘From document’ drafts questions from your slides (PDF, PowerPoint, Impress) with AI. Questions from another set can be added via the set’s ⋯ menu." },
+  ]),
+  ...inSection("types", [
+  q("single_choice", "Single Choice", "Participants pick exactly one answer. Tick the correct one — or none for an opinion poll. Yes/No and True/False have their own entry in the menu."),
   { id: "question.settings", page: "question", target: "question.settings", kind: "info",
     titleKey: "Settings every question has",
     bodyKey: "Random order shuffles the answers anew for each presentation — all participants see the same order. ‘Reveal correct answer’ decides whether the solution appears immediately with the results, only when triggered, or never." },
@@ -164,41 +211,63 @@ export const proTour: TourStep[] = [
     bodyKey: "Insert images into the question text with the image icon in the toolbar — or drag them in. Each answer has its own image icon, too." },
   q("multiple_choice", "Multiple Choice", "Several answers can be correct — tick each one. Participants may select more than one."),
   q("likert", "Likert scale", "An agreement scale with an optional abstention — there is no ‘correct’ answer, you see the distribution."),
-  q("word_cloud", "Word cloud", "Participants type free terms; you can cap the contributions per person. Upper/lower-case variants are merged, and you can show the cloud live on the projector while voting is open. In Expert mode with AI, terms can be grouped by theme."),
-  q("open_text", "Free text", "A free-text answer (up to 500 characters), shown as a list. In Expert mode with AI enabled, answers can be evaluated against a model solution."),
+  q("word_cloud", "Word cloud",
+    "Participants type short terms; you can cap the contributions per person. Upper/lower-case variants are merged, and the cloud can grow live on the projector while voting is open.",
+    [{ key: "With AI, the projector can also show a cleaned-up or grouped view of the terms.", ...PRO_AI }]),
+  q("open_text", "Free text",
+    "A free-text answer (up to 500 characters), shown as a list.",
+    [{ key: "With AI, answers can be evaluated against a model solution, and the projector can show key statements or grouped answers instead of the list.", ...PRO_AI }]),
   q("priorities", "Priorities", "Participants distribute up to 100 points across the answers — the more important, the more points. The result shows which items received the highest priority overall."),
   q("ordering", "Ordering", "The order you save here is the solution; participants see the items shuffled and sort them."),
+  q("mindmap", "Mind map",
+    "Participants build a mind map together — it grows live on the projector. Optionally, a rating phase follows in which they weight the terms with points or plus/minus.",
+    [
+      { key: "On the projector you moderate it: merge, move or rename terms — and undo any step.", modes: ["pro"] },
+      { key: "With AI, ‘Optimise mind map’ proposes a tidier structure — you see a preview and decide what to apply.", ...PRO_AI },
+    ]),
   { id: "question.lang-tabs", page: "question", target: "question.lang-tabs", kind: "info", modes: ["pro"],
     titleKey: "Author in two languages", bodyKey: "Rich text, options and images — with German/English tabs." },
+  ]),
+  ...inSection("present", [
   { id: "set.present", page: "set", target: "set.present", kind: "info", navigateTo: "exampleSet",
     titleKey: "Start the presentation",
     bodyKey: "This starts presentation mode for the projector: participants join via QR code or room code, and you run the questions one by one." },
+  // present-lobby / present-first: no-ops when the presenter is already in
+  // that state, so emitting them going forward is harmless — and going Back
+  // they restore the lobby / the first question.
   { id: "present.join", page: "present", target: "present.join", kind: "info", navigateTo: "exampleSetPresent",
+    signal: "present-lobby",
     titleKey: "Joining",
-    bodyKey: "In the lobby, show the QR code or room code — participants join on their phones; you see how many are connected." },
+    bodyKey: "In the lobby, show the QR code or room code — participants join on their phones; you see how many are connected. Later, the QR icon in the footer (Q) shows it again." },
   { id: "present.voting", page: "present", target: "present.toggle", kind: "info",
     signal: "present-first",
     titleKey: "Start and stop voting",
     bodyKey: "Start (S) opens voting on the current question, Stop (S) closes it. Until you start, participants only see the question." },
   { id: "present.reveal", page: "present", target: "present.reveal", kind: "info",
+    signal: "present-first",
     titleKey: "Show results",
     bodyKey: "Switch what the projector shows: the question, the live results (E) or — once available — the correct answer (A)." },
   { id: "present.navigate", page: "present", target: "present.nav", kind: "info",
+    signal: "present-first",
     titleKey: "Next question and end",
     bodyKey: "→ moves to the next question, ← goes back. End (Esc) closes the run and stores the results." },
+  ]),
+  ...inSection("results", [
   { id: "set.results", page: "set", target: "set.results", kind: "info", navigateTo: "exampleSet",
     signal: "present-lobby",
     titleKey: "Where to find results",
     bodyKey: "Open this set’s results any time with ‘Results’ — every presentation is stored there." },
   { id: "results.view", page: "results", target: "results.view", kind: "info", navigateTo: "exampleSetResults",
     titleKey: "Results",
-    bodyKey: "Results of this set appear here — one chart, word cloud or list per question." },
+    bodyKey: "Results of this set appear here — one chart, word cloud or list per question.",
+    bodyExtras: [{ key: "With AI, ‘Create short report’ summarises the run for you.", ...PRO_AI }] },
   { id: "results.runs", page: "results", target: "results.runs", kind: "info", optional: true,
     titleKey: "Earlier runs",
     bodyKey: "Every presentation is stored as its own run. Pick earlier, archived runs here." },
   { id: "results.export", page: "results", target: "results.export", kind: "info", optional: true,
     titleKey: "Export and delete",
     bodyKey: "Download a CSV of this run or of all runs (incl. archive). ‘Delete all’ removes the results for good." },
+  ]),
   { id: "final", target: null, kind: "info", navigateTo: "roomsHome",
     titleKey: "You’ve got it 🎉",
     bodyKey: "Try things out in the example room — or create your own room with ‘New room’. Restart this tour anytime from the ? menu." },

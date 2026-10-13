@@ -11,6 +11,7 @@ import "./driverTheme.css";
 import {
   PAGE_PATTERNS,
   RESTORE_STEP,
+  SECTION_LABELS,
   type AutoPerform,
   type NavigateTarget,
   type TourMode,
@@ -96,6 +97,26 @@ function isAt(target: NavigateTarget, route: string, pathname: string): boolean 
   return matchPath(destPattern(target), pathname) != null && matchPath(routePath, pathname) != null;
 }
 
+/** Ignore ←/→ while typing (inputs, selects, the rich-text editor). */
+function isTextField(el: Element | null): boolean {
+  if (!el) return false;
+  const tag = el.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    (el as HTMLElement).isContentEditable
+  );
+}
+
+/** An app menu/dialog is open (outside the tour popover): Esc and ←/→ belong
+ *  to it, not to the tour. */
+function appPopupOpen(): boolean {
+  return Array.from(
+    document.querySelectorAll('[role="menu"], [role="dialog"], [role="alertdialog"], [role="note"]'),
+  ).some((el) => !el.closest(".driver-popover"));
+}
+
 function matchesMilestone(step: TourStep, pathname: string): boolean {
   if (step.kind !== "action" || !step.milestone) return false;
   const m = step.milestone;
@@ -160,6 +181,13 @@ export function TourProvider({
   const questionsRef = useRef<Question[] | undefined>(undefined);
   const onEndRef = useRef(onEnd);
   onEndRef.current = onEnd;
+  // Steps actually shown in this run, with the URL they were shown on — Back
+  // pops this stack, so it returns to the right page and never lands on a
+  // step that was skipped going forward (missing kind, absent optional
+  // target, skipped section).
+  const historyRef = useRef<{ index: number; path: string }[]>([]);
+  // The popover's Next/Back handlers, for the ←/→ keys.
+  const keyNavRef = useRef<{ next: () => void; back: (() => void) | null } | null>(null);
 
   /** Usage statistics (anonymous) — best-effort, never affects the tour. */
   const track = useCallback((event: TourEventPayload) => {
@@ -175,6 +203,7 @@ export function TourProvider({
       /* driver already torn down */
     }
     driverRef.current = null;
+    keyNavRef.current = null; // no ←/→ without a visible popover
     // Single source of truth for the action-step interactivity class: always
     // cleared on teardown so it can never leak across a step change, pause,
     // end (Esc/✕), or unmount. highlight() re-adds it only for action steps.
@@ -191,6 +220,7 @@ export function TourProvider({
     const set = opts.exampleSetId ?? null;
     exampleRef.current = { room, set };
     questionsRef.current = undefined; // fresh question lookup per run
+    historyRef.current = [];
     // Built from the arguments (the `steps` memo still reflects the old
     // mode/override); `tourFor` is the same function the memo uses.
     const list = tourFor(m, { aiEnabled: !!opts.aiEnabled });
@@ -312,6 +342,7 @@ export function TourProvider({
         // at its first (rooms-page) step.
         setStepsOverride(null);
         setIndex(0);
+        historyRef.current = []; // indices shift once the restore step is gone
         if (pageFor(pathRef.current) !== pageFor(dest)) navigate(dest);
       } catch {
         if (!activeRef.current) return; // tour ended meanwhile — nothing to pause
@@ -327,6 +358,67 @@ export function TourProvider({
     [advance, runAutoPerform, navigate, destroyDriver, t],
   );
 
+  /** Kind steps whose example question is known to be missing (the example
+   *  set's questions were fetched) are skipped — leave them out of the count. */
+  const knownSkipped = useCallback((s: TourStep): boolean => {
+    const nav = s.navigateTo;
+    if (typeof nav !== "object" || questionsRef.current === undefined) return false;
+    return !questionsRef.current.some((qq) => qq.kind === nav.questionKind);
+  }, []);
+
+  /** "Skip section": first step of the next section (the final step when
+   *  this is the last section). */
+  const skipSection = useCallback(() => {
+    const section = steps[index]?.section;
+    if (!section) return advance();
+    const next = steps.findIndex((s, i) => i > index && s.section !== section);
+    if (next < 0) return end("completed");
+    setPaused(false);
+    setIndex(next);
+  }, [steps, index, advance, end]);
+
+  /** Route of the page step `i` lives on, for Back without history (context
+   *  start): the nearest `navigateTo` at or before it on the same page. */
+  const routeForStep = useCallback(
+    async (i: number): Promise<string | null> => {
+      const page = steps[i]?.page;
+      if (page === "rooms") return "/";
+      for (let j = i; j >= 0 && steps[j].page === page; j--) {
+        const nav = steps[j].navigateTo;
+        if (nav) return resolveRoute(nav);
+      }
+      return null;
+    },
+    [steps, resolveRoute],
+  );
+
+  /** Back: return to the previously shown step on the page (URL) it was shown
+   *  on; its own signal (Effect A) restores the page state. Without history
+   *  (context start), step back through the list instead. */
+  const goBack = useCallback(async () => {
+    const history = historyRef.current;
+    if (history.length && history[history.length - 1].index === index) history.pop();
+    const prev = history.pop();
+    let target = prev?.index ?? -1;
+    let path = prev?.path ?? null;
+    if (!prev) {
+      for (let i = index - 1; i >= 0; i--) {
+        if (steps[i].kind === "action") continue;
+        const route = await routeForStep(i);
+        if (route !== null || !steps[i].page) {
+          target = i;
+          path = route;
+          break;
+        }
+      }
+      if (!activeRef.current) return;
+    }
+    if (target < 0) return;
+    if (path !== null && path !== pathRef.current + window.location.search) navigate(path);
+    setPaused(false);
+    setIndex(target);
+  }, [index, steps, routeForStep, navigate]);
+
   /** Build + show the driver popover for the current step against `element`
    *  (undefined → centered, element-less popover). */
   const highlight = useCallback(
@@ -335,11 +427,36 @@ export function TourProvider({
       const isLast = index === steps.length - 1;
       const isAction = s.kind === "action";
 
-      // No Back: the tour is forward-only (earlier steps may have created
-      // things / navigated away); the user ends it via ✕ or Esc.
-      const showButtons: ("next" | "close")[] = ["next", "close"];
+      // Record the shown step (Back returns here, on this URL).
+      const history = historyRef.current;
+      if (history[history.length - 1]?.index !== index) {
+        history.push({ index, path: window.location.pathname + window.location.search });
+      }
+      // Back from the second step on; never on the restore step (it is the
+      // first step of its run anyway).
+      const canBack = !isAction && (history.length >= 2 || index > 0);
+      const showButtons: ("previous" | "next" | "close")[] = canBack
+        ? ["previous", "next", "close"]
+        : ["next", "close"];
+
+      // Section header "<Section> · n of m" over the steps of this section in
+      // this run (mode/AI already filtered; known-missing kinds left out).
+      let sectionHead: string | null = null;
+      if (s.section) {
+        const inSection = steps.filter((x) => x.section === s.section && (x.id === s.id || !knownSkipped(x)));
+        sectionHead = t("{{section}} · {{current}} of {{total}}", {
+          section: t(SECTION_LABELS[s.section]),
+          current: inSection.findIndex((x) => x.id === s.id) + 1,
+          total: inSection.length,
+        });
+      }
 
       let description = t(s.bodyKey);
+      for (const extra of s.bodyExtras ?? []) {
+        if (extra.modes && !extra.modes.includes(mode)) continue;
+        if (extra.requiresAi && !aiEnabled) continue;
+        description += ` ${t(extra.key)}`;
+      }
       // The "do it yourself" hint only makes sense when the user CAN do the
       // step themselves, i.e. it has a milestone (the restore step has none).
       if (isAction && s.milestone) {
@@ -389,17 +506,38 @@ export function TourProvider({
           // a navigation then re-syncs the tour to the new page (Effect C).
           disableButtons: [],
           nextBtnText: isLast ? t("Finish") : t("Next"),
+          prevBtnText: t("Back"),
           onNextClick: () => (isAction ? void handleAuto(s) : advance()),
+          onPrevClick: () => void goBack(),
           onCloseClick: () => end(),
+          // Section header above the title + "Skip section" link in the footer
+          // (driver.js has no slots for either; its progress text stays off).
+          onPopoverRender: (popover) => {
+            if (!sectionHead) return;
+            const head = document.createElement("div");
+            head.className = "tour-section-head";
+            head.textContent = sectionHead;
+            popover.wrapper.insertBefore(head, popover.title);
+            const skip = document.createElement("button");
+            skip.type = "button";
+            skip.className = "tour-skip-section";
+            skip.textContent = t("Skip section");
+            skip.addEventListener("click", () => skipSection());
+            popover.footer.insertBefore(skip, popover.footer.firstChild);
+          },
         },
       });
+      keyNavRef.current = {
+        next: () => (isAction ? void handleAuto(s) : advance()),
+        back: canBack ? () => void goBack() : null,
+      };
       if (element && typeof ResizeObserver !== "undefined") {
         const ro = new ResizeObserver(() => driverRef.current?.refresh());
         ro.observe(element);
         resizeObsRef.current = ro;
       }
     },
-    [destroyDriver, index, steps.length, t, advance, handleAuto, end],
+    [destroyDriver, index, steps, t, advance, handleAuto, end, mode, aiEnabled, knownSkipped, goBack, skipSection],
   );
 
   // --- Effect A: present the current step (navigate → wait for target → show).
@@ -572,15 +710,24 @@ export function TourProvider({
   // an app menu/dialog is open: then Esc belongs to it (the ‘New question’ menu,
   // MoreMenu, HelpMenu, InfoHint, ConfirmDialog all close on Esc), and ending
   // the tour on that same keypress made it look like the tour had crashed.
+  // ←/→ = Back/Next under the same rule, and not while typing. Not on the
+  // presenter page: there ←/→ switch questions (the tour's step text says so).
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const appPopupOpen = Array.from(
-        document.querySelectorAll('[role="menu"], [role="dialog"], [role="alertdialog"], [role="note"]'),
-      ).some((el) => !el.closest(".driver-popover"));
-      if (appPopupOpen) return;
-      end();
+      if (e.key === "Escape") {
+        if (appPopupOpen()) return;
+        end();
+        return;
+      }
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const nav = keyNavRef.current;
+      if (!nav || appPopupOpen() || isTextField(document.activeElement)) return;
+      if (pageFor(pathRef.current) === "present") return;
+      e.preventDefault();
+      if (e.key === "ArrowRight") nav.next();
+      else nav.back?.();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -603,7 +750,7 @@ export function TourProvider({
           role="status"
           aria-live="polite"
         >
-          <div className="flex items-center gap-3 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 shadow-lg sm:rounded-full dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
             <span>{t("Tour paused")}</span>
             <button
               type="button"
@@ -625,6 +772,15 @@ export function TourProvider({
             >
               {t("Skip step")}
             </button>
+            {step?.section && (
+              <button
+                type="button"
+                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                onClick={skipSection}
+              >
+                {t("Skip section")}
+              </button>
+            )}
             <button
               type="button"
               className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"

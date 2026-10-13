@@ -68,7 +68,8 @@ ausprobieren und jederzeit löschen.
 3. Den Set-Editor: eine Frage hinzufügen und die Liste der Fragetypen.
 4. Jeden Fragetyp einzeln im Editor — dazu die Einstellungen, die jede Frage
    hat (zufällige Reihenfolge, Lösung aufdecken, Zeitbegrenzung) und das
-   Einfügen von Bildern.
+   Einfügen von Bildern. Enthält Ihr Beispielset eine Mindmap (Beispielräume ab
+   Oktober 2026), stellt der Rundgang auch sie vor.
 5. Den Präsentationsmodus: Beitritt per QR- oder Raumcode, Abstimmung starten
    und stoppen, zwischen Frage, Ergebnis und Lösung umschalten, zur nächsten
    Frage wechseln und beenden.
@@ -80,11 +81,16 @@ ausprobieren und jederzeit löschen.
 - **„Weiter"** führt zum nächsten Schritt und wechselt dafür bei Bedarf selbst
   die Seite. Sie müssen nichts anklicken — dürfen es aber: Wo der Rundgang dazu
   einlädt (z. B. „Neue Frage" öffnen), können Sie es direkt ausprobieren.
+- Der Rundgang ist in Abschnitte gegliedert (Räume, Fragensets, Fragetypen,
+  Präsentieren, Ergebnisse); oben im Fenster sehen Sie, wo Sie stehen (z. B.
+  „Fragetypen · 3 von 11"). Mit **„Zurück"** (oder der Taste ←) kehren Sie zum
+  vorigen Schritt zurück, mit **„Abschnitt überspringen"** springen Sie direkt
+  zum nächsten Abschnitt; → entspricht „Weiter".
 - Mit **✕** oder der **Esc**-Taste beenden Sie den Rundgang. (Ist gerade ein
   Menü geöffnet, schließt Esc zunächst nur das Menü.)
 - Verlassen Sie zwischendurch die Seite, **pausiert** der Rundgang. Unten
   erscheint dann eine Leiste mit **Fortsetzen** (weiter auf der aktuellen
-  Seite), **Schritt überspringen** und **Beenden**.
+  Seite), **Schritt überspringen**, **Abschnitt überspringen** und **Beenden**.
 
 > Die Nutzung des Rundgangs wird nur als anonyme Tageszahl erfasst (wie oft
 > gestartet, abgeschlossen oder abgebrochen) — ohne Bezug zu Ihrer Person.

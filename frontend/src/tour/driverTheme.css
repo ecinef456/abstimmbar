@@ -93,6 +93,51 @@
   border-bottom-color: theme("colors.white");
 }
 
+/* Section header ("Rooms · 2 of 4") above the title, and the "Skip section"
+ * text link at the start of the footer — both added by TourController's
+ * onPopoverRender. The footer wraps so Back/Next + the link fit at phone
+ * width. */
+.tour-section-head {
+  margin-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: theme("colors.slate.500");
+}
+
+.driver-popover-footer {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.driver-popover-navigation-btns {
+  margin-left: auto;
+  gap: 0.25rem;
+}
+
+/* driver.js gives the previous button a left margin for spacing; the gap
+ * above does that now. */
+.driver-popover-navigation-btns button + button {
+  margin-left: 0;
+}
+
+.tour-skip-section {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 0.8125rem;
+  color: theme("colors.slate.600");
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.tour-skip-section:hover,
+.tour-skip-section:focus-visible {
+  color: theme("colors.slate.900");
+}
+
 /* Dark mode: the app toggles `.dark` on <html> (@basicbar/ui ThemeProvider). */
 .dark .driver-popover {
   background: theme("colors.slate.900");
@@ -135,6 +180,19 @@
 .dark .driver-popover-navigation-btns button.driver-popover-next-btn:focus,
 .dark .driver-popover-navigation-btns button.driver-popover-done-btn:focus {
   background: theme("colors.brand.400");
+}
+
+.dark .tour-section-head {
+  color: theme("colors.slate.400");
+}
+
+.dark .tour-skip-section {
+  color: theme("colors.slate.300");
+}
+
+.dark .tour-skip-section:hover,
+.dark .tour-skip-section:focus-visible {
+  color: theme("colors.slate.50");
 }
 
 .dark .driver-popover-close-btn {

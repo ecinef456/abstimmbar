@@ -18,9 +18,13 @@ npx playwright test --ui                   # interactive runner
 Projects:
 
 - `firefox` — desktop, the original specs (`create-question-set.spec.ts`)
-  and the translation-controls drag smoke test (`translation-controls.spec.ts`).
+  and the translation-controls drag smoke test (`translation-controls.spec.ts`),
+  and the guided tour (`tour.spec.ts`: sections/progress, Back across a page
+  change, "Skip section", ←/→, mind map step shown only if the demo user's
+  example set has one; read-only on the example room, restores it if missing).
 - `phone-chromium` / `phone-firefox` — 324×756 px (Galaxy Z Fold7 front
-  screen), `mobile-*.spec.ts` only: layout checks (`mobile-layout.spec.ts`) and
+  screen), `mobile-*.spec.ts` only: layout checks (`mobile-layout.spec.ts`,
+  tour popover in `mobile-tour.spec.ts`) and
   axe accessibility smoke checks (`mobile-a11y.spec.ts`), each in light and dark.
 - `mobile-setup` / `mobile-teardown` — log in once (storage states in
   `e2e/.auth/`, gitignored) and seed/delete one shared "E2E Mobile …" room.
