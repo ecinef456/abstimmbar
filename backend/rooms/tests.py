@@ -3785,11 +3785,19 @@ class OnboardingSeedTests(TestCase):
     def test_one_question_of_every_kind(self):
         question_set = self.room.question_sets.get()
         kinds = list(question_set.questions.values_list("kind", flat=True))
-        # The mindmap kind (stage 1) is not part of the example room / guided
-        # tour yet — that needs its own tour step and sample results.
-        expected = [k for k in Question.Kind.values if k != Question.Kind.MINDMAP]
-        self.assertEqual(sorted(kinds), sorted(expected))
+        self.assertEqual(sorted(kinds), sorted(Question.Kind.values))
         self.assertEqual(len(kinds), len(set(kinds)))  # exactly one each
+
+    def test_mindmap_is_last_with_bilingual_root_and_branches(self):
+        last = self.room.question_sets.get().questions.order_by("position").last()
+        self.assertEqual(last.kind, Question.Kind.MINDMAP)
+        self.assertEqual((last.mindmap_root_de, last.mindmap_root_en), ("Gute Lehre", "Good teaching"))
+        self.assertEqual(
+            [(b["text"]["de"], b["text"]["en"]) for b in last.mindmap_seed],
+            [("Inhalt", "Content"), ("Methoden", "Methods")],
+        )
+        self.assertFalse(last.mindmap_rating_mode)
+        self.assertFalse(last.wordcloud_ai_enabled)
 
     def test_every_question_has_bilingual_text(self):
         question_set = self.room.question_sets.get()
@@ -3874,10 +3882,25 @@ class ExampleResultsSeedTests(TestCase):
 
     def test_every_question_answered_in_every_run(self):
         for run in self.question_set.runs.all():
-            for question in self.question_set.questions.all():
+            for question in self.question_set.questions.exclude(kind=Question.Kind.MINDMAP):
                 self.assertTrue(
                     run.votes.filter(question=question).exists(), (run.pk, question.kind)
                 )
+
+    def test_mindmap_contributions_in_both_runs(self):
+        from live.models import MindmapContribution, MindmapNode
+
+        question = self.question_set.questions.get(kind=Question.Kind.MINDMAP)
+        for run in self.question_set.runs.all():
+            nodes = MindmapNode.objects.filter(run=run, question=question)
+            self.assertEqual(nodes.filter(seeded=True, parent=None).count(), 2)
+            self.assertEqual(nodes.filter(seeded=False).count(), 7)
+            total = MindmapContribution.objects.filter(node__in=nodes).count()
+            self.assertGreaterEqual(total, 6)
+            twice = nodes.get(text="Beispiele")
+            self.assertEqual(twice.contributions.count(), 2)
+            self.assertEqual(twice.parent.text, "Methoden")
+            self.assertEqual(run.votes.filter(question=question).count(), 0)
 
     def test_participant_counts_per_run(self):
         older, newer = self.question_set.runs.order_by("created_at")

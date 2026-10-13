@@ -244,6 +244,35 @@ def seed_example_room(user) -> Room:
             text_en=option_en,
             position=i,
         )
+    position += 1
+
+    # mindmap: shared tree with two predefined branches (bilingual seed);
+    # no rating phase, AI switch off. Example contributions: live.onboarding.
+    text_de, text_en = _p(
+        "Was gehört zu einer guten Lehrveranstaltung?",
+        "What makes a good course?",
+    )
+    Question.objects.create(
+        question_set=question_set,
+        kind=Question.Kind.MINDMAP,
+        text_de=text_de,
+        text_en=text_en,
+        mindmap_root_de="Gute Lehre",
+        mindmap_root_en="Good teaching",
+        mindmap_seed=[
+            {
+                "text": {"de": "Inhalt", "en": "Content"},
+                "description": {"de": "", "en": ""},
+                "children": [],
+            },
+            {
+                "text": {"de": "Methoden", "en": "Methods"},
+                "description": {"de": "", "en": ""},
+                "children": [],
+            },
+        ],
+        position=position,
+    )
 
     # Example results (guided tour): two finished runs with invented answers.
     # Imported here — live depends on rooms, not the other way round.
