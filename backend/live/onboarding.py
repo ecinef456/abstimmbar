@@ -9,7 +9,8 @@ picker (the earlier run = an archived Durchführung), CSV export and the set's
 "archive results" action are explorable right away. Both runs lie in the
 past: Easy mode then auto-archives on the next presentation and Expert gets
 the start dialog, so the example runs are never continued by accident.
-Deterministic (fixed seed) so tests and screenshots are stable.
+The mind map question gets example contributions (``MINDMAP_TERMS``) under
+its seeded branches instead of votes. Deterministic (fixed seed) so tests and screenshots are stable.
 """
 import random
 from datetime import timedelta
@@ -18,7 +19,8 @@ from django.utils import timezone
 
 from rooms.models import Question
 
-from .models import OrderingResponse, ParticipantToken, PriorityScore, Run, Vote
+from . import mindmap as mm
+from .models import MindmapNode, OrderingResponse, ParticipantToken, PriorityScore, Run, Vote
 
 # (days ago, participants) per run, older first.
 EXAMPLE_RUNS = ((14, 9), (2, 12))
@@ -34,6 +36,18 @@ OPEN_TEXT_ANSWERS = [
     "Niemand kann sehen, wer was geantwortet hat.",
     "Man kann ohne Konto teilnehmen.",
     "Keine Zuordnung zur Person möglich.",
+]
+
+# Mind-map example contributions: (canonical seed branch, term, indices of the
+# contributing example tokens). "Beispiele" is contributed twice (merged).
+MINDMAP_TERMS = [
+    ("Inhalt", "Praxisbezug", (0,)),
+    ("Inhalt", "Aktuelle Forschung", (1,)),
+    ("Inhalt", "Klare Struktur", (2,)),
+    ("Methoden", "Gruppenarbeit", (3,)),
+    ("Methoden", "Beispiele", (4, 5)),
+    ("Methoden", "Live-Umfragen", (6,)),
+    ("Methoden", "Diskussion", (7,)),
 ]
 
 # Relative weights for the 5 likert agreement steps (negative first).
@@ -84,6 +98,23 @@ def _answer(rng, run, question, token):
         )
 
 
+def _seed_mindmap(run, question, tokens):
+    """Materialise the question's branches for ``run`` and add the example
+    terms of the tokens taking part (through the live helpers, so the tree is
+    exactly what participants would have built)."""
+    mm.ensure_seed(run, question)
+    # Keyed by the German seed text (seed_i18n), independent of the canonical
+    # content language that ``node.text`` follows.
+    branches = {
+        node.seed_i18n["text"]["de"]: node
+        for node in MindmapNode.objects.filter(run=run, question=question, seeded=True)
+    }
+    for branch, term, indices in MINDMAP_TERMS:
+        for index in indices:
+            if index < len(tokens):
+                mm.add_term(run, question, tokens[index], branches[branch].pk, term)
+
+
 def seed_example_results(question_set):
     """Create the two finished example runs (see module docstring)."""
     rng = random.Random(78)
@@ -104,7 +135,12 @@ def seed_example_results(question_set):
         )
         for token in tokens[:participants]:
             for question in questions:
+                if question.kind == Question.Kind.MINDMAP:
+                    continue
                 _answer(rng, run, question, token)
+        for question in questions:
+            if question.kind == Question.Kind.MINDMAP:
+                _seed_mindmap(run, question, tokens[:participants])
         # auto_now_add/auto_now fields: back-date after the fact.
         Run.objects.filter(pk=run.pk).update(created_at=started, updated_at=ended)
         Vote.objects.filter(run=run).update(created_at=started)

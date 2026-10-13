@@ -84,9 +84,7 @@ class OnboardingSeedOnWhoamiTests(TestCase):
         room = rooms.get()
         question_set = room.question_sets.get()
         kinds = set(question_set.questions.values_list("kind", flat=True))
-        # The mindmap kind (stage 1) is not part of the example room yet —
-        # it would need a tour step and sample results.
-        self.assertEqual(kinds, set(Question.Kind.values) - {Question.Kind.MINDMAP})
+        self.assertEqual(kinds, set(Question.Kind.values))
 
     @override_settings(**LT_OFF)
     def test_second_whoami_does_not_duplicate_the_room(self):
@@ -507,6 +505,13 @@ class ExampleRoomTests(TestCase):
         second = self.client.post("/api/whoami/example-room/", content_type="application/json")
         self.assertEqual(first.json(), second.json())
         self.assertEqual(Room.objects.filter(owner=self.user, is_example=True).count(), 1)
+        # The restored room carries the mind map incl. its example contributions.
+        from live.models import MindmapContribution
+        qset = Room.objects.get(owner=self.user, is_example=True).question_sets.get()
+        self.assertTrue(qset.questions.filter(kind=Question.Kind.MINDMAP).exists())
+        self.assertGreaterEqual(
+            MindmapContribution.objects.filter(node__run__question_set=qset).count(), 12
+        )
 
     def test_restore_requires_auth(self):
         self.client.logout()

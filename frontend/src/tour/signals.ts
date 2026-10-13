@@ -8,7 +8,11 @@
  *  re-emits until the step's target appears (the page may still be mounting). */
 import { useEffect, useRef } from "react";
 
-export type TourSignal = "open-question-menu" | "present-first" | "present-lobby";
+export type TourSignal =
+  | "open-question-menu"
+  | "close-question-menu"
+  | "present-first"
+  | "present-lobby";
 
 const EVENT = "abstimmbar:tour-signal";
 
