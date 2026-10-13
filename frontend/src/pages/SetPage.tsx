@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, Timer, ToggleLeft, Trash2, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import {
   api,
   results,
@@ -520,6 +520,19 @@ function NewQuestionMenu({
     };
   }, [open]);
 
+  // Phones: the menu is a full-screen sheet — keep the page behind it from
+  // scrolling and put the focus on its close button.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open || !window.matchMedia("(max-width: 639px)").matches) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
   // Guided tour: the "Question types" step opens this menu to spotlight it.
   useTourSignal("open-question-menu", () => setOpen(true));
 
@@ -540,10 +553,28 @@ function NewQuestionMenu({
         />
       </Button>
       {open && (
+        // Phones: a full-screen sheet with its own title bar and ✕ (a
+        // dropdown under the button ran off the small screen). From `sm` up
+        // the familiar dropdown under the button.
+        <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-slate-950 sm:absolute sm:inset-auto sm:right-0 sm:z-30 sm:mt-2 sm:block sm:w-80 sm:overflow-hidden sm:rounded-xl sm:border sm:border-slate-200 sm:shadow-lg sm:shadow-slate-900/5 sm:dark:border-slate-700 sm:dark:bg-slate-900">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:hidden">
+            <span className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {t("New question")}
+            </span>
+            <button
+              type="button"
+              ref={closeRef}
+              onClick={() => setOpen(false)}
+              aria-label={t("Close")}
+              className="-mr-2 rounded-full p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <X aria-hidden className="h-5 w-5" />
+            </button>
+          </div>
         <div
           role="menu"
           data-tour="set.type-list"
-          className="absolute right-0 z-30 mt-2 max-h-[75vh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900"
+          className="min-h-0 flex-1 overflow-y-auto py-1 sm:max-h-[75vh]"
         >
           {QUESTION_TYPE_GROUPS.map((group) => {
             const types = QUESTION_TYPES.filter(
@@ -591,6 +622,7 @@ function NewQuestionMenu({
               </div>
             );
           })}
+        </div>
         </div>
       )}
     </div>
