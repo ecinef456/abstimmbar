@@ -9,7 +9,8 @@ picker (the earlier run = an archived Durchführung), CSV export and the set's
 "archive results" action are explorable right away. Both runs lie in the
 past: Easy mode then auto-archives on the next presentation and Expert gets
 the start dialog, so the example runs are never continued by accident.
-Deterministic (fixed seed) so tests and screenshots are stable.
+The mind map question gets example contributions (``MINDMAP_TERMS``) under
+its seeded branches instead of votes. Deterministic (fixed seed) so tests and screenshots are stable.
 """
 import random
 from datetime import timedelta
@@ -102,8 +103,10 @@ def _seed_mindmap(run, question, tokens):
     terms of the tokens taking part (through the live helpers, so the tree is
     exactly what participants would have built)."""
     mm.ensure_seed(run, question)
+    # Keyed by the German seed text (seed_i18n), independent of the canonical
+    # content language that ``node.text`` follows.
     branches = {
-        node.text: node
+        node.seed_i18n["text"]["de"]: node
         for node in MindmapNode.objects.filter(run=run, question=question, seeded=True)
     }
     for branch, term, indices in MINDMAP_TERMS:

@@ -3887,6 +3887,21 @@ class ExampleResultsSeedTests(TestCase):
                     run.votes.filter(question=question).exists(), (run.pk, question.kind)
                 )
 
+    def test_seeding_works_with_english_canonical_language(self):
+        from django.test import override_settings
+        from live.models import MindmapNode
+
+        with override_settings(
+            MODELTRANSLATION_DEFAULT_LANGUAGE="en", CONTENT_DEFAULT_LANGUAGE="en"
+        ):
+            user = User.objects.create_user(username="seed_en_canonical")
+            room = seed_example_room(user)
+            qset = room.question_sets.get()
+            question = qset.questions.get(kind=Question.Kind.MINDMAP)
+            for run in qset.runs.all():
+                node = MindmapNode.objects.get(run=run, question=question, seed_i18n__text__de="Methoden")
+                self.assertEqual(node.children.filter(seeded=False).count(), 4)
+
     def test_mindmap_contributions_in_both_runs(self):
         from live.models import MindmapContribution, MindmapNode
 
