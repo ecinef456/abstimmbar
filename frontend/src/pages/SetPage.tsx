@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, Timer, ToggleLeft, Trash2, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import {
   api,
   results,
@@ -398,9 +398,29 @@ function buildRows(questions: Question[], sections: SectionType[]): OutlineRow[]
 
 // Label/description are English source strings, translated with t() at the
 // NewQuestionMenu render site (this array lives at module scope).
+type QuestionTypeGroup = "choose" | "rate" | "open";
+
+/** Groups of the "+ Neue Frage" menu — by what participants do, not by the
+ *  purpose (a single choice serves knowledge checks and opinion polls alike),
+ *  so every type has exactly one place. English source strings. */
+const QUESTION_TYPE_GROUPS: { id: QuestionTypeGroup; label: string; description: string }[] = [
+  { id: "choose", label: "Choose", description: "Participants pick from given answers." },
+  {
+    id: "rate",
+    label: "Rate & order",
+    description: "Participants rate, weight or rank items.",
+  },
+  {
+    id: "open",
+    label: "Answer openly",
+    description: "Participants answer in their own words — also for collecting ideas together.",
+  },
+];
+
 const QUESTION_TYPES: {
   kind: QuestionKind;
   template?: "binary";
+  group: QuestionTypeGroup;
   label: string;
   description: string;
   icon: LucideIcon;
@@ -408,12 +428,14 @@ const QUESTION_TYPES: {
   {
     kind: "single_choice",
     icon: CircleDot,
+    group: "choose",
     label: "Single Choice",
     description: "One answer selectable; a correct answer can be marked.",
   },
   {
     kind: "multiple_choice",
     icon: ListChecks,
+    group: "choose",
     label: "Multiple Choice",
     description: "Multiple answers selectable at the same time.",
   },
@@ -421,42 +443,49 @@ const QUESTION_TYPES: {
     kind: "single_choice",
     template: "binary",
     icon: ToggleLeft,
+    group: "choose",
     label: "Yes/No",
     description: "Two options — pick a Yes/No or True/False template, or type your own.",
   },
   {
     kind: "likert",
     icon: SlidersHorizontal,
+    group: "rate",
     label: "Likert scale",
     description: "Fixed rating scale (e.g. agreement), optionally with an abstain option.",
   },
   {
-    kind: "word_cloud",
-    icon: Cloud,
-    label: "Word cloud",
-    description: "Short free-form terms, live as a growing word cloud.",
-  },
-  {
     kind: "open_text",
     icon: MessageSquareText,
+    group: "open",
     label: "Free text",
     description: "Free-form text answer (max. 500 characters), shown as a list.",
   },
   {
+    kind: "word_cloud",
+    icon: Cloud,
+    group: "open",
+    label: "Word cloud",
+    description: "Short free-form terms, live as a growing word cloud.",
+  },
+  {
     kind: "priorities",
     icon: Scale,
+    group: "rate",
     label: "Priorities",
     description: "Distribute up to 100 points across the options; evaluated as the average per option.",
   },
   {
     kind: "ordering",
     icon: ArrowDownUp,
+    group: "rate",
     label: "Ordering",
     description: "Participants sort items into the correct order (drag & drop).",
   },
   {
     kind: "mindmap",
     icon: Network,
+    group: "open",
     label: "Mind map",
     description: "Build a mind map together, live on the beamer.",
   },
@@ -491,6 +520,19 @@ function NewQuestionMenu({
     };
   }, [open]);
 
+  // Phones: the menu is a full-screen sheet — keep the page behind it from
+  // scrolling and put the focus on its close button.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open || !window.matchMedia("(max-width: 639px)").matches) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
   // Guided tour: the "Question types" step opens this menu to spotlight it.
   useTourSignal("open-question-menu", () => setOpen(true));
 
@@ -511,12 +553,48 @@ function NewQuestionMenu({
         />
       </Button>
       {open && (
+        // Phones: a full-screen sheet with its own title bar and ✕ (a
+        // dropdown under the button ran off the small screen). From `sm` up
+        // the familiar dropdown under the button.
+        <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-slate-950 sm:absolute sm:inset-auto sm:right-0 sm:z-30 sm:mt-2 sm:block sm:w-80 sm:overflow-hidden sm:rounded-xl sm:border sm:border-slate-200 sm:shadow-lg sm:shadow-slate-900/5 sm:dark:border-slate-700 sm:dark:bg-slate-900">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:hidden">
+            <span className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {t("New question")}
+            </span>
+            <button
+              type="button"
+              ref={closeRef}
+              onClick={() => setOpen(false)}
+              aria-label={t("Close")}
+              className="-mr-2 rounded-full p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <X aria-hidden className="h-5 w-5" />
+            </button>
+          </div>
         <div
           role="menu"
           data-tour="set.type-list"
-          className="absolute right-0 z-30 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/5 dark:border-slate-700 dark:bg-slate-900"
+          className="min-h-0 flex-1 overflow-y-auto py-1 sm:max-h-[75vh]"
         >
-          {QUESTION_TYPES.filter((type) => allowedKinds.includes(type.kind)).map((type) => (
+          {QUESTION_TYPE_GROUPS.map((group) => {
+            const types = QUESTION_TYPES.filter(
+              (type) => type.group === group.id && allowedKinds.includes(type.kind),
+            );
+            if (types.length === 0) return null;
+            return (
+              <div
+                key={group.id}
+                role="group"
+                aria-label={t(group.label)}
+                className="py-1 [&+&]:border-t [&+&]:border-slate-100 dark:[&+&]:border-slate-800"
+              >
+                <div className="px-3 pb-1 pt-1.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    {t(group.label)}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{t(group.description)}</div>
+                </div>
+                {types.map((type) => (
             <button
               key={type.label}
               type="button"
@@ -540,7 +618,11 @@ function NewQuestionMenu({
                 </span>
               </span>
             </button>
-          ))}
+                ))}
+              </div>
+            );
+          })}
+        </div>
         </div>
       )}
     </div>

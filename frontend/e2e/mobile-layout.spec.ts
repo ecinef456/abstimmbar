@@ -152,6 +152,24 @@ for (const colorScheme of ['light', 'dark'] as const) {
         }
       });
 
+      // "+ Neue Frage" is a full-screen sheet on phones (a dropdown ran off
+      // the screen); its own ✕ closes it.
+      test('new-question menu opens as a full-screen sheet', async ({ page, seed }) => {
+        await page.goto(`/sets/${seed.setId}`);
+        await page.getByRole('button', { name: /^\+?\s*(Neue Frage|New question)$/ }).click();
+        const menu = page.locator('[data-tour="set.type-list"]');
+        await expect(menu).toBeVisible();
+        await expectInViewport(menu, 'new-question menu');
+        await expectNoHorizontalOverflow(page, 'new-question menu open');
+        await menu.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+        await expect(menu.getByRole('menuitem').last()).toBeInViewport();
+        await menu
+          .locator('xpath=..')
+          .getByRole('button', { name: /^(Schließen|Close)$/ })
+          .click();
+        await expect(menu).toBeHidden();
+      });
+
       test('user menu opens inside the viewport', async ({ page }) => {
         await page.goto('/');
         await expect(page.locator('[data-tour="rooms.list"]')).toBeVisible();
