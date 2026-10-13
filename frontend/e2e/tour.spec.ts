@@ -95,6 +95,21 @@ test('tour: sections, progress, Back across pages, skip section, arrow keys, min
   await popover(page).getByRole('button', { name: 'Skip section' }).click();
   await expectHead(page, /^Question sets · 1 of \d+$/);
   await expect(title(page)).toHaveText('Sets and their types');
+
+  // The type-list step opens the "New question" menu; Back to the step
+  // before closes it again.
+  const typeMenu = page.locator('[data-tour="set.type-list"]');
+  for (let i = 0; i < 6 && (await title(page).textContent()) !== 'Question types'; i++) {
+    const before = await head(page).textContent();
+    await next(page);
+    await expect(head(page)).not.toHaveText(before ?? '', { timeout: 15_000 });
+  }
+  await expect(title(page)).toHaveText('Question types');
+  await expect(typeMenu).toBeVisible();
+  await popover(page).getByRole('button', { name: 'Back' }).click();
+  await expect(title(page)).toHaveText('Add a question');
+  await expect(typeMenu).toBeHidden();
+
   // … and again: "Question sets" → the first question-type step.
   await popover(page).getByRole('button', { name: 'Skip section' }).click();
   await expectHead(page, /^Question types · 1 of \d+$/);
@@ -133,6 +148,25 @@ test('tour: sections, progress, Back across pages, skip section, arrow keys, min
   await expectHead(page, new RegExp(`^Question types · ${total} of ${total}$`));
   await expect(title(page)).toHaveText(titles[titles.length - 1]);
   await expect(page).toHaveURL(/\/sets\/\d+\/questions\/\d+$/);
+
+  // Through the presenter to the results, then Back into the presenter: the
+  // last presenter step shows the first question again, not the lobby.
+  await page.keyboard.press('ArrowRight');
+  await expectHead(page, /^Presenting · 1 of \d+$/);
+  for (let i = 0; i < 8; i++) {
+    const current = await headParts(head(page));
+    if (current.section === 'Results') break;
+    const before = await head(page).textContent();
+    await next(page);
+    await expect(head(page)).not.toHaveText(before ?? '', { timeout: 15_000 });
+  }
+  await expectHead(page, /^Results · 1 of \d+$/);
+  await expect(page).toHaveURL(/\/sets\/\d+$/);
+  await popover(page).getByRole('button', { name: 'Back' }).click();
+  await expect(title(page)).toHaveText('Next question and end', { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/sets\/\d+\/present/);
+  await expect(page.getByText(/^Question 1\/\d+$/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[data-tour="present.reveal"]')).toBeVisible();
 
   // End the tour (✕).
   await popover(page).locator('.driver-popover-close-btn').click();

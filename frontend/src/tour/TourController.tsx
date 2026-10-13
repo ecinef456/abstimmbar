@@ -97,15 +97,25 @@ function isAt(target: NavigateTarget, route: string, pathname: string): boolean 
   return matchPath(destPattern(target), pathname) != null && matchPath(routePath, pathname) != null;
 }
 
-/** Ignore ←/→ while typing (inputs, selects, the rich-text editor). */
-function isTextField(el: Element | null): boolean {
+/** Widgets with their own ←/→ behaviour (tabs, sliders, listboxes, radio
+ *  groups, dnd-kit drag handles, …). */
+const ARROW_WIDGETS =
+  '[role="tab"], [role="tablist"], [role="slider"], [role="listbox"], [role="option"], ' +
+  '[role="combobox"], [role="spinbutton"], [role="radiogroup"], [role="radio"], ' +
+  '[role="menu"], [role="menuitem"], [role="grid"], [role="tree"], [role="treeitem"], ' +
+  '[aria-roledescription="sortable"]';
+
+/** Ignore ←/→ while typing (inputs, selects, the rich-text editor) or while
+ *  focus is on a widget that uses the arrow keys itself. */
+function ownsArrowKeys(el: Element | null): boolean {
   if (!el) return false;
   const tag = el.tagName;
   return (
     tag === "INPUT" ||
     tag === "TEXTAREA" ||
     tag === "SELECT" ||
-    (el as HTMLElement).isContentEditable
+    (el as HTMLElement).isContentEditable ||
+    el.closest(ARROW_WIDGETS) != null
   );
 }
 
@@ -385,7 +395,11 @@ export function TourProvider({
       if (page === "rooms") return "/";
       for (let j = i; j >= 0 && steps[j].page === page; j--) {
         const nav = steps[j].navigateTo;
-        if (nav) return resolveRoute(nav);
+        if (!nav) continue;
+        const route = await resolveRoute(nav);
+        // A missing example question (e.g. no mind map) doesn't say where
+        // the page is — keep walking back to an earlier step on it.
+        if (route !== null) return route;
       }
       return null;
     },
@@ -592,6 +606,18 @@ export function TourProvider({
       const found = (el: Element) => {
         if (cancelled) return;
         clearWaiters();
+        // Re-send the signal now that the page is mounted: the one emitted
+        // before navigating may have been lost (e.g. Back from the results
+        // into the presenter, whose footer target also exists in the lobby,
+        // so the wait loop never re-sent it). Handlers are idempotent; the
+        // deferred copy covers listeners that subscribe right after mount.
+        if (current.signal) {
+          const signal = current.signal;
+          emitTourSignal(signal);
+          window.setTimeout(() => {
+            if (!cancelled) emitTourSignal(signal);
+          }, 150);
+        }
         highlight(current, el);
       };
 
@@ -723,7 +749,7 @@ export function TourProvider({
       if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       const nav = keyNavRef.current;
-      if (!nav || appPopupOpen() || isTextField(document.activeElement)) return;
+      if (!nav || appPopupOpen() || ownsArrowKeys(document.activeElement)) return;
       if (pageFor(pathRef.current) === "present") return;
       e.preventDefault();
       if (e.key === "ArrowRight") nav.next();

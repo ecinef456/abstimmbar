@@ -535,6 +535,8 @@ function NewQuestionMenu({
 
   // Guided tour: the "Question types" step opens this menu to spotlight it.
   useTourSignal("open-question-menu", () => setOpen(true));
+  // …and the step before it (reached via Back) closes it again.
+  useTourSignal("close-question-menu", () => setOpen(false));
 
   return (
     <div className="relative" ref={ref}>

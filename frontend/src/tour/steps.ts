@@ -186,8 +186,10 @@ export const proTour: TourStep[] = [
     titleKey: "The set editor", bodyKey: "This example set holds one question of every type — let’s look at each." },
   // The copy invites opening the type menu, so the page stays clickable and the
   // popover sits above the button (the menu opens below it).
+  // close-question-menu: Back from the type list must not leave the menu
+  // open (no-op going forward — the menu is closed then).
   { id: "set.add-question", page: "set", target: "set.add-question", kind: "info",
-    interactive: true, side: "top",
+    interactive: true, side: "top", signal: "close-question-menu",
     titleKey: "Add a question",
     bodyKey: "Click ‘New question’ and pick the question type in the menu — the type decides the answer format and how results are evaluated." },
   { id: "set.type-list", page: "set", target: "set.type-list", kind: "info",
@@ -199,7 +201,7 @@ export const proTour: TourStep[] = [
     bodyKey: "‘From document’ drafts questions from your slides (PDF, PowerPoint, Impress) with AI. Questions from another set can be added via the set’s ⋯ menu." },
   ]),
   ...inSection("types", [
-  q("single_choice", "Single Choice", "Participants pick exactly one answer. Tick the correct one — or none for an opinion poll. Yes/No and True/False have their own entry in the menu."),
+  q("single_choice", "Single Choice", "Participants pick exactly one answer. Tick the correct one — or none for an opinion poll. For Yes/No and True/False there is a separate entry in the menu."),
   { id: "question.settings", page: "question", target: "question.settings", kind: "info",
     titleKey: "Settings every question has",
     bodyKey: "Random order shuffles the answers anew for each presentation — all participants see the same order. ‘Reveal correct answer’ decides whether the solution appears immediately with the results, only when triggered, or never." },
