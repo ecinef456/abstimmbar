@@ -1032,5 +1032,11 @@
   "{{count}} changes applied — Ctrl/Cmd+Z undoes them._one": "{{count}} Änderung übernommen – Strg/Cmd+Z nimmt sie zurück.",
   "{{count}} changes applied — Ctrl/Cmd+Z undoes them._other": "{{count}} Änderungen übernommen – Strg/Cmd+Z nimmt sie zurück.",
   "{{count}} no longer fitted the map and were skipped._one": "{{count}} passte nicht mehr zur Mindmap und wurde übersprungen.",
-  "{{count}} no longer fitted the map and were skipped._other": "{{count}} passten nicht mehr zur Mindmap und wurden übersprungen."
+  "{{count}} no longer fitted the map and were skipped._other": "{{count}} passten nicht mehr zur Mindmap und wurden übersprungen.",
+  "Choose": "Auswählen",
+  "Participants pick from given answers.": "Teilnehmende wählen aus vorgegebenen Antworten.",
+  "Rate & order": "Bewerten & Ordnen",
+  "Participants rate, weight or rank items.": "Teilnehmende stufen ein, gewichten oder bringen in eine Reihenfolge.",
+  "Answer openly": "Offen antworten",
+  "Participants answer in their own words — also for collecting ideas together.": "Teilnehmende antworten in eigenen Worten – auch zum gemeinsamen Sammeln von Ideen."
 }
