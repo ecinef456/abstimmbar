@@ -38,6 +38,7 @@ from rooms.matrix import (
     CATEGORY_NAMED,
     CATEGORY_OFF,
     MATRIX_DESCRIPTION_MAX,
+    MATRIX_MAX_CARDS,
     MATRIX_TITLE_MAX,
     allowed_zones,
     category_keys,
@@ -222,10 +223,16 @@ def _create(run, question, token, zone, title, category, description, teacher):
     )
 
 
+def _check_cap(run, question):
+    if _cards(run, question).count() >= MATRIX_MAX_CARDS:
+        raise MatrixError("Card limit reached.", 409)
+
+
 def add_card(run, question, token, zone, title, category="", description=""):
     title, category, description = _validated(question, zone, title, category, description)
     with transaction.atomic():
         _lock_run(run)
+        _check_cap(run, question)
         if _cards(run, question).filter(token=token).count() >= question.matrix_max_per_person:
             raise MatrixError("Card limit reached.", 409)
         return _create(run, question, token, zone, title, category, description, False)
@@ -237,16 +244,21 @@ def add_teacher_card(run, question, zone, title, category="", description=""):
         _lock_run(run)
         if run.phase == Run.Phase.FINISHED:
             raise MatrixError("The run is finished.", 409)
+        _check_cap(run, question)
         return _create(run, question, None, zone, title, category, description, True)
 
 
 def _detach(card):
     """Take ``card`` out of its stack. A member just leaves; a top with
-    members hands its position and its members to the oldest member."""
+    members hands its position and its members to the oldest member. A card
+    leaving (or promoted out of) a hidden top stays hidden — moderation must
+    not silently re-expose it."""
     with transaction.atomic():
         if card.stack_id:
+            if card.stack.hidden:
+                card.hidden = True
             card.stack = None
-            card.save(update_fields=["stack"])
+            card.save(update_fields=["stack", "hidden"])
             return
         members = list(card.members.order_by("created_at", "pk"))
         if not members:
@@ -254,7 +266,8 @@ def _detach(card):
         new_top, rest = members[0], members[1:]
         new_top.stack = None
         new_top.x, new_top.y, new_top.zone, new_top.placed = card.x, card.y, card.zone, card.placed
-        new_top.save(update_fields=["stack", "x", "y", "zone", "placed"])
+        new_top.hidden = new_top.hidden or card.hidden
+        new_top.save(update_fields=["stack", "x", "y", "zone", "placed", "hidden"])
         MatrixCard.objects.filter(pk__in=[m.pk for m in rest]).update(stack=new_top)
 
 
@@ -293,6 +306,9 @@ def move_card(run, question, card_id, x, y):
         top.x, top.y = clamp_to_zone(top.zone, x, y, edges)
         top.placed = True
         top.save(update_fields=["zone", "x", "y", "placed"])
+        # Members carry the top's zone and position (spec: the top's values
+        # count) — keep the stored rows consistent.
+        top.members.update(zone=top.zone, x=top.x, y=top.y)
         return top
 
 
@@ -303,9 +319,15 @@ def stack_card(run, question, card_id, onto_id):
         target = _top(_get(run, question, onto_id))
         if moving.pk == target.pk:
             raise MatrixError("Cannot stack a card onto itself.")
-        moving.members.update(stack=target)
+        # The whole moving stack takes the target's zone and position; the
+        # members of a hidden top become hidden too.
+        place = {"stack": target, "zone": target.zone, "x": target.x, "y": target.y}
+        if moving.hidden:
+            moving.members.update(hidden=True)
+        moving.members.update(**place)
         moving.stack = target
-        moving.save(update_fields=["stack"])
+        moving.zone, moving.x, moving.y = target.zone, target.x, target.y
+        moving.save(update_fields=["stack", "zone", "x", "y"])
         return target
 
 
@@ -356,8 +378,9 @@ def contributor_count(run, question):
 
 
 def board_payload(run, question, presenter):
-    """The whole board. ``presenter=False`` drops hidden cards, the members
-    of a hidden top, and the membership of hidden members."""
+    """The whole board (``cards``, ``count``, ``contributors``; settings live
+    in :func:`settings_payload`). ``presenter=False`` drops hidden cards and
+    the members of a hidden top; ``presenter=True`` marks them (``hidden``)."""
     rows = list(_cards(run, question))
     hidden_ids = {c.pk for c in rows if c.hidden}
     cards = []

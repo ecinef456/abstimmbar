@@ -162,7 +162,7 @@ def build_payloads(room):
         # Settings only — never the board: participants see just their own
         # cards (fetched via matrix/mine), the board lives on the beamer.
         participant["question"] = question_payload(question, shuffle_seed=run.pk)
-        participant["matrix"] = matrix.settings_payload(question)
+        participant["matrix_settings"] = matrix.settings_payload(question)
     # Results on participant devices (v2, per-set option): only while the
     # beamer shows results, correct flags only once revealed.
     if (
@@ -237,7 +237,7 @@ def build_payloads(room):
             presenter["question"]["mindmap_ai"] = mindmap.ai_settings(question)
         elif is_matrix:
             presenter["matrix"] = matrix.board_payload(run, question, presenter=True)
-            presenter["matrix"].update(matrix.settings_payload(question))
+            presenter["matrix_settings"] = matrix.settings_payload(question)
             presenter["votes"] = matrix.contributor_count(run, question)
         elif question.kind in Question.TEXT_KINDS:
             presenter["words"] = words_with_counts(run, question)

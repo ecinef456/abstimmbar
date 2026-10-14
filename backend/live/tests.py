@@ -7923,13 +7923,13 @@ class MatrixServiceTests(MatrixTestCase):
     def test_move_member_moves_top(self):
         top, m = self.add(title="T"), self.add(title="M")
         self.stacked(top, m)
-        member_xy = (m.x, m.y)
         result = mxs.move_card(self.run, self.xq, m.pk, -0.5, -0.5)
         self.assertEqual(result.pk, top.pk)
         top.refresh_from_db()
         m.refresh_from_db()
         self.assertEqual((top.x, top.y, top.zone), (-0.5, -0.5, "q3"))
-        self.assertEqual((m.x, m.y), member_xy)
+        # Members carry the top's position (the top's values count).
+        self.assertEqual((m.x, m.y, m.zone), (-0.5, -0.5, "q3"))
 
     def test_stack_and_stack_of_stack(self):
         a, b, c, d = (self.add(title=t) for t in "ABCD")
@@ -8206,6 +8206,91 @@ def board(case):
     return {c["id"]: c for c in build_payloads(case.room)["presenter"]["matrix"]["cards"]}
 
 
+class MatrixFinalReviewTests(MatrixTestCase):
+    """Whole-branch review fixes (PR 1)."""
+
+    def test_stacked_card_reports_the_tops_zone_and_position(self):
+        top, member = self.add(zone="q1", title="Top"), self.add(zone="q2", title="Member")
+        self.stacked(top, member)
+        mxs.move_card(self.run, self.xq, top.pk, -0.6, -0.6)  # into q3
+        top.refresh_from_db()
+        member.refresh_from_db()
+        self.assertEqual((member.zone, member.x, member.y), (top.zone, top.x, top.y))
+        self.assertEqual(top.zone, "q3")
+        payload = {c["id"]: c for c in mxs.board_payload(self.run, self.xq, True)["cards"]}
+        self.assertEqual(
+            (payload[member.pk]["zone"], payload[member.pk]["x"], payload[member.pk]["y"]),
+            (top.zone, top.x, top.y),
+        )
+        row = next(r for r in mxs.csv_rows(self.run, self.xq) if r["title"] == "Member")
+        self.assertEqual(
+            (row["zone"], row["x"], row["y"]), (top.zone, f"{top.x:.2f}", f"{top.y:.2f}")
+        )
+
+    def test_stacking_copies_target_position_onto_moving_stack(self):
+        target = self.add(zone="q1", title="Target")
+        moving, sub = self.add(zone="q2", title="Moving"), self.add(zone="q2", title="Sub")
+        self.stacked(moving, sub)
+        mxs.stack_card(self.run, self.xq, moving.pk, target.pk)
+        for card in (moving, sub):
+            card.refresh_from_db()
+            self.assertEqual((card.zone, card.x, card.y), (target.zone, target.x, target.y))
+            self.assertEqual(card.stack_id, target.pk)
+
+    def test_card_cap_per_run_and_question(self):
+        with patch.object(mxs, "MATRIX_MAX_CARDS", 2):
+            self.configure(matrix_max_per_person=50)
+            self.add(self.tok)
+            mxs.add_teacher_card(self.run, self.xq, "q1", "T")
+            with self.assertRaises(MatrixError) as cm:
+                self.add(self.tok2)
+            self.assertEqual((cm.exception.status, cm.exception.detail), (409, "Card limit reached."))
+            with self.assertRaises(MatrixError) as cm:
+                mxs.add_teacher_card(self.run, self.xq, "q1", "T2")
+            self.assertEqual(cm.exception.status, 409)
+            self.assertEqual(MatrixCard.objects.count(), 2)
+
+    def test_hidden_top_stacked_onto_card_hides_its_members(self):
+        target = self.add(title="Target")
+        top, member = self.add(title="Top"), self.add(title="Member")
+        self.stacked(top, member)
+        mxs.set_hidden(self.run, self.xq, top.pk, True)
+        mxs.stack_card(self.run, self.xq, top.pk, target.pk)
+        member.refresh_from_db()
+        self.assertTrue(member.hidden)
+        visible = [c["title"] for c in mxs.board_payload(self.run, self.xq, False)["cards"]]
+        self.assertEqual(visible, ["Target"])
+
+    def test_promoted_member_of_hidden_top_stays_hidden(self):
+        top, member = self.add(title="Top"), self.add(title="Member")
+        self.stacked(top, member)
+        mxs.set_hidden(self.run, self.xq, top.pk, True)
+        mxs.unstack_card(self.run, self.xq, top.pk)  # promotes Member
+        member.refresh_from_db()
+        self.assertIsNone(member.stack_id)
+        self.assertTrue(member.hidden)
+        self.assertEqual(
+            [c["title"] for c in mxs.board_payload(self.run, self.xq, False)["cards"]], []
+        )
+
+    def test_unstacked_member_of_hidden_top_stays_hidden(self):
+        top, member = self.add(title="Top"), self.add(title="Member")
+        self.stacked(top, member)
+        mxs.set_hidden(self.run, self.xq, top.pk, True)
+        mxs.unstack_card(self.run, self.xq, member.pk)
+        member.refresh_from_db()
+        self.assertTrue(member.hidden)
+
+    def test_deleting_hidden_teacher_top_promotes_hidden_member(self):
+        top = mxs.add_teacher_card(self.run, self.xq, "q1", "Top")
+        member = self.add(title="Member")
+        self.stacked(top, member)
+        mxs.set_hidden(self.run, self.xq, top.pk, True)
+        mxs.delete_teacher_card(self.run, self.xq, top.pk)
+        member.refresh_from_db()
+        self.assertTrue(member.hidden)
+
+
 class MatrixPayloadTests(MatrixTestCase):
     def test_presenter_payload_has_cards_and_votes(self):
         self.add(self.tok, title="Secret card")
@@ -8213,6 +8298,10 @@ class MatrixPayloadTests(MatrixTestCase):
         presenter = build_payloads(self.room)["presenter"]
         self.assertEqual(len(presenter["matrix"]["cards"]), 2)
         self.assertEqual(presenter["votes"], 2)
+        # One contract: ``matrix`` is the board, ``matrix_settings`` the settings.
+        self.assertEqual(set(presenter["matrix"]), {"cards", "count", "contributors"})
+        self.assertIn("axes", presenter["matrix_settings"])
+        self.assertNotIn("cards", presenter["matrix_settings"])
 
     def test_participant_payload_has_settings_but_no_cards(self):
         self.configure(
@@ -8222,7 +8311,8 @@ class MatrixPayloadTests(MatrixTestCase):
         )
         self.add(self.tok2, title="Other participant card", category="blue")
         participant = build_payloads(self.room)["participant"]
-        m = participant["matrix"]
+        self.assertNotIn("matrix", participant)
+        m = participant["matrix_settings"]
         self.assertIn("e_top", m["zones"])
         self.assertTrue(m["edges"])
         self.assertEqual(m["axes"]["x_from"]["en"], "small")
@@ -8236,7 +8326,7 @@ class MatrixPayloadTests(MatrixTestCase):
     def test_participant_payload_stays_after_close(self):
         self.run.phase = Run.Phase.CLOSED
         self.run.save()
-        self.assertIn("matrix", build_payloads(self.room)["participant"])
+        self.assertIn("matrix_settings", build_payloads(self.room)["participant"])
 
 
 class MatrixResultsTests(MatrixTestCase):
@@ -8249,8 +8339,10 @@ class MatrixResultsTests(MatrixTestCase):
             f"/api/question-sets/{self.question_set.pk}/results/"
         ).json()["results"]
         item = next(q for r in data for q in r["questions"] if q["kind"] == "matrix")
-        titles = [c["title"] for c in item["matrix"]["cards"]]
-        self.assertEqual(titles, ["Visible"])
+        # The owner's results mark hidden cards instead of dropping them.
+        flags = {c["title"]: c["hidden"] for c in item["matrix"]["cards"]}
+        self.assertEqual(flags, {"Visible": False, "Hidden one": True})
+        self.assertEqual(item["matrix"]["count"], 1)
         self.assertIn("x", item["matrix"]["cards"][0])
         self.assertIn("axes", item["matrix_settings"])
         self.assertEqual(item["votes"], 1)

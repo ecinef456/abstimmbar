@@ -401,7 +401,8 @@ def run_results(run):
                 item["mindmap"]["rating"] = rating
             item["votes"] = contributor_count(run, question)
         elif question.kind == Question.Kind.MATRIX:
-            item["matrix"] = matrix.board_payload(run, question, presenter=False)
+            # Owner-only endpoint: hidden cards are marked, not dropped.
+            item["matrix"] = matrix.board_payload(run, question, presenter=True)
             item["matrix_settings"] = matrix.settings_payload(question)
             item["votes"] = matrix.contributor_count(run, question)
         elif question.kind in Question.TEXT_KINDS:

@@ -180,7 +180,7 @@ def question_preview(request, question_id):
     if question.kind == Question.Kind.MINDMAP:
         preview_state["mindmap"] = mindmap.preview_tree(question)
     elif question.kind == Question.Kind.MATRIX:
-        preview_state["matrix"] = matrix.settings_payload(question)
+        preview_state["matrix_settings"] = matrix.settings_payload(question)
     response = render(
         request,
         "live/participant.html",
@@ -929,7 +929,7 @@ def matrix_mine(request, code):
     return Response({"mine": matrix.mine_payload(run, question, token)})
 
 
-def _matrix_moderate(request, run_id, question_id, action, status=200):
+def _matrix_moderate(request, run_id, question_id, action, http_status=200):
     """Owner-only shell for the presenter endpoints: 404 for anyone else and
     for non-matrix questions, MatrixError mapping, board echo + broadcast."""
     run = get_object_or_404(
@@ -950,7 +950,7 @@ def _matrix_moderate(request, run_id, question_id, action, status=200):
         return Response(error.body(), status=error.status)
     broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
     return Response(
-        {"matrix": matrix.board_payload(run, question, presenter=True)}, status=status
+        {"matrix": matrix.board_payload(run, question, presenter=True)}, status=http_status
     )
 
 
@@ -1012,7 +1012,7 @@ def matrix_teacher_add(request, run_id, question_id):
             run, q, d.get("zone"), _text_field(d, "title"),
             _text_field(d, "category"), _text_field(d, "description"),
         ),
-        status=201,
+        http_status=201,
     )
 
 
