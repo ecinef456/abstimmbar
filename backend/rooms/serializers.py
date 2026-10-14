@@ -15,7 +15,7 @@ from django.db.models import Count, Max
 from django.utils.html import strip_tags
 from rest_framework import serializers
 
-from common.i18n_fields import TranslatedMapMixin
+from common.i18n_fields import LANGS, TranslatedMapMixin
 from common.serializers import TranslationSyncMixin
 
 from . import mindmap, set_types
@@ -310,12 +310,12 @@ class SectionSerializer(TranslatedMapMixin, serializers.ModelSerializer):
     # title is a {"de","en"} map (#33 MR2); its own numbered-default logic
     # lives in create()/update(), so it is exempt from the mixin's
     # canonical-required check.
-    translated_fields = ("title",)
+    translated_fields = ("title", "description")
     translated_optional_fields = ("title",)
 
     class Meta:
         model = Section
-        fields: ClassVar = ["id", "question_set", "title", "position"]
+        fields: ClassVar = ["id", "question_set", "title", "description", "position"]
         read_only_fields: ClassVar = ["position"]
 
     def validate_question_set(self, question_set):
@@ -325,6 +325,26 @@ class SectionSerializer(TranslatedMapMixin, serializers.ModelSerializer):
         ):
             raise serializers.ValidationError("You do not manage this room.")
         return question_set
+
+    def validate_description(self, value):
+        return clean_html(value)
+
+    def to_internal_value(self, data):
+        attrs = super().to_internal_value(data)
+        # The mixin treats a fully blank map on update as "keep the old
+        # value" (right for titles); the optional description must be
+        # clearable, so an explicitly sent blank map empties every language.
+        if (
+            self.instance is not None
+            and isinstance(data, dict)
+            and "description" in data
+            and not any(
+                attrs.get(f"description_{lang}") for lang in LANGS
+            )
+        ):
+            for lang in LANGS:
+                attrs[f"description_{lang}"] = ""
+        return attrs
 
     def create(self, validated_data):
         # See RoomSerializer.validate: canonical value is title_<default>;

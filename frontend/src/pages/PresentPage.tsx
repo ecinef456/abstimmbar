@@ -176,14 +176,15 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // Section interstitial (v2 "Zwischenfolie"): shown when advancing into a
   // section for the first time, before its first question is called up.
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [sectionTitles, setSectionTitles] = useState<Map<number, string>>(new Map());
+  // Section id -> its interstitial content (title + optional rich description).
+  const [sectionInfo, setSectionInfo] = useState<Map<number, SectionSlide>>(new Map());
 
   // Institution logo for the beamer (shown only if the room opts in).
   useEffect(() => {
     void api.getSite().then((s) => setLogoUrl(s.logo)).catch(() => setLogoUrl(null));
   }, []);
   const beamerLogo = state?.room.show_logo && logoUrl ? logoUrl : null;
-  const [interstitial, setInterstitial] = useState<{ title: string; index: number } | null>(null);
+  const [interstitial, setInterstitial] = useState<(SectionSlide & { index: number }) | null>(null);
   const announcedRef = useRef<Set<number>>(new Set());
   const indexRef = useRef(-1);
   // #7 deep link: index the lobby Start should open, and a one-shot guard.
@@ -287,8 +288,16 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       const easyMode = !!who.easy_mode;
       setWhoAi({ easy: easyMode, ai: !!who.ai_enabled });
       setQuestions(page.results);
-      setSectionTitles(
-        new Map(sectionPage.results.map((s) => [s.id, localizedText(s.title)])),
+      setSectionInfo(
+        new Map(
+          sectionPage.results.map((s) => [
+            s.id,
+            {
+              title: localizedText(s.title),
+              description: localizedText(s.description ?? ""),
+            },
+          ]),
+        ),
       );
       setOpenOnShow(setData.open_on_show);
       setPresentResultsAfter(setData.present_results_after);
@@ -926,12 +935,12 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       const clamped = Math.max(0, Math.min(questions.length - 1, index));
       const section = questions[clamped].section;
       if (section !== null && !announcedRef.current.has(section)) {
-        setInterstitial({ title: sectionTitles.get(section) ?? "", index: clamped });
+        setInterstitial({ ...sectionSlide(sectionInfo, section), index: clamped });
         return;
       }
       void goto(clamped);
     },
-    [runId, questions, sectionTitles, goto],
+    [runId, questions, sectionInfo, goto],
   );
 
   // Start from the lobby into the armed deep-link question (#7), or the first
@@ -977,11 +986,11 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       current.section != null &&
       (idx === 0 || questions[idx - 1].section !== current.section)
     ) {
-      setInterstitial({ title: sectionTitles.get(current.section) ?? "", index: idx });
+      setInterstitial({ ...sectionSlide(sectionInfo, current.section), index: idx });
     } else {
       requestGoto(idx - 1);
     }
-  }, [questions, sectionTitles, requestGoto]);
+  }, [questions, sectionInfo, requestGoto]);
 
   // Guarded "advance" (#10). Quick paging stays silent; only when a slide was
   // dwelled on do we prompt — either "you didn't start this vote" (preview,
@@ -1735,11 +1744,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         }
       >
         {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
-        <div className="ab-fade-in flex min-h-full flex-col items-center justify-center text-center">
-          <h1 className="max-w-4xl text-6xl font-extrabold leading-tight">
-            {interstitial.title}
-          </h1>
-        </div>
+        <SectionInterstitial title={interstitial.title} description={interstitial.description} />
       </Shell>
     );
   }
@@ -3039,6 +3044,64 @@ function useTopLeftExtent(active: boolean): number {
     };
   }, [active]);
   return right;
+}
+
+/** Content of a section interstitial ("Zwischenfolie"), resolved to the
+ *  content language: plain title + optional sanitized rich description. */
+interface SectionSlide {
+  title: string;
+  description: string;
+}
+
+function sectionSlide(info: Map<number, SectionSlide>, id: number): SectionSlide {
+  return info.get(id) ?? { title: "", description: "" };
+}
+
+/** The interstitial slide: section title, with the optional rich
+ *  description below it. A long description is scaled down (never up) to
+ *  fit the beamer instead of scrolling. */
+function SectionInterstitial({ title, description }: SectionSlide) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+  const hasDescription = stripHtml(description).trim() !== "" || /<img/i.test(description);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const inner = innerRef.current;
+    if (!box || !inner) return;
+    const measure = () => {
+      const h = inner.offsetHeight; // unaffected by the transform
+      const avail = box.clientHeight;
+      const next = h > 0 && avail > 0 ? Math.max(0.35, Math.min(1, avail / h)) : 1;
+      setScale((s) => (Math.abs(s - next) < 0.01 ? s : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(inner);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [title, description]);
+  return (
+    <div
+      ref={boxRef}
+      data-testid="section-interstitial"
+      className="ab-fade-in flex h-full min-h-0 items-center justify-center overflow-hidden pb-12 text-center"
+    >
+      <div
+        ref={innerRef}
+        className="max-w-5xl shrink-0"
+        style={scale < 1 ? { transform: `scale(${scale})`, transformOrigin: "center" } : undefined}
+      >
+        <h1 className="mx-auto max-w-4xl text-6xl font-extrabold leading-tight">{title}</h1>
+        {hasDescription && (
+          <RichText
+            className="section-description mx-auto mt-8 max-w-4xl text-2xl leading-relaxed text-slate-700 md:text-3xl [&_a]:text-brand-700 [&_a]:underline [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-80 [&_ol]:list-decimal [&_ol]:pl-8 [&_ol]:text-left [&_ul]:list-disc [&_ul]:pl-8 [&_ul]:text-left [&_p]:my-2"
+            html={description}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 function Shell({

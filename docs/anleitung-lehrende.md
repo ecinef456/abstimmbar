@@ -112,7 +112,9 @@ den Zugang nur einmal kennen müssen.
 
 Innerhalb eines Raums legen Sie ein oder mehrere **Fragensets** an — etwa eines
 je Sitzung. Ein Fragenset können Sie in **Abschnitte** gliedern, um längere
-Sitzungen zu strukturieren.
+Sitzungen zu strukturieren. Jedem Abschnitt können Sie optional eine
+**Beschreibung** geben; sie erscheint in der Präsentation auf der Zwischenfolie
+unter dem Abschnittstitel (nur am Beamer, nicht bei den Teilnehmenden).
 
 Beim Anlegen wählen Sie den **Typ** des Fragensets — er legt fest, wie es
 durchgeführt wird:

@@ -24,7 +24,7 @@ class QuestionSetTranslationOptions(TranslationOptions):
 
 @register(Section)
 class SectionTranslationOptions(TranslationOptions):
-    fields = ("title",)
+    fields = ("title", "description")
 
 
 @register(Question)

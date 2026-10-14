@@ -274,6 +274,10 @@ class Section(TimeStampedModel):
         QuestionSet, on_delete=models.CASCADE, related_name="sections"
     )
     title = models.CharField(max_length=200)
+    # Optional rich-text (sanitized HTML, like Question.text) shown under the
+    # title on the presenter's interstitial slide only — never sent to
+    # participants.
+    description = models.TextField(blank=True)
     position = models.PositiveIntegerField(default=0)
 
     class Meta:

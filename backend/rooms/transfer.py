@@ -10,7 +10,7 @@ but not a move to a different instance (known v1 limitation, roadmap).
 Imported HTML is untrusted and goes through the nh3 allowlist.
 
 Format v2 (#33 MR2 Task 6): every translatable field (QuestionSet
-title/description, Section.title, Question.text, AnswerOption.text) is a
+title/description, Section.title/description, Question.text, AnswerOption.text) is a
 {"de": ..., "en": ...} map, like the authoring API's TranslatedMapMixin
 (common/i18n_fields.py). v1 files — a plain string per translatable field —
 are still accepted on import, written to the canonical language only (the
@@ -223,6 +223,7 @@ def duplicate_set(question_set, target_room, title=None):
             question_set=clone,
             position=section.position,
             **_lang_columns(section, "title"),
+            **_lang_columns(section, "description"),
         )
         for section in question_set.sections.all()
     }
@@ -256,7 +257,11 @@ def export_set(question_set):
         "license": question_set.license,
         "license_holder": question_set.license_holder,
         "sections": [
-            {"title": translated_map(section, "title")} for section in sections
+            {
+                "title": translated_map(section, "title"),
+                "description": translated_map(section, "description"),
+            }
+            for section in sections
         ],
         "questions": [
             {
@@ -401,11 +406,20 @@ def import_set(room, data):
             }
             if not section_title[CONTENT_DEFAULT_LANGUAGE]:
                 section_title[CONTENT_DEFAULT_LANGUAGE] = f"Abschnitt {position + 1}"
+            # Foreign file: sanitize the rich description per language (#49).
+            raw_description = raw.get("description") if isinstance(raw, dict) else None
+            section_description = {
+                lang: clean_html(v) for lang, v in _lang_map(raw_description).items()
+            }
             imported_sections.append(
                 Section.objects.create(
                     question_set=question_set,
                     position=position,
                     **{f"title_{lang}": (v or None) for lang, v in section_title.items()},
+                    **{
+                        f"description_{lang}": (v or None)
+                        for lang, v in section_description.items()
+                    },
                 )
             )
     for position, item in enumerate(questions):

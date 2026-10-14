@@ -1104,5 +1104,6 @@
   "End quiz": "Quiz beenden",
   "Ends the quiz — participants then see the closing screen.": "Beendet das Quiz – die Teilnehmenden sehen danach den Schlussbildschirm.",
   "Quiz ended — participants now see the closing screen.": "Quiz beendet – die Teilnehmenden sehen jetzt den Schlussbildschirm.",
-  "The session has already ended or could not be ended. Please try again.": "Die Durchführung ist bereits beendet oder konnte nicht beendet werden. Bitte versuchen Sie es erneut."
+  "The session has already ended or could not be ended. Please try again.": "Die Durchführung ist bereits beendet oder konnte nicht beendet werden. Bitte versuchen Sie es erneut.",
+  "Optional – shown on the interstitial slide below the title.": "Optional – erscheint auf der Zwischenfolie unter dem Titel."
 }
