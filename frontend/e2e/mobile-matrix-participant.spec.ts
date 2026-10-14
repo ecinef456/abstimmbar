@@ -61,6 +61,12 @@ for (const scheme of ['light', 'dark'] as const) {
         for (const end of ['nicht nützlich', 'nützlich', 'altbacken', 'modern']) {
           await expect(view.locator('.mx-axis', { hasText: end }).first()).toBeVisible();
         }
+        // Every spot shows a "+" (quadrants and edges alike); the selected spot
+        // shows the check instead.
+        for (const button of await zones.all()) {
+          await expect(button.locator('.mx-plus svg')).toBeVisible();
+          await expect(button.locator('.mx-tick')).toBeHidden();
+        }
         // Touch targets.
         for (const button of await zones.all()) {
           const box = await button.boundingBox();
@@ -79,6 +85,8 @@ for (const scheme of ['light', 'dark'] as const) {
         const q1 = view.getByRole('button', { name: ZONE.q1, exact: true });
         await q1.click();
         await expect(q1).toHaveAttribute('aria-pressed', 'true');
+        await expect(q1.locator('.mx-tick')).toBeVisible();
+        await expect(q1.locator('.mx-plus')).toBeHidden();
         await expect(add).toBeDisabled();
         const idea = view.getByRole('radio', { name: /Idee/ });
         const risk = view.getByRole('radio', { name: /Risiko/ });

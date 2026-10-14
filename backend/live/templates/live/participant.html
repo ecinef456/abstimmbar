@@ -112,15 +112,16 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   .mx-xright{grid-area:right;writing-mode:vertical-rl;max-width:34px}
   .mx-gridwrap{grid-area:grid;position:relative}
   .mx-grid{aspect-ratio:1/1;display:grid;grid-template:1fr 1fr / 1fr 1fr;gap:2px;background:var(--field-line);border:2px solid var(--field-line);border-radius:14px;overflow:hidden}
-  .mx-zone{position:relative;width:auto;margin:0;min-height:44px;border:0;border-radius:0;padding:8px;text-align:center;font-size:13px;font-weight:600;line-height:1.25;display:flex;align-items:center;justify-content:center;background:var(--surface);color:var(--ink)}
+  .mx-zone{position:relative;width:auto;margin:0;min-height:44px;border:0;border-radius:0;padding:8px;text-align:center;font-size:13px;font-weight:600;line-height:1.25;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;background:var(--surface);color:var(--ink)}
   .mx-edges .mx-zone{padding:8px 24px}
+  .mx-plus{display:inline-flex;flex:none;color:var(--ink-soft)}
+  [aria-pressed="true"] > .mx-plus{display:none}
+  .mx-zone .mx-tick{position:static;order:-1}
   .mx-zone[aria-pressed="true"]{background:var(--brand-soft);outline:3px solid var(--brand-strong);outline-offset:-3px;color:var(--ink)}
   .mx-tick{display:none;position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;background:var(--brand-strong);color:var(--surface);align-items:center;justify-content:center}
   [aria-pressed="true"] > .mx-tick{display:inline-flex}
   .mx-edge{position:absolute;width:44px;height:44px;min-height:44px;margin:0;padding:0;border-radius:50%;border:2px solid var(--field-line);background:var(--surface);color:var(--ink-soft);display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%);z-index:2}
-  .mx-edge::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--ink-soft)}
   .mx-edge[aria-pressed="true"]{background:var(--brand-strong);border-color:var(--brand-strong);outline:none}
-  .mx-edge[aria-pressed="true"]::before{display:none}
   .mx-edge .mx-tick{display:none;position:static;background:none;color:var(--surface)}
   .mx-edge[aria-pressed="true"] > .mx-tick{display:inline-flex}
   .mx-zone:disabled,.mx-edge:disabled{opacity:.6}
@@ -3333,6 +3334,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     purple: { hex: "#CC79A7", number: 5 }, sky: { hex: "#56B4E9", number: 6 },
   };
   const MX_ICONS = {
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
     trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
   };
@@ -3436,6 +3438,12 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       b.className = isEdge ? "mx-edge" : "mx-zone";
       b.setAttribute("aria-label", mxZoneName(zone));
       b.setAttribute("aria-pressed", "false");
+      // A visible "+" marks every spot as selectable; the check replaces it
+      // while the spot is selected (aria-label above is the accessible name).
+      const plus = document.createElement("span");
+      plus.className = "mx-plus";
+      plus.innerHTML = mxIcon("plus", isEdge ? 18 : 20);
+      b.append(plus);
       if (!isEdge) b.append(document.createTextNode(mxZoneName(zone)));
       const tick = document.createElement("span");
       tick.className = "mx-tick";
