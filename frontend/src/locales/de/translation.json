@@ -1,4 +1,5 @@
 {
+  "Card descriptions": "Beschreibungen auf Karten",
   "LTI platforms": "LTI-Plattformen",
   "Add platform": "Plattform hinzufügen",
   "Edit platform": "Plattform bearbeiten",
@@ -318,7 +319,7 @@
   "Set type": "Set-Art",
   "Live poll": "Live-Umfrage",
   "Live, presenter-driven on the beamer. All question types.": "Live am Beamer, lehrgesteuert. Alle Fragetypen.",
-  "Participants answer at their own pace in class; you start it and see the results. All question types except the mind map.": "Teilnehmende beantworten in Stillarbeit im eigenen Tempo; Sie starten es und sehen die Auswertung. Alle Fragetypen außer der Mindmap.",
+  "Participants answer at their own pace in class; you start it and see the results. All question types except the mind map and the four-field matrix.": "Teilnehmende beantworten in Stillarbeit im eigenen Tempo; Sie starten es und sehen die Auswertung. Alle Fragetypen außer der Mindmap und der Vier-Felder-Matrix.",
   "Self-check": "Lernkontrolle",
   "Learners practice on their own via a link, with instant feedback.": "Lernende üben eigenständig über einen Link, mit Sofort-Feedback.",
   "Sections": "Abschnitte",

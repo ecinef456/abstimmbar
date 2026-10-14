@@ -44,7 +44,7 @@ export const SET_TYPES: Record<SetType, SetTypeInfo> = {
   },
   self_paced: {
     label: "Self-paced quiz",
-    description: "Participants answer at their own pace in class; you start it and see the results. All question types except the mind map.",
+    description: "Participants answer at their own pace in class; you start it and see the results. All question types except the mind map and the four-field matrix.",
     allowedKinds: SELF_PACED_KINDS,
     runAction: "self_paced",
     icon: GraduationCap,

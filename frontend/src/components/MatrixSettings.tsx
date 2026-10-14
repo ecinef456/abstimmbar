@@ -3,6 +3,7 @@
 
 /** Settings panel of the four-field matrix question (axes, edges,
  *  description, cards per person, categories) with a small live preview. */
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { getDefaultContentLang, localizedMap, localizedText, type LocalizedText } from "@basicbar/ui";
@@ -173,8 +174,6 @@ export default function MatrixSettings({
   );
 
   const problem = matrixProblem(value);
-  const numberInput =
-    "w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none";
 
   return (
     <fieldset disabled={disabled} className="grid min-w-0 gap-5 border-0 p-0" data-testid="matrix-settings">
@@ -216,26 +215,14 @@ export default function MatrixSettings({
         <ToggleSwitch
           checked={value.descriptions}
           onChange={(descriptions) => patch({ descriptions })}
-          label={t("Description")}
+          label={t("Card descriptions")}
         />
         <p className="pl-[2.875rem] text-xs text-slate-500 dark:text-slate-400">
           {t("Participants add a title and an optional description to each card.")}
         </p>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-        {t("Cards per person")}
-        <input
-          type="number"
-          min={1}
-          max={100}
-          value={String(value.maxPerPerson)}
-          onChange={(event) =>
-            patch({ maxPerPerson: Math.min(100, Math.max(1, Number(event.target.value) || 1)) })
-          }
-          className={numberInput}
-        />
-      </label>
+      <MaxPerPerson value={value.maxPerPerson} onCommit={(maxPerPerson) => patch({ maxPerPerson })} label={t("Cards per person")} />
 
       <div className="grid gap-3">
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t("Categories")}</h3>
@@ -305,5 +292,38 @@ export default function MatrixSettings({
 
       <Preview value={value} />
     </fieldset>
+  );
+}
+
+const numberInput =
+  "w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none";
+
+/** Number input with a local string draft: clearing it with backspace must not
+ *  snap to 1 while typing; the value is clamped to 1–100 on blur. */
+function MaxPerPerson({ value, onCommit, label }: { value: number; onCommit: (n: number) => void; label: string }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const n = Math.min(100, Math.max(1, Math.round(Number(draft)) || 1));
+    setDraft(String(n));
+    onCommit(n);
+  };
+  return (
+    <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+      {label}
+      <input
+        type="number"
+        min={1}
+        max={100}
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          const n = Number(event.target.value);
+          if (event.target.value !== "" && n >= 1 && n <= 100) onCommit(Math.round(n));
+        }}
+        onBlur={commit}
+        className={numberInput}
+      />
+    </label>
   );
 }

@@ -5,7 +5,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { test, expect, API_BASE_URL, deleteRooms } from './fixtures';
-import { AUTH, apiClient, control, createMatrixQuestion, createRoomWithQuestions, startRun } from './helpers/seed';
+import { AUTH, apiClient, control, createMatrixQuestion, createRoomWithQuestions, joinParticipants, startRun } from './helpers/seed';
 import { expectNoHorizontalOverflow } from './helpers/layout';
 
 const ZONE = {
@@ -197,6 +197,77 @@ for (const scheme of ['light', 'dark'] as const) {
         await control(api, runId, 'open', a);
         await expect(view.locator('#mx-mine li')).toHaveCount(1);
         await expect(view.locator('#mx-mine li')).toContainText('Karte in A');
+      } finally {
+        await page.close();
+        await deleteRooms(demoApi, created);
+        await demoApi.dispose();
+      }
+    });
+
+    test('focus: empty hint, stable across broadcasts, moves after add/delete', async ({ page, playwright }) => {
+      test.setTimeout(90_000);
+      const demoApi = await playwright.request.newContext({ storageState: AUTH.demo });
+      const created: number[] = [];
+      try {
+        const room = await createRoomWithQuestions(demoApi, [], 'Matrix', (id) => created.push(id), 'E2E Matrix');
+        const api = apiClient(demoApi);
+        const questionId = await createMatrixQuestion(api, room.setId);
+        const runId = await startRun(api, room.setId);
+        await control(api, runId, 'open', questionId);
+        await page.goto(`${API_BASE_URL}/p/${room.code}/`);
+        const view = page.locator('#matrix');
+        const cards = view.locator('#mx-mine li');
+        const head = view.locator('#mx-mine-head');
+        await expect(view.locator('#mx-zones button')).toHaveCount(8);
+
+        // Empty-list hint until the first card exists.
+        await expect(view.locator('#mx-empty')).toBeVisible();
+        await expect(view.locator('#mx-empty')).toContainText('noch keine Karten');
+        const add = async (zone: string, title: string) => {
+          await view.getByRole('button', { name: zone, exact: true }).click();
+          await view.getByRole('radio', { name: /Idee/ }).click();
+          await view.getByRole('textbox', { name: 'Titel' }).fill(title);
+          await view.getByRole('button', { name: 'Karte hinzufügen' }).click();
+        };
+        await add(ZONE.q1, 'Erste Idee');
+        await expect(cards).toHaveCount(1);
+        await expect(view.locator('#mx-empty')).toBeHidden();
+        // Screen-reader category text next to the card.
+        await expect(cards.first().locator('.mx-sr')).toHaveText(/Idee/);
+        // Selected chip shows a check (not colour alone).
+        await expect(view.getByRole('radio', { name: /Idee/ }).locator('.mx-tick')).toBeVisible();
+
+        // Focus on a trash button survives broadcasts (another participant adds a card).
+        const trash = view.getByRole('button', { name: 'Karte „Erste Idee“ löschen' });
+        await trash.focus();
+        await trash.evaluate((el) => ((el as HTMLElement & { __mark?: boolean }).__mark = true));
+        const [other] = await joinParticipants(page.request, room.code, 1);
+        const r = await page.request.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/add/`, {
+          data: { token: other, question: questionId, zone: 'q2', title: 'Fremde Idee', category: 'blue' },
+        });
+        expect(r.status()).toBe(201);
+        await page.waitForTimeout(3000); // several SSE renders
+        const stillThere = await page.evaluate(() => {
+          const el = document.activeElement as (HTMLElement & { __mark?: boolean }) | null;
+          return { mark: !!el?.__mark, cls: el?.className, inList: !!el?.closest('#mx-mine') };
+        });
+        expect(stillThere).toEqual({ mark: true, cls: 'mx-del', inList: true });
+
+        // Second card reaches the limit → focus moves to the list heading.
+        await add(ZONE.q3, 'Zweite Idee');
+        await expect(cards).toHaveCount(2);
+        await expect(view.locator('#mx-limit')).toBeVisible();
+        await expect(head).toBeFocused();
+
+        // Delete the first card → focus goes to the next delete button.
+        await view.getByRole('button', { name: 'Karte „Erste Idee“ löschen' }).click();
+        await expect(cards).toHaveCount(1);
+        await expect(view.getByRole('button', { name: 'Karte „Zweite Idee“ löschen' })).toBeFocused();
+        // Delete the last card → focus goes to the heading, hint is back.
+        await view.getByRole('button', { name: 'Karte „Zweite Idee“ löschen' }).click();
+        await expect(cards).toHaveCount(0);
+        await expect(head).toBeFocused();
+        await expect(view.locator('#mx-empty')).toBeVisible();
       } finally {
         await page.close();
         await deleteRooms(demoApi, created);

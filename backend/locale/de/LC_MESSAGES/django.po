@@ -604,3 +604,7 @@ msgstr "Karte „{title}“ löschen"
 #: live/templates/live/participant.html
 msgid "Card added."
 msgstr "Karte hinzugefügt."
+
+#: live/templates/live/participant.html
+msgid "You have not added any cards yet."
+msgstr "Sie haben noch keine Karten hinzugefügt."
