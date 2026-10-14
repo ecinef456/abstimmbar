@@ -152,9 +152,12 @@ export function FooterIconButton({
   disabled,
   pressed,
   testId,
+  tour,
   detail,
 }: {
   help: string;
+  /** `data-tour` anchor of a tour step. */
+  tour?: string;
   label: string;
   keys?: string;
   icon: LucideIcon;
@@ -171,6 +174,7 @@ export function FooterIconButton({
     <button
       type="button"
       data-help={help}
+      data-tour={tour}
       data-testid={testId}
       aria-label={label}
       aria-pressed={pressed}
@@ -270,6 +274,7 @@ export function Footer(props: {
   onToggleJoin?: () => void;
   /** "?" help (labels every control); hidden until wired. */
   onHelp?: () => void;
+  helpShown?: boolean;
   /** Question-specific action icons left of Start/Stop (mind-map rating). */
   extra?: ReactNode;
 }) {
@@ -357,7 +362,15 @@ export function Footer(props: {
           <FooterIconButton help="next" label={name("next")} keys="→" icon={ChevronRight} onClick={props.onNext} />
         </div>
         {props.onHelp && (
-          <FooterIconButton help="help" label={name("help")} keys="?" icon={CircleHelp} onClick={props.onHelp} />
+          <FooterIconButton
+            help="help"
+            tour="present.help"
+            label={name("help")}
+            keys="?"
+            icon={CircleHelp}
+            onClick={props.onHelp}
+            pressed={props.helpShown}
+          />
         )}
       </div>
     </footer>

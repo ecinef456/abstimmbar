@@ -35,6 +35,7 @@ import MindmapRanking, { rankMindmap } from "../results/MindmapRanking";
 import { requestDetail, useMindmapModeration } from "../results/mindmapModeration";
 import { MindmapAiDrawer, useMindmapAi } from "../results/mindmapAi";
 import { Footer, FooterIconButton, buildViewSegments, type ViewSegment } from "./presenter/footer";
+import HelpOverlay from "./presenter/HelpOverlay";
 import { INK, evalColor, categoryColor, categoryDeep, categoryHue, termColor } from "../results/palette";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -209,6 +210,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // presenter can flash without changing the vote phase. Toggled by the
   // footer icon or the "q" key; Esc closes it.
   const [showJoin, setShowJoin] = useState(false);
+  // "?" help overlay: labels every visible control (HelpOverlay). While it is
+  // open it swallows all keys itself, so `onKey` never sees them.
+  const [showHelp, setShowHelp] = useState(false);
   // Word-cloud view cycle: raw → AI-consolidated → AI-grouped (#Wortwolke-KI).
   // Free text adds "results" (AI verdict bars) and reads "consolidated" as
   // key statements. The effective view (`wcView`) is derived below.
@@ -1288,6 +1292,11 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         if (key === "escape") void finish();
         return;
       }
+      // ? / H: the help overlay (labels every control; closes itself).
+      if (key === "?" || key === "h") {
+        setShowHelp(true);
+        return;
+      }
       // While the interstitial is up, S/→/Enter/Space confirm it, Esc dismisses.
       if (interstitial) {
         if (advance || key === "arrowright") confirmInterstitial();
@@ -1638,9 +1647,12 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
             onNext={confirmInterstitial}
             onFinish={() => void finish()}
             onCloseWindow={canCloseWindow ? () => window.close() : undefined}
+            onHelp={() => setShowHelp(true)}
+            helpShown={showHelp}
           />
         }
       >
+        {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
         <div className="ab-fade-in flex min-h-full flex-col items-center justify-center text-center">
           <h1 className="max-w-4xl text-6xl font-extrabold leading-tight">
             {interstitial.title}
@@ -1749,9 +1761,12 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
           onToggleJoin={() => setShowJoin((v) => !v)}
           onFinish={() => void finish()}
           onCloseWindow={canCloseWindow ? () => window.close() : undefined}
+          onHelp={() => setShowHelp(true)}
+          helpShown={showHelp}
         />
       }
     >
+      {showHelp && <HelpOverlay views={viewSegments} onClose={() => setShowHelp(false)} />}
       {leaveWarn && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/40 p-6">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-xl">

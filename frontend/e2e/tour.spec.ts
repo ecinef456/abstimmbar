@@ -153,17 +153,32 @@ test('tour: sections, progress, Back across pages, skip section, arrow keys, min
   // last presenter step shows the first question again, not the lobby.
   await page.keyboard.press('ArrowRight');
   await expectHead(page, /^Presenting · 1 of \d+$/);
+  const presentTitles: string[] = [];
   for (let i = 0; i < 8; i++) {
     const current = await headParts(head(page));
     if (current.section === 'Results') break;
+    presentTitles.push((await title(page).textContent()) ?? '');
+    // Each presenter step highlights its (visible) target control.
+    if (current.current > 1) {
+      await expect(page.locator('.driver-active-element')).toBeVisible();
+    }
     const before = await head(page).textContent();
     await next(page);
     await expect(head(page)).not.toHaveText(before ?? '', { timeout: 15_000 });
   }
   await expectHead(page, /^Results · 1 of \d+$/);
+  expect(presentTitles).toEqual([
+    'Start the presentation',
+    'Joining',
+    'Start and stop voting',
+    'Choose what the projector shows',
+    'Next question and end',
+    'Help on the projector',
+  ]);
   await expect(page).toHaveURL(/\/sets\/\d+$/);
   await popover(page).getByRole('button', { name: 'Back' }).click();
-  await expect(title(page)).toHaveText('Next question and end', { timeout: 15_000 });
+  await expect(title(page)).toHaveText('Help on the projector', { timeout: 15_000 });
+  await expect(page.locator('[data-tour="present.help"]')).toBeVisible();
   await expect(page).toHaveURL(/\/sets\/\d+\/present/);
   // Footer position "1/N" (its tooltip/name: "Question 1/N").
   await expect(page.locator('footer [data-help="position"]')).toHaveText(/^1\/\d+$/, { timeout: 10_000 });

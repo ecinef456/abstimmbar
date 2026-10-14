@@ -227,28 +227,45 @@ Hinzukommende jederzeit beitreten können.
 
 ## 8. Präsentieren
 
-Im Präsentationsmodus steuern Sie die Sitzung über die Leiste am unteren Rand
-(oder per Tastatur):
+Im Präsentationsmodus steuern Sie die Sitzung über die Symbolleiste am unteren
+Rand (oder per Tastatur). Die Leiste zeigt nur, was gerade passt; fahren Sie mit
+der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
 
-- **Starten** (Taste S) öffnet die Abstimmung zur aktuellen Frage, **Stoppen**
-  (S) schließt sie. Bis Sie starten, sehen die Teilnehmenden nur die Frage.
+- Links steht die **Position** (z. B. „3/12“), daneben das **QR-Symbol** (Q),
+  das QR-Code und Zugangscode jederzeit wieder einblendet.
+- **Starten** (Taste S, auch Enter oder Leertaste – praktisch mit einem
+  Presenter) öffnet die Abstimmung zur aktuellen Frage, **Stoppen** (S) schließt
+  sie. Bis Sie starten, sehen die Teilnehmenden nur die Frage.
   Unten links zeigt eine kleine Anzeige die **verbundenen Teilnehmenden** und
   die **abgegebenen Stimmen**. Ein farbiger Ring zeigt den Anteil, der schon
   geantwortet hat: rot unter 50 %, gelb bis 80 %, hellgrün bis 95 %,
   dunkelgrün darüber; haben alle geantwortet, leuchtet er kurz auf.
-- Mit dem Umschalter **Frage / Ergebnisse** (E) / **Lösung** (A) legen Sie fest,
-  was der Beamer zeigt; die Ergebnisse aktualisieren sich **in Echtzeit**. Die
-  Balken bauen sich kurz animiert auf, jede Antwort hat ihre eigene Farbe. Die
-  Lösung erscheint gemäß Ihrer Einstellung: Die richtige Antwort wird dann
-  **grün** und mit „Richtig“ markiert, die übrigen werden zart rosé. Ein
-  erneutes A blendet die Markierung wieder aus.
-- **→** wechselt zur nächsten Frage, **←** zurück.
-- **Beenden** (Esc) schließt die Durchführung und speichert die Ergebnisse.
-- Das QR-Symbol blendet QR-Code und Zugangscode jederzeit wieder ein.
+- Mit dem **Ansichts-Schalter** neben dem QR-Symbol legen Sie fest, was der
+  Beamer zeigt: die **Frage**, die **Ergebnisse** und – falls die Frage eine
+  richtige Antwort hat und die Lösung „erst auf Anweisung“ erscheinen soll –
+  die **Lösung**. Wortwolken, Freitext und Mindmaps bringen hier ihre eigenen
+  Darstellungen mit (z. B. Original, Aufgeräumt und Gruppiert, Bewertung oder
+  Rangliste). Die Ergebnisse aktualisieren sich **in Echtzeit**; die Balken
+  bauen sich kurz animiert auf, jede Antwort hat ihre eigene Farbe. Bei der
+  Lösung wird die richtige Antwort **grün** und mit „Richtig“ markiert, die
+  übrigen werden zart rosé.
+  - **E** springt zu den Ergebnissen (und schließt dabei eine laufende
+    Abstimmung); ein weiteres E kehrt zur Frage zurück.
+  - **L** blendet die Lösung ein, ein erneutes L wieder aus.
+  - **A** schaltet die Ansichten der Reihe nach durch. A ist eine reine
+    „Ansehen“-Taste: Eine laufende Abstimmung schließt sie nie.
+- **‹ ›** bzw. die Pfeiltasten **← →** wechseln zur vorigen bzw. nächsten
+  Frage.
+- Das rote **✕** (Esc) beendet die Präsentation und speichert die Ergebnisse.
+- Rechts außen öffnet **?** (oder die Taste H) die **Hilfe**: Der Bildschirm
+  wird abgedunkelt, und an jedem gerade sichtbaren Knopf und an jeder Lasche am
+  rechten Rand steht, was er tut und welche Taste dazugehört; unten in der
+  Mitte stehen alle Tasten auf einen Blick. Ein Klick, Esc oder ? schließt die
+  Hilfe wieder.
 - **Mindmap:** Die Mindmap wächst live mit den Beiträgen. Mit Mausrad und Ziehen
-  zoomen und verschieben Sie sie; die Ansicht lässt sich zwischen **kompakt** und
-  **ausführlich** (mit Beschreibungen) umschalten. Im Experten-Modus moderieren
-  Sie die Mindmap direkt auf dem Beamer: Mit **+** an einem Begriff fügen Sie auf
+  zoomen und verschieben Sie sie; in der Zoom-Lasche am rechten Rand schalten
+  Sie zwischen **kompakt** und **ausführlich** (mit Beschreibungen) um. Im
+  Experten-Modus moderieren Sie die Mindmap direkt auf dem Beamer: Mit **+** an einem Begriff fügen Sie auf
   Zuruf einen Unterbegriff hinzu; ziehen Sie einen Begriff **auf** einen anderen,
   werden beide zusammengeführt (die Unterbegriffe wandern mit), ziehen Sie ihn
   auf die Zone **„hier anhängen“** daneben, wird er samt Teilbaum dorthin
@@ -295,17 +312,19 @@ Im Präsentationsmodus steuern Sie die Sitzung über die Leiste am unteren Rand
 - **Wortwolken bearbeiten (Experten-Modus):** Ziehen Sie einen Begriff auf
   einen anderen, um beide zusammenzuführen; mit × blenden Sie einen Begriff aus.
   Der Stift am rechten Rand öffnet die Liste zum Wiederherstellen, Trennen und
-  Umbenennen. Der Stern darunter schaltet die KI-Ansichten ein: **Aufgeräumt**
-  fasst Schreibvarianten, Synonyme und auf Wunsch ähnliche Konzepte zusammen,
-  **Gruppiert** ordnet die Begriffe nach einer Anweisung, die Sie spontan
-  anpassen können. Beides wird an der Frage gespeichert.
+  Umbenennen. Der Stern darunter enthält die KI-Einstellungen; die
+  KI-Ansichten erscheinen dann im Ansichts-Schalter: **Aufgeräumt** fasst
+  Schreibvarianten, Synonyme und auf Wunsch ähnliche Konzepte zusammen,
+  **Gruppiert** ordnet die Begriffe nach einer Anweisung, die Sie im Stern-Panel
+  spontan anpassen können. Beides wird an der Frage gespeichert.
 - **Freitext-Antworten (Experten-Modus):** Die Antworten lassen sich ebenso
-  bearbeiten. Über die Ansicht wählen Sie **Original** (die Antworten selbst),
+  bearbeiten. Im Ansichts-Schalter wählen Sie **Antworten** (die Antworten selbst),
   **Bewertung** (Balken der KI-Bewertung, falls eingeschaltet),
   **Kernaussagen** (die KI fasst gleiche Aussagen mit Anzahl zusammen) und
   **Gruppiert** (Kernaussagen nach Ihrer Anweisung, z. B. „korrekt / falsch“;
   auf Wunsch unter Berücksichtigung der Musterlösung, die im Panel zugeklappt
-  bleibt). Wörtliche Antworten zeigt der Beamer nur in „Original“.
+  bleibt). Wörtliche Antworten zeigt der Beamer nur in „Antworten“; sind die
+  Antworten bewertet, steht „Bewertung“ im Schalter vorn.
 - Optional lässt sich Ihr Einrichtungs-Logo im Präsentationsmodus ein- oder
   ausblenden.
 

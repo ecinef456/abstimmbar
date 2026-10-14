@@ -116,7 +116,7 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
   await expect(seg(page, 'view.solution')).toBeVisible();
   expect(await footerControls(page)).toEqual([
     'position', 'qr', 'view.question', 'view.results', 'view.solution',
-    'toggle', 'end', 'prev', 'next',
+    'toggle', 'end', 'prev', 'next', 'help',
   ]);
   await expect(footer(page).locator('[data-help="position"]')).toHaveText('1/2');
   await expectActive(page, 'view.question');
@@ -156,7 +156,7 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
   await expect(footer(page).locator('[data-help="position"]')).toHaveText('2/2');
   await expect(seg(page, 'view.solution')).toHaveCount(0);
   expect(await footerControls(page)).toEqual([
-    'position', 'qr', 'view.question', 'view.results', 'toggle', 'end', 'prev', 'next',
+    'position', 'qr', 'view.question', 'view.results', 'toggle', 'end', 'prev', 'next', 'help',
   ]);
   await page.keyboard.press('e');
   await expectActive(page, 'view.results');
@@ -180,7 +180,7 @@ test('word cloud: Original only, AI views when the question has AI', async ({
   await expectActive(page, 'view.wc.raw');
   await expect(seg(page, 'view.question')).toHaveAttribute('aria-disabled', 'true');
   expect(await footerControls(page)).toEqual([
-    'position', 'qr', 'view.question', 'view.wc.raw', 'toggle', 'end', 'prev', 'next',
+    'position', 'qr', 'view.question', 'view.wc.raw', 'toggle', 'end', 'prev', 'next', 'help',
   ]);
   await page.keyboard.press('a'); // one live view only: nothing to cycle, still open
   await expectActive(page, 'view.wc.raw');
@@ -197,7 +197,7 @@ test('word cloud: Original only, AI views when the question has AI', async ({
   await expect(seg(page, 'view.wc.grouped')).toBeVisible();
   expect(await footerControls(page)).toEqual([
     'position', 'qr', 'view.question', 'view.wc.raw', 'view.wc.consolidated',
-    'view.wc.grouped', 'toggle', 'end', 'prev', 'next',
+    'view.wc.grouped', 'toggle', 'end', 'prev', 'next', 'help',
   ]);
   await expectActive(page, 'view.wc.raw');
   await shot(page, 'word-cloud-ai');
@@ -253,7 +253,7 @@ test('mind map: Mind map · Ranking after a rating, rating action as icon', asyn
   await expect(seg(page, 'view.mm.ranking')).toBeVisible();
   expect(await footerControls(page)).toEqual([
     'position', 'qr', 'view.question', 'view.mm.raw', 'view.mm.ranking',
-    'mm.collect', 'toggle', 'end', 'prev', 'next',
+    'mm.collect', 'toggle', 'end', 'prev', 'next', 'help',
   ]);
   await expectActive(page, 'view.mm.raw');
   // Compact / detailed moved into the zoom handle.
