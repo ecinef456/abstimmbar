@@ -454,10 +454,10 @@ class Question(TimeStampedModel):
     # Four-field matrix settings (rooms/matrix.py) — only meaningful for
     # kind == MATRIX. The four axis labels are translatable (*_de/_en) and
     # required in the canonical language.
-    matrix_x_from = models.CharField(max_length=mx.MATRIX_LABEL_MAX, blank=True, default="")
-    matrix_x_to = models.CharField(max_length=mx.MATRIX_LABEL_MAX, blank=True, default="")
-    matrix_y_from = models.CharField(max_length=mx.MATRIX_LABEL_MAX, blank=True, default="")
-    matrix_y_to = models.CharField(max_length=mx.MATRIX_LABEL_MAX, blank=True, default="")
+    matrix_x_from = models.CharField(max_length=mx.MATRIX_AXIS_LABEL_MAX, blank=True, default="")
+    matrix_x_to = models.CharField(max_length=mx.MATRIX_AXIS_LABEL_MAX, blank=True, default="")
+    matrix_y_from = models.CharField(max_length=mx.MATRIX_AXIS_LABEL_MAX, blank=True, default="")
+    matrix_y_to = models.CharField(max_length=mx.MATRIX_AXIS_LABEL_MAX, blank=True, default="")
     # Cards may also be placed on the four axis lines.
     matrix_edges = models.BooleanField(default=False)
     # Participants enter a title + optional description per card.
@@ -467,11 +467,11 @@ class Question(TimeStampedModel):
         default=mx.MATRIX_DEFAULT_MAX_PER_PERSON,
         validators=[
             MinValueValidator(mx.MATRIX_MIN_MAX_PER_PERSON),
-            MaxValueValidator(mx.MATRIX_MAX_MAX_PER_PERSON),
+            MaxValueValidator(mx.MATRIX_MAX_PER_PERSON_LIMIT),
         ],
     )
     matrix_category_mode = models.CharField(
-        max_length=10, choices=mx.CATEGORY_MODE_CHOICES, default=mx.MODE_OFF
+        max_length=10, choices=mx.CATEGORY_MODE_CHOICES, default=mx.CATEGORY_OFF
     )
     # [{"key": palette key, "name": {lang: text}}], ≤ 6 (mx.clean_categories).
     matrix_categories = models.JSONField(default=list, blank=True)

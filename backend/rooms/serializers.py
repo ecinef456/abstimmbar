@@ -568,7 +568,7 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
             ):
                 mode = attrs.get(
                     "matrix_category_mode",
-                    getattr(self.instance, "matrix_category_mode", matrix.MODE_OFF),
+                    getattr(self.instance, "matrix_category_mode", matrix.CATEGORY_OFF),
                 )
                 categories = attrs.get(
                     "matrix_categories",

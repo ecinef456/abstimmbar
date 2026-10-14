@@ -475,7 +475,7 @@ def import_set(room, data):
             )
         except matrix.CategoryError:
             # Foreign file: drop an invalid list rather than reject the import.
-            mx_mode, mx_categories = matrix.MODE_OFF, []
+            mx_mode, mx_categories = matrix.CATEGORY_OFF, []
         question = Question.objects.create(
             question_set=question_set,
             kind=item["kind"],

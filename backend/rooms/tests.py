@@ -4798,7 +4798,7 @@ class MatrixAuthoringTests(ApiTestCase):
             "unknown key": ("named", named("blue", "pink")),
             "duplicate key": ("named", named("blue", "blue")),
             "seven entries": (
-                "named", named("blue", "orange", "green", "purple", "red", "teal", "blue"),
+                "named", named("blue", "orange", "green", "red", "purple", "sky", "blue"),
             ),
             "single entry": ("named", named("blue")),
             "no entries": ("colors", []),
@@ -4818,7 +4818,7 @@ class MatrixAuthoringTests(ApiTestCase):
             self.assertIn("matrix_categories", response.json(), label)
 
     def test_six_categories_allowed(self):
-        keys = ["blue", "orange", "green", "purple", "red", "teal"]
+        keys = ["blue", "orange", "green", "red", "purple", "sky"]
         response = self._create(
             matrix_category_mode="named",
             matrix_categories=[{"key": k, "name": k} for k in keys],
