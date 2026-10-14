@@ -138,6 +138,30 @@ test('category colours can be chosen; used colours are disabled; "+ Kategorie" t
   expect(stored.matrix_categories.map((c: any) => c.key)).toEqual(['purple', 'orange', 'blue']);
 });
 
+test('changing a colour keeps focus, the name and its language tab', async ({ page, trackRoom }) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  await page.getByRole('radio', { name: 'mit Namen' }).click();
+  const name = page.getByRole('textbox', { name: 'Name der Kategorie 1' });
+  await name.fill('Idee');
+  await page.getByRole('tablist', { name: 'Name der Kategorie 1' }).getByRole('tab', { name: /^en/ }).click();
+  await page.getByRole('textbox', { name: 'Name der Kategorie 1' }).fill('Idea');
+
+  const group = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 1' });
+  await group.getByRole('radio', { name: 'Farbe 1 (blau)' }).focus();
+  // Category 2 holds orange (2): ArrowRight skips it -> green (3), then red (4).
+  await page.keyboard.press('ArrowRight');
+  await expect(group.getByRole('radio', { name: 'Farbe 3 (grün)' })).toBeChecked();
+  await page.keyboard.press('ArrowRight');
+  await expect(group.getByRole('radio', { name: 'Farbe 4 (rot)' })).toBeChecked();
+  await expect(group.getByRole('radio', { name: 'Farbe 4 (rot)' })).toBeFocused();
+  // The name field kept its value and its active (English) language tab.
+  await expect(page.getByRole('textbox', { name: 'Name der Kategorie 1' })).toHaveValue('Idea');
+  await expect(
+    page.getByRole('tablist', { name: 'Name der Kategorie 1' }).getByRole('tab', { name: /^en/ }),
+  ).toHaveAttribute('aria-selected', 'true');
+});
+
 test('axis inputs sit around the coordinate graph; stacked without overflow on phones', async ({
   page,
   trackRoom,
@@ -169,8 +193,15 @@ test('axis inputs sit around the coordinate graph; stacked without overflow on p
     (await box('y-Achse von')).y,
   ];
   expect(ys).toEqual([...ys].sort((a, b) => a - b));
-  for (const hint of ['oben', 'links', 'rechts', 'unten']) {
-    await expect(page.getByText(hint, { exact: true })).toBeVisible();
+  for (const [name, hint] of [
+    ['y-Achse bis', 'oben'],
+    ['x-Achse von', 'links'],
+    ['x-Achse bis', 'rechts'],
+    ['y-Achse von', 'unten'],
+  ]) {
+    await expect(page.getByRole('textbox', { name, exact: true })).toHaveAccessibleDescription(
+      `Position: ${hint}`,
+    );
   }
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

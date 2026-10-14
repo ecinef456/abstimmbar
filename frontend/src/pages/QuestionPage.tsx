@@ -857,6 +857,7 @@ export default function QuestionPage() {
   // Updates compose: "translate all fields" fires several onChange calls in one
   // tick, each of which must build on the previous result rather than on the
   // render-time value. The ref always holds the latest (even unrendered) state.
+  // Updaters (updateMatrix) read this ref, not the render-time value.
   matrixRef.current = matrixValue;
   function updateMatrix(update: MatrixUpdate) {
     const v = update(matrixRef.current!);

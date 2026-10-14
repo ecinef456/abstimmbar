@@ -187,21 +187,22 @@ export default function MatrixSettings({
     }));
 
   function setMode(mode: MatrixCategoryMode) {
-    if (mode !== "off" && value.categories.length === 0) {
-      patch({
-        categoryMode: mode,
-        categories: MATRIX_PALETTE.slice(0, 2).map((entry) => ({ key: entry.key, name: emptyName })),
-      });
-    } else {
-      patch({ categoryMode: mode });
-    }
+    patch((prev) =>
+      mode !== "off" && prev.categories.length === 0
+        ? {
+            categoryMode: mode,
+            categories: MATRIX_PALETTE.slice(0, 2).map((entry) => ({ key: entry.key, name: emptyName })),
+          }
+        : { categoryMode: mode },
+    );
   }
 
   function addCategory() {
-    const used = new Set(value.categories.map((c) => c.key));
-    const next = MATRIX_PALETTE.find((entry) => !used.has(entry.key));
-    if (!next) return;
-    patch({ categories: [...value.categories, { key: next.key, name: emptyName }] });
+    patch((prev) => {
+      const used = new Set(prev.categories.map((c) => c.key));
+      const next = MATRIX_PALETTE.find((entry) => !used.has(entry.key));
+      return next ? { categories: [...prev.categories, { key: next.key, name: emptyName }] } : {};
+    });
   }
 
   const axis = (
@@ -211,12 +212,15 @@ export default function MatrixSettings({
     place: string,
   ) => (
     <div className={`grid min-w-0 gap-1 ${place}`}>
-      <span className="text-xs font-medium text-slate-500 md:hidden dark:text-slate-400">{hint}</span>
       <TranslatableField
         label={label}
         value={value[id]}
         onChange={(next) => patch({ [id]: clamp(next, AXIS_LABEL_MAX) })}
         inputClassName="max-w-xs"
+        // The position hint is the field's described-by text (below md only;
+        // at md+ the drawn graph shows the position).
+        hint={hint}
+        className="md:[&>p[id$=-hint]]:hidden"
       />
     </div>
   );
@@ -238,11 +242,11 @@ export default function MatrixSettings({
             bottom). Below md the graph is hidden and the inputs stack in the
             order top, left, right, bottom, each with a short position hint. */}
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-x-4">
-          {axis("yTo", t("y-axis to"), t("top"), "md:col-span-3 md:justify-self-center md:w-full md:max-w-xs")}
-          {axis("xFrom", t("x-axis from"), t("left"), "md:justify-self-end md:w-full md:max-w-xs")}
+          {axis("yTo", t("y-axis to"), t("Axis position: top"), "md:col-span-3 md:justify-self-center md:w-full md:max-w-xs")}
+          {axis("xFrom", t("x-axis from"), t("Axis position: left"), "md:justify-self-end md:w-full md:max-w-xs")}
           <AxesGraph />
-          {axis("xTo", t("x-axis to"), t("right"), "md:justify-self-start md:w-full md:max-w-xs")}
-          {axis("yFrom", t("y-axis from"), t("bottom"), "md:col-span-3 md:justify-self-center md:w-full md:max-w-xs")}
+          {axis("xTo", t("x-axis to"), t("Axis position: right"), "md:justify-self-start md:w-full md:max-w-xs")}
+          {axis("yFrom", t("y-axis from"), t("Axis position: bottom"), "md:col-span-3 md:justify-self-center md:w-full md:max-w-xs")}
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {t("x runs from left to right, y from bottom to top.")}
@@ -293,7 +297,9 @@ export default function MatrixSettings({
           <div className="grid gap-2">
             <ul className="grid gap-2">
               {value.categories.map((category, index) => (
-                <li key={category.key} className="flex flex-wrap items-end gap-x-3 gap-y-2">
+                // Index key: the row (colour picker focus, name field's active language
+                // tab) must survive a colour change, which changes category.key.
+                <li key={index} className="flex flex-wrap items-end gap-x-3 gap-y-2">
                   <span className="flex h-9 flex-none items-center">
                     <ColorPicker
                       value={category.key}
@@ -327,7 +333,7 @@ export default function MatrixSettings({
                     type="button"
                     aria-label={t("Remove category {{n}}", { n: index + 1 })}
                     onClick={() =>
-                      patch({ categories: value.categories.filter((_, i) => i !== index) })
+                      patch((prev) => ({ categories: prev.categories.filter((_, i) => i !== index) }))
                     }
                     className="mb-1 rounded-full p-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                   >

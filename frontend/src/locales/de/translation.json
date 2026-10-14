@@ -1139,8 +1139,8 @@
   "red": "rot",
   "purple": "violett",
   "sky blue": "himmelblau",
-  "top": "oben",
-  "left": "links",
-  "right": "rechts",
-  "bottom": "unten"
+  "Axis position: top": "Position: oben",
+  "Axis position: left": "Position: links",
+  "Axis position: right": "Position: rechts",
+  "Axis position: bottom": "Position: unten"
 }
