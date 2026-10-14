@@ -22,7 +22,7 @@
  *
  *  `interactive` is the hook for the presenter's drag/stack/open handlers;
  *  without it the board is read-only. The beamer is always light. */
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createElement, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { EyeOff } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
@@ -125,6 +125,57 @@ function useBox<T extends HTMLElement>() {
   return [ref, box] as const;
 }
 
+/** A card centred on its pixel point, kept fully inside the plot (cards at
+ *  the extreme auto-place slots would otherwise stick out into the axis-label
+ *  margin). The stored (x, y) is unchanged; only the drawing is nudged. */
+function PlacedCard({
+  tag,
+  px,
+  py,
+  box,
+  style,
+  children,
+  ...rest
+}: {
+  tag: "div" | "button";
+  px: number;
+  py: number;
+  box: Box;
+  style: CSSProperties;
+  children: ReactNode;
+  [attr: string]: unknown;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  const [size, setSize] = useState<Box | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      const { offsetWidth: width, offsetHeight: height } = el;
+      setSize((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  // No slide-in from the unclamped spot: animate only once measured.
+  const [settled, setSettled] = useState(false);
+  useLayoutEffect(() => {
+    if (!size || settled) return;
+    const frame = requestAnimationFrame(() => setSettled(true));
+    return () => cancelAnimationFrame(frame);
+  }, [size, settled]);
+  const SHADOW = 6; // stacked-paper offset
+  const w = size?.width ?? 0;
+  const h = size?.height ?? 0;
+  const clamp = (v: number, half: number, max: number) =>
+    Math.max(half, Math.min(v, max - half - SHADOW));
+  const left = clamp(px, w / 2, box.width) - w / 2;
+  const top = clamp(py, h / 2, box.height) - h / 2;
+  return createElement(tag, { ref, ...rest, style: { ...style, left, top, ...(settled ? null : { transition: "none" }) } }, children);
+}
+
 export default function Matrix({
   board,
   settings,
@@ -147,11 +198,13 @@ export default function Matrix({
   const categoryMode = settings.category_mode;
   const knownCategory = (key: string) => categories.some((c) => c.key === key);
 
-  const visibleCards = board.cards.filter((c) => !hiddenCategories?.has(c.category));
-  const hiddenIds = new Set(visibleCards.filter((c) => c.hidden).map((c) => c.id));
-  const stacks = matrixStacks(visibleCards).filter(
-    // Present mode: moderated cards are gone (a hidden top takes its members).
-    (s) => results || !(s.card.hidden || hiddenIds.has(s.card.id)),
+  // Stacks come from the whole board: a member whose top is filtered out
+  // (hidden card or category toggled off) must not be promoted to a top.
+  const stacks = matrixStacks(board.cards).filter(
+    (s) =>
+      !hiddenCategories?.has(s.card.category) &&
+      // Present mode: moderated cards are gone (a hidden top takes its members).
+      (results || !s.card.hidden),
   );
 
   const label = (c: MatrixCard) => {
@@ -167,18 +220,34 @@ export default function Matrix({
     q4: "bg-[#f8f6fb]",
   };
   const axisLine = `bg-slate-500 ${dk("dark:bg-slate-400")}`;
-  const axisLabel = `absolute rounded bg-white px-1.5 py-px text-[0.7rem] font-semibold text-slate-700 [overflow-wrap:anywhere] max-w-[40%] ${dk(
-    "dark:bg-slate-900 dark:text-slate-200",
-  )}`;
+  // Axis labels live in the margin OUTSIDE the plot (the plot box stays the
+  // coordinate box), so they can never overlap cards.
+  const axisLabel = `px-1.5 py-px font-semibold text-slate-700 [overflow-wrap:anywhere] ${dk("dark:text-slate-200")}`;
   const axisStyle: CSSProperties = { fontSize: `${0.7 * zoom}rem` };
 
   return (
-    <div className="flex w-full flex-col">
+    <div
+      className={`grid w-full grid-cols-[minmax(3.5rem,13%)_minmax(0,1fr)_minmax(3.5rem,13%)] ${
+        results ? "" : "aspect-video grid-rows-[auto_minmax(0,1fr)_auto_auto]"
+      }`}
+    >
+      <span className={`${axisLabel} col-start-2 row-start-1 text-center`} style={axisStyle} data-axis="y_to">
+        ↑ {localizedText(settings.axes.y_to)}
+      </span>
+      <span className={`${axisLabel} col-start-1 row-start-2 self-center text-right`} style={axisStyle} data-axis="x_from">
+        ← {localizedText(settings.axes.x_from)}
+      </span>
+      <span className={`${axisLabel} col-start-3 row-start-2 self-center`} style={axisStyle} data-axis="x_to">
+        {localizedText(settings.axes.x_to)} →
+      </span>
+      <span className={`${axisLabel} col-start-2 row-start-3 text-center`} style={axisStyle} data-axis="y_from">
+        ↓ {localizedText(settings.axes.y_from)}
+      </span>
       <div
         ref={plotRef}
         data-matrix-board
-        className={`relative w-full select-none rounded-lg border border-slate-300 ${dk("dark:border-slate-600")} ${
-          results ? "" : "aspect-video"
+        className={`relative col-start-2 row-start-2 w-full select-none rounded-lg border border-slate-300 ${dk("dark:border-slate-600")} ${
+          results ? "" : "h-full min-h-0"
         }`}
         style={results ? { aspectRatio: RESULTS_ASPECT } : undefined}
       >
@@ -194,19 +263,6 @@ export default function Matrix({
           <div className={`absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 ${axisLine}`} />
         </div>
 
-        <span className={`${axisLabel} left-1 top-[calc(50%+6px)]`} style={axisStyle} data-axis="x_from">
-          ← {localizedText(settings.axes.x_from)}
-        </span>
-        <span className={`${axisLabel} right-1 top-[calc(50%+6px)] text-right`} style={axisStyle} data-axis="x_to">
-          {localizedText(settings.axes.x_to)} →
-        </span>
-        <span className={`${axisLabel} left-[calc(50%+6px)] top-1`} style={axisStyle} data-axis="y_to">
-          ↑ {localizedText(settings.axes.y_to)}
-        </span>
-        <span className={`${axisLabel} bottom-1 left-[calc(50%+6px)]`} style={axisStyle} data-axis="y_from">
-          ↓ {localizedText(settings.axes.y_from)}
-        </span>
-
         {box &&
           stacks.map((stack) => {
             const { card } = stack;
@@ -220,14 +276,18 @@ export default function Matrix({
             const zoneName = matrixZoneName(card.zone, settings.axes, t);
             const Tag = interactive ? "button" : "div";
             return (
-              <Tag
+              <PlacedCard
                 key={card.id}
+                tag={Tag}
+                px={px}
+                py={py}
+                box={box}
                 {...(interactive ? { type: "button" as const } : {})}
                 data-card-id={card.id}
                 data-zone={card.zone}
                 data-stack-size={n}
                 data-hidden={isHidden ? "true" : undefined}
-                className={`absolute max-w-[22%] -translate-x-1/2 -translate-y-1/2 rounded-md border-l-[5px] px-2 py-1 text-left leading-tight ${
+                className={`absolute max-w-[22%] rounded-md border-l-[5px] px-2 py-1 text-left leading-tight ${
                   isHidden
                     ? `border-y border-r border-dashed border-slate-400 bg-slate-100 text-slate-600 ${dk(
                         "dark:border-slate-500 dark:bg-slate-900 dark:text-slate-300",
@@ -235,8 +295,6 @@ export default function Matrix({
                     : `bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,.25)] ${dk("dark:bg-slate-800 dark:text-slate-100")}`
                 }`}
                 style={{
-                  left: px,
-                  top: py,
                   borderLeftColor: hex,
                   fontSize: `${0.75 * zoom}rem`,
                   transition: reduced ? "none" : "left .25s ease, top .25s ease",
@@ -247,7 +305,7 @@ export default function Matrix({
               >
                 <span className="flex items-start gap-1">
                   {cat.short && (
-                    <span aria-hidden className="font-bold text-slate-700 dark:text-slate-300">
+                    <span aria-hidden className={`font-bold text-slate-700 ${dk("dark:text-slate-300")}`}>
                       {cat.short}
                     </span>
                   )}
@@ -275,56 +333,54 @@ export default function Matrix({
                 <span className="sr-only">
                   {` – ${[cat.a11y, zoneName].filter(Boolean).join(", ")}`}
                 </span>
-              </Tag>
+              </PlacedCard>
             );
           })}
 
-        {categoryMode !== "off" && categories.length > 0 && (
-          <ul
-            aria-label={t("Categories")}
-            className={`absolute bottom-1.5 right-2 flex flex-wrap justify-end gap-x-2 gap-y-0.5 rounded bg-white/90 px-1.5 py-0.5 text-[0.7rem] text-slate-700 ${dk(
-              "dark:bg-slate-900/90 dark:text-slate-200",
-            )}`}
-            style={{ fontSize: `${0.7 * zoom}rem` }}
-            data-testid="matrix-legend"
-          >
-            {categories.map((c) => {
-              const cat = categoryLabel(categories, c.key, categoryMode, lang, t);
-              const off = hiddenCategories?.has(c.key) ?? false;
-              const content = (
-                <>
-                  <span
-                    aria-hidden
-                    className="inline-block h-2.5 w-2.5 rounded-full border"
-                    style={{
-                      background: off ? "transparent" : paletteEntry(c.key)?.hex,
-                      borderColor: paletteEntry(c.key)?.hex,
-                    }}
-                  />
-                  <span className={off ? "line-through" : ""}>{cat.name || cat.short}</span>
-                </>
-              );
-              return (
-                <li key={c.key}>
-                  {onToggleCategory ? (
-                    <button
-                      type="button"
-                      aria-pressed={!off}
-                      aria-label={cat.name || cat.a11y}
-                      onClick={() => onToggleCategory(c.key)}
-                      className="inline-flex items-center gap-1 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                    >
-                      {content}
-                    </button>
-                  ) : (
-                    <span className="inline-flex items-center gap-1">{content}</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
       </div>
+      {categoryMode !== "off" && categories.length > 0 && (
+        <ul
+          aria-label={t("Categories")}
+          className={`col-start-2 row-start-4 mt-1.5 flex flex-wrap justify-end gap-x-3 gap-y-0.5 px-1.5 text-[0.7rem] text-slate-700 ${dk("dark:text-slate-200")}`}
+          style={{ fontSize: `${0.7 * zoom}rem` }}
+          data-testid="matrix-legend"
+        >
+          {categories.map((c) => {
+            const cat = categoryLabel(categories, c.key, categoryMode, lang, t);
+            const off = hiddenCategories?.has(c.key) ?? false;
+            const content = (
+              <>
+                <span
+                  aria-hidden
+                  className="inline-block h-2.5 w-2.5 rounded-full border"
+                  style={{
+                    background: off ? "transparent" : paletteEntry(c.key)?.hex,
+                    borderColor: paletteEntry(c.key)?.hex,
+                  }}
+                />
+                <span className={off ? "line-through" : ""}>{cat.name || cat.short}</span>
+              </>
+            );
+            return (
+              <li key={c.key}>
+                {onToggleCategory ? (
+                  <button
+                    type="button"
+                    aria-pressed={!off}
+                    aria-label={cat.name || cat.a11y}
+                    onClick={() => onToggleCategory(c.key)}
+                    className="inline-flex items-center gap-1 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1">{content}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

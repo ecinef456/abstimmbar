@@ -31,13 +31,14 @@ async function login(page: Page) {
   await page.waitForURL('http://localhost:5174/**');
 }
 
-async function seed(page: Page, trackRoom: (id: number) => void) {
+async function seed(page: Page, trackRoom: (id: number) => void, opts: { tokens?: number; finish?: boolean } = {}) {
   const room = await createRoomWithQuestions(page.request, [], 'Matrix Ergebnisse', trackRoom, 'E2E Matrix');
   const api = apiClient(page.request);
   const questionId = await createMatrixQuestion(api, room.setId);
   const runId = await startRun(api, room.setId);
   await control(api, runId, 'open', questionId);
-  const [t1, t2, t3] = await joinParticipants(page.request, room.code, 3);
+  const tokens = await joinParticipants(page.request, room.code, opts.tokens ?? 3);
+  const [t1, t2, t3] = tokens;
   const add = async (token: string, zone: string, title: string, category: string, description = '') => {
     const response = await page.request.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/add/`, {
       data: { token, question: questionId, zone, title, category, description },
@@ -46,15 +47,16 @@ async function seed(page: Page, trackRoom: (id: number) => void) {
     expect(response.ok(), await response.text()).toBeTruthy();
     return (await response.json()).card_id as number;
   };
+  const url = (action: string) => `/api/runs/${runId}/matrix/${questionId}/${action}`;
+  if (opts.finish === false) return { room, add, api, url, tokens, runId };
   const chatbot = await add(t1, 'q1', 'Chatbot', 'blue', 'Beantwortet Fragen');
   const feedback = await add(t2, 'q1', 'Feedback-Tool', 'blue');
   const altlast = await add(t3, 'q3', 'Altlast', 'orange');
   const secret = await add(t1, 'q2', 'Versteckte Idee', 'orange');
-  const url = (action: string) => `/api/runs/${runId}/matrix/${questionId}/${action}`;
   await api.post(url('stack'), { card: feedback, onto: chatbot });
   await api.post(url('hide'), { card: secret, hidden: true });
   await control(api, runId, 'finished');
-  return { room, chatbot, altlast, secret };
+  return { room, chatbot, altlast, secret, add, api, url, tokens, runId };
 }
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -70,7 +72,7 @@ for (const scheme of ['light', 'dark'] as const) {
       const board = page.locator('[data-matrix-board]');
       await expect(board).toBeVisible();
       for (const end of ['nicht nützlich', 'nützlich', 'altbacken', 'modern']) {
-        await expect(board.locator('[data-axis]', { hasText: end }).first()).toBeVisible();
+        await expect(page.locator('[data-axis]', { hasText: end }).first()).toBeVisible();
       }
 
       // Quadrants: compare card centres with the board centre.
@@ -97,7 +99,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(hidden.getByTestId('matrix-hidden-marker')).toHaveText('ausgeblendet');
 
       // Legend with both categories; toggling hides a category's cards.
-      const legend = board.getByTestId('matrix-legend');
+      const legend = page.getByTestId('matrix-legend');
       await expect(legend.getByRole('button', { name: 'Idee' })).toBeVisible();
       await expect(legend.getByRole('button', { name: 'Risiko' })).toBeVisible();
       await legend.getByRole('button', { name: 'Risiko' }).click();
@@ -131,3 +133,62 @@ for (const scheme of ['light', 'dark'] as const) {
     });
   });
 }
+
+test('legend toggle never promotes the members of a hidden top', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  await login(page);
+  const { room, add, api, url, tokens } = await seed(page, trackRoom, { finish: false });
+  const top = await add(tokens[0], 'q4', 'Geheimer Stapel', 'orange');
+  const member = await add(tokens[1], 'q4', 'Mitglied im Stapel', 'blue');
+  await api.post(url('stack'), { card: member, onto: top });
+  await api.post(url('hide'), { card: top, hidden: true });
+  await page.goto(`/sets/${room.setId}/results`);
+  const board = page.locator('[data-matrix-board]');
+  await expect(board.locator(`[data-card-id="${top}"]`)).toHaveCount(1);
+  await expect(board.locator(`[data-card-id="${member}"]`)).toHaveCount(0);
+  const legend = page.getByTestId('matrix-legend');
+  await legend.getByRole('button', { name: 'Risiko' }).click();
+  // The hidden top is filtered out by its category; its member must not appear.
+  await expect(board.locator(`[data-card-id="${top}"]`)).toHaveCount(0);
+  await expect(board.locator(`[data-card-id="${member}"]`)).toHaveCount(0);
+  await expect(board.getByText('Mitglied im Stapel')).toHaveCount(0);
+});
+
+test('axis labels and legend never overlap cards (extreme auto-place slots)', async ({ page, trackRoom }) => {
+  test.setTimeout(120_000);
+  await login(page);
+  const { room, add, api, runId, tokens } = await seed(page, trackRoom, { tokens: 22, finish: false });
+  // Fill the extreme slots: edges (6 on top/bottom, 3 left/right) and the
+  // outermost quadrant rows.
+  const plan: [string, number][] = [['e_top', 6], ['e_bottom', 6], ['e_left', 3], ['e_right', 3], ['q1', 6], ['q2', 6], ['q3', 6], ['q4', 6]];
+  const used = new Map<string, number>();
+  let n = 0;
+  for (const [zone, count] of plan) {
+    for (let i = 0; i < count; i++) {
+      // max 2 cards per person: walk through the tokens.
+      const token = tokens[Math.floor(n / 2) % tokens.length];
+      const key = token;
+      if ((used.get(key) ?? 0) >= 2) throw new Error('out of tokens');
+      used.set(key, (used.get(key) ?? 0) + 1);
+      await add(token, zone, `X${n} Karte mit längerem Titel`, n % 2 ? 'blue' : 'orange', 'Beschreibung');
+      n++;
+    }
+  }
+  await control(api, runId, 'finished');
+  await page.goto(`/sets/${room.setId}/results`);
+  const board = page.locator('[data-matrix-board]');
+  await expect(board).toBeVisible();
+  await expect(board.locator('[data-card-id]')).toHaveCount(n);
+  await page.waitForTimeout(600); // let the position transition settle
+  const rects = async (loc: ReturnType<Page['locator']>) =>
+    Promise.all((await loc.all()).map(async (l) => (await l.boundingBox())!));
+  const cards = await rects(board.locator('[data-card-id]'));
+  const outside = [
+    ...(await rects(page.locator('[data-axis]'))),
+    ...(await rects(page.getByTestId('matrix-legend'))),
+  ];
+  expect(outside.length).toBe(5);
+  const hit = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  for (const o of outside) for (const c of cards) expect(hit(o, c), JSON.stringify({ o, c })).toBe(false);
+});
