@@ -1066,7 +1066,6 @@
   "Participants add terms again; the ratings are kept.": "Teilnehmende ergänzen wieder Begriffe; die Bewertungen bleiben erhalten.",
   "Start / Stop": "Starten / Stoppen",
   "Opens or closes voting on this question.": "Öffnet oder schließt die Abstimmung zu dieser Frage.",
-  "Closes this presentation window.": "Schließt dieses Präsentationsfenster.",
   "Goes back one question.": "Geht eine Frage zurück.",
   "Moves on to the next question.": "Geht zur nächsten Frage weiter.",
   "Labels every control.": "Beschriftet alle Bedienelemente.",
@@ -1101,5 +1100,9 @@
   "‹ › or the arrow keys move between the questions. The red ✕ (Esc) leaves the presentation — the survey stays open, and you end it in the question set overview.": "‹ › oder die Pfeiltasten wechseln zwischen den Fragen. Das rote ✕ (Esc) verlässt die Präsentation – die Umfrage bleibt offen; beenden können Sie sie in der Übersicht des Fragensets.",
   "End survey": "Umfrage beenden",
   "Ends the survey — participants then see the closing screen.": "Beendet die Umfrage – die Teilnehmenden sehen danach den Schlussbildschirm.",
-  "Survey ended — participants now see the closing screen.": "Umfrage beendet – die Teilnehmenden sehen jetzt den Schlussbildschirm."
+  "Survey ended — participants now see the closing screen.": "Umfrage beendet – die Teilnehmenden sehen jetzt den Schlussbildschirm.",
+  "End quiz": "Quiz beenden",
+  "Ends the quiz — participants then see the closing screen.": "Beendet das Quiz – die Teilnehmenden sehen danach den Schlussbildschirm.",
+  "Quiz ended — participants now see the closing screen.": "Quiz beendet – die Teilnehmenden sehen jetzt den Schlussbildschirm.",
+  "The session has already ended or could not be ended. Please try again.": "Die Durchführung ist bereits beendet oder konnte nicht beendet werden. Bitte versuchen Sie es erneut."
 }

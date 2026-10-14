@@ -1334,6 +1334,9 @@ export const live = {
   status: (setId: number) =>
     request<{
       active_run: number | null;
+      active_run_phase: string | null;
+      /** Past the lobby, left by the presenter, or carrying answers. */
+      active_run_in_use: boolean;
       has_votes: boolean;
       active_run_has_votes: boolean;
       recently_started: boolean;

@@ -819,14 +819,35 @@ export default function SetPage() {
       setMaxQuestions(who.ai_generate_max_questions);
     });
     void refreshReviewHint();
-    live
-      .status(id)
-      .then((status) => setActiveRun(status.active_run))
-      .catch(() => setActiveRun(null));
     // Deep link from the app-wide status bar → open the review panel directly.
     if ((location.state as { openReview?: boolean } | null)?.openReview) {
       setReviewOpen(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // „Umfrage beenden": only for a run actually in use (not the empty lobby
+  // run "archive results" prepares). Re-checked on focus, so a tab that
+  // stayed on the set overview while presenting elsewhere picks it up.
+  async function refreshLiveStatus() {
+    try {
+      const status = await live.status(id);
+      setActiveRun(status.active_run_in_use ? status.active_run : null);
+    } catch {
+      setActiveRun(null);
+    }
+  }
+  useEffect(() => {
+    void refreshLiveStatus();
+    const onFocus = () => {
+      if (document.visibilityState === "visible") void refreshLiveStatus();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -910,6 +931,7 @@ export default function SetPage() {
     await results.archive(id);
     const updated = await api.getQuestionSet(id);
     setSet(updated);
+    void refreshLiveStatus(); // the archived run is finished now
     // Confirm success — archiving only changes the *next* presentation, so
     // without feedback it looks like nothing happened (#70).
     setArchivedNotice(true);
@@ -1014,13 +1036,22 @@ export default function SetPage() {
   async function endSurvey() {
     if (activeRun === null || ending) return;
     setEnding(true);
+    const quiz = set?.type === "self_paced";
     try {
       await live.control(activeRun, { phase: "finished" });
       setActiveRun(null);
-      showToast(t("Survey ended — participants now see the closing screen."), 4000);
+      showToast(
+        quiz
+          ? t("Quiz ended — participants now see the closing screen.")
+          : t("Survey ended — participants now see the closing screen."),
+        4000,
+      );
       setSet(await api.getQuestionSet(id));
-    } catch (err) {
-      showToast(String(err), 4000);
+    } catch {
+      // Typically 409: the run was already finished elsewhere (presenter,
+      // archive in another tab) — refresh instead of showing a raw error.
+      await refreshLiveStatus();
+      showToast(t("The session has already ended or could not be ended. Please try again."), 4000);
     } finally {
       setEnding(false);
     }
@@ -1751,12 +1782,17 @@ export default function SetPage() {
                 <Button
                   variant="danger"
                   data-testid="end-survey"
-                  title={t("Ends the survey — participants then see the closing screen.")}
+                  title={
+                    set.type === "self_paced"
+                      ? t("Ends the quiz — participants then see the closing screen.")
+                      : t("Ends the survey — participants then see the closing screen.")
+                  }
                   disabled={ending}
                   onClick={() => void endSurvey()}
                   className="inline-flex items-center gap-1.5 border border-red-200 dark:border-red-900"
                 >
-                  <SquareStop aria-hidden className="h-4 w-4" />{t("End survey")}
+                  <SquareStop aria-hidden className="h-4 w-4" />
+                  {set.type === "self_paced" ? t("End quiz") : t("End survey")}
                 </Button>
               )}
               {/* Lernkontrolle (#75 phase 3): "run" means publishing the

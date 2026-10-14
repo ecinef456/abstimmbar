@@ -1274,16 +1274,22 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // participants see „paused"; the run is ended from the set overview (or
   // resumed by presenting again). Always back to the set overview in the same
   // tab — never closes the window, even when opened from the editor.
+  // Runs once (double-click on ✕, ✕ then Esc); a hanging request must not
+  // keep the presenter on the beamer — after a short wait it leaves anyway.
+  const leavingRef = useRef(false);
   const leave = useCallback(async () => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
     if (runId && !selfPaced) {
-      try {
-        await live.control(runId, { away: true });
-      } catch {
-        // leave anyway — the run stays as it is
-      }
+      await Promise.race([
+        live.control(runId, { away: true }).catch(() => {
+          // leave anyway — the run stays as it is
+        }),
+        new Promise((resolve) => window.setTimeout(resolve, 3000)),
+      ]);
     }
-    leavePresentation();
-  }, [runId, selfPaced, leavePresentation]);
+    navigate(`/sets/${id}`, { replace: true });
+  }, [runId, selfPaced, navigate, id]);
   // Closing slide reached in live mode, run not finished yet (see finish()).
   const [pendingFinish, setPendingFinish] = useState(false);
   const finishAndLeave = useCallback(async () => {

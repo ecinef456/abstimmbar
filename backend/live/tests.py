@@ -7727,3 +7727,57 @@ class PresenterAwayTests(LiveTestCase):
         run.refresh_from_db()
         self.assertFalse(run.presenter_away)
         self.assertEqual(run.phase, Run.Phase.OPEN)
+
+    def test_invalid_control_keeps_away(self):
+        run = self.open_question()
+        run.presenter_away = True
+        run.phase = Run.Phase.CLOSED
+        run.save()
+        self.client.force_login(self.owner)
+        self.assertEqual(self.control(run, phase="bogus").status_code, 400)
+        self.assertEqual(self.control(run, away=False).status_code, 400)
+        run.refresh_from_db()
+        self.assertTrue(run.presenter_away)
+
+    def live_status(self):
+        return self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/live-status/"
+        ).json()
+
+    def test_live_status_in_use(self):
+        self.client.force_login(self.owner)
+        # Empty lobby run (e.g. prepared by "archive results"): not in use.
+        run = Run.objects.create(question_set=self.question_set, phase=Run.Phase.LOBBY)
+        status = self.live_status()
+        self.assertEqual(status["active_run"], run.pk)
+        self.assertEqual(status["active_run_phase"], "lobby")
+        self.assertFalse(status["active_run_in_use"])
+        # Left from the lobby: participants see „paused" → in use.
+        self.control(run, away=True)
+        self.assertTrue(self.live_status()["active_run_in_use"])
+        # A question shown (past the lobby) → in use.
+        run.presenter_away = False
+        run.phase = Run.Phase.PREVIEW
+        run.active_question = self.question
+        run.save()
+        self.assertTrue(self.live_status()["active_run_in_use"])
+        run.phase = Run.Phase.FINISHED
+        run.save()
+        status = self.live_status()
+        self.assertIsNone(status["active_run"])
+        self.assertFalse(status["active_run_in_use"])
+
+    def test_live_status_after_archive_not_in_use(self):
+        token = self.join()
+        run = self.open_question()
+        self.vote(token, options=[self.correct.pk])
+        self.client.force_login(self.owner)
+        self.assertTrue(self.live_status()["active_run_in_use"])
+        response = self.client.post(
+            f"/api/question-sets/{self.question_set.pk}/archive-results/",
+            {}, content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        status = self.live_status()
+        self.assertNotEqual(status["active_run"], run.pk)
+        self.assertFalse(status["active_run_in_use"])

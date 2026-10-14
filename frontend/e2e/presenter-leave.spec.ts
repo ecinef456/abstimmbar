@@ -9,7 +9,14 @@
  *  deletes them. No AI calls. */
 import type { Page } from '@playwright/test';
 import { test, expect, API_BASE_URL } from './fixtures';
-import { apiClient, createRoomWithQuestions } from './helpers/seed';
+import {
+  apiClient,
+  castAnswers,
+  control,
+  createRoomWithQuestions,
+  joinParticipants,
+  startRun,
+} from './helpers/seed';
 
 test.use({ locale: 'en-US', viewport: { width: 1280, height: 800 } });
 
@@ -116,9 +123,12 @@ test('set overview: „End survey" finishes the run; participants see the closin
   try {
     await p.goto(`${API_BASE_URL}/p/${seed.code}/`);
     await openPresenterOnFirstQuestion(page, seed.setId);
-    await endButton(page).click();
+    // Double-click: leaves once (no second history entry for the set page).
+    await endButton(page).dblclick();
     await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
     await expect(p.locator('#paused')).toBeVisible();
+    // Nothing answered yet → no (empty) review button.
+    await expect(p.locator('#paused-review')).toBeHidden();
 
     const end = page.getByTestId('end-survey');
     await expect(end).toHaveText(/End survey|Umfrage beenden/);
@@ -130,4 +140,33 @@ test('set overview: „End survey" finishes the run; participants see the closin
   } finally {
     await participantCtx.close();
   }
+});
+
+test('„End survey" hides for the empty run "archive results" prepares; stale click recovers', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(
+    page.request, ['single_choice'], 'Archive', trackRoom, 'E2E Leave',
+  );
+  const api = apiClient(page.request);
+  const runId = await startRun(api, seed.setId);
+  await control(api, runId, 'open', seed.questions[0].id);
+  const tokens = await joinParticipants(page.request, seed.code, 1);
+  await castAnswers(page.request, seed.code, seed.questions[0], tokens);
+
+  await page.goto(`/sets/${seed.setId}`);
+  const end = page.getByTestId('end-survey');
+  await expect(end).toBeVisible();
+  // Archived elsewhere (other tab): the shown button is stale → a click
+  // refreshes, shows a friendly message and hides the button.
+  await api.post(`/api/question-sets/${seed.setId}/archive-results/`);
+  await end.click();
+  await expect(page.getByText(/already ended|bereits beendet/)).toBeVisible();
+  await expect(end).toBeHidden();
+  // The fresh lobby run left by archiving doesn't count as "in use".
+  expect((await liveStatus(page, seed.setId)).active_run).not.toBeNull();
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(end).toBeHidden();
 });

@@ -1378,9 +1378,23 @@ def live_status(request, set_id):
     # Whether the run the start dialog would resume already carries answers —
     # lets the UI offer archive/delete instead of silently appending (#70).
     active_run_has_votes = bool(run and mindmap.run_has_answers(run))
+    # The set overview's „Umfrage beenden" (spec PR 2) only for a run that is
+    # actually in use: past the lobby, left by the presenter (participants
+    # see „paused", even if nobody answered yet), or carrying answers — not
+    # the empty lobby run that „Ergebnisse archivieren" prepares.
+    active_run_in_use = bool(
+        run
+        and (
+            run.phase != Run.Phase.LOBBY
+            or run.presenter_away
+            or active_run_has_votes
+        )
+    )
     return Response(
         {
             "active_run": run.pk if run else None,
+            "active_run_phase": run.phase if run else None,
+            "active_run_in_use": active_run_in_use,
             "has_votes": has_votes,
             "active_run_has_votes": active_run_has_votes,
             "recently_started": _recently_started(question_set),
@@ -1602,16 +1616,15 @@ def control_run(request, run_id):
         run.save(update_fields=fields)
         broadcast(room)
         return Response({"status": "ok", "phase": run.phase})
-    # Any other presenter action means the presenter is back.
-    if run.presenter_away:
-        run.presenter_away = False
-        run.save(update_fields=["presenter_away", "updated_at"])
-
+    # Any other (valid) presenter action means the presenter is back — cleared
+    # below only once the request passed validation, and saved + broadcast
+    # together with the action itself.
     # Reveal correct answers (v2): server state so participant devices
     # highlight in sync with the beamer (presenter key "A").
     if "reveal" in request.data:
         run.answers_revealed = bool(request.data["reveal"])
-        run.save(update_fields=["answers_revealed", "updated_at"])
+        run.presenter_away = False
+        run.save(update_fields=["answers_revealed", "presenter_away", "updated_at"])
         broadcast(room)
         return Response({"status": "ok", "phase": run.phase})
 
@@ -1619,6 +1632,9 @@ def control_run(request, run_id):
     # beamer shows per-question deep links; live only (self-paced is already
     # async). Mints a token once; broadcast carries it to the beamer.
     if request.data.get("recording") and run.mode == Run.Mode.LIVE:
+        if run.presenter_away:
+            run.presenter_away = False
+            run.save(update_fields=["presenter_away", "updated_at"])
         run.enable_recording()
         broadcast(room)
         return Response({"status": "ok", "recording_token": run.recording_token})
@@ -1643,6 +1659,7 @@ def control_run(request, run_id):
         return Response({"detail": "No active question."}, status=400)
 
     run.phase = phase
+    run.presenter_away = False
     if phase == Run.Phase.OPEN:
         run.opened_at = timezone.now()
         if run.first_opened_at is None:
