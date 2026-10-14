@@ -26,7 +26,7 @@ import HomeCrumb from "../components/HomeCrumb";
 import SortableOutline from "../components/SortableOutline";
 import TranslatableField from "../components/TranslatableField";
 import { allowedKindsFor, SET_TYPES, type SetType } from "../setTypes";
-import { localizedText, type LocalizedText, RichText, stripHtml, TranslationControlsSlot } from "@basicbar/ui";
+import { localizedMap, localizedText, type LocalizedText, RichText, stripHtml, TranslationControlsSlot } from "@basicbar/ui";
 import {
   Button,
   ConfirmInline,
@@ -661,6 +661,72 @@ function SectionTitleField({
   );
 }
 
+/** Optional rich-text description of a section (shown under its title on the
+ * presenter's interstitial slide only). Collapsed behind a toggle so the
+ * outline stays compact; committed when focus leaves the field, like the
+ * section name. */
+function SectionDescriptionField({
+  section,
+  onSave,
+}: {
+  section: SectionType;
+  onSave: (id: number, description: LocalizedText) => void;
+}) {
+  const { t } = useTranslation();
+  const saved = section.description ?? "";
+  const [description, setDescription] = useState<LocalizedText>(saved);
+  const hasSaved = Object.values(localizedMap(saved)).some(
+    (html) => stripHtml(html ?? "").trim() !== "" || /<img/i.test(html ?? ""),
+  );
+  const [open, setOpen] = useState(hasSaved);
+  // Re-seed only when another section takes this slot — not after our own
+  // save comes back (that would reset the editor mid-typing).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setDescription(saved), [section.id]);
+  const dirty =
+    JSON.stringify(localizedMap(description)) !== JSON.stringify(localizedMap(saved));
+  const commit = () => {
+    if (dirty) onSave(section.id, localizedMap(description));
+  };
+  // Also save shortly after typing stops (e.g. a translation pre-fill
+  // changes the value without the field ever losing focus).
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = window.setTimeout(() => onSave(section.id, localizedMap(description)), 1200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description]);
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="ml-8 mt-1 text-xs text-slate-500 hover:text-brand-700 hover:underline dark:text-slate-400 dark:hover:text-brand-300"
+      >
+        + {t("Add description")}
+      </button>
+    );
+  }
+  return (
+    <div
+      className="ml-8 mt-2 max-w-2xl"
+      data-testid={`section-description-${section.id}`}
+      onBlur={(e) => {
+        // Commit only when focus leaves the whole field (toolbar, tabs …).
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) commit();
+      }}
+    >
+      <TranslatableField
+        variant="rich"
+        label={t("Description")}
+        hint={t("Optional – shown on the interstitial slide below the title.")}
+        value={description}
+        onChange={setDescription}
+      />
+    </div>
+  );
+}
+
 /** Inline hint above the question list when this set has an un-reviewed
  * generation job: shows running progress or a "N questions ready — review"
  * call to action, and is the entry point to the review panel. */
@@ -905,9 +971,18 @@ export default function SetPage() {
   }
 
   async function renameSection(sectionId: number, title: LocalizedText) {
-    const updated = await api.updateSection(sectionId, title);
+    const updated = await api.updateSection(sectionId, { title });
     setSections((current) =>
       current.map((s) => (s.id === sectionId ? { ...s, title: updated.title } : s)),
+    );
+  }
+
+  async function describeSection(sectionId: number, description: LocalizedText) {
+    const updated = await api.updateSection(sectionId, { description });
+    setSections((current) =>
+      current.map((s) =>
+        s.id === sectionId ? { ...s, description: updated.description } : s,
+      ),
     );
   }
 
@@ -1968,6 +2043,12 @@ export default function SetPage() {
                         </h3>
                       )}
                     </div>
+                    {editingSections && (
+                      <SectionDescriptionField
+                        section={row.section}
+                        onSave={(id, description) => void describeSection(id, description)}
+                      />
+                    )}
                   </>
                 );
               }

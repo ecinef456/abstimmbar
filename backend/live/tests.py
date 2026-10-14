@@ -741,6 +741,24 @@ class StatePayloadTests(LiveTestCase):
         option = payloads["participant"]["question"]["options"][0]
         self.assertNotIn("is_correct", option)
 
+    def test_section_description_never_reaches_participants(self):
+        # The section description is beamer-only (interstitial slide).
+        from rooms.models import Section
+
+        section = Section.objects.create(
+            question_set=self.question_set, title_de="Teil A",
+            description_de="<p>GEHEIM-BESCHREIBUNG</p>",
+        )
+        self.question.section = section
+        self.question.save(update_fields=["section"])
+        for phase in (Run.Phase.PREVIEW, Run.Phase.OPEN, Run.Phase.CLOSED):
+            run = self.open_question()
+            run.phase = phase
+            run.save()
+            payloads = build_payloads(self.room)
+            self.assertNotIn("GEHEIM-BESCHREIBUNG", json.dumps(payloads["participant"]))
+            run.delete()
+
     def test_participant_payload_carries_run_id(self):
         # Devices scope their "already voted" marker to the run so a re-run
         # lets them vote again (client-side; the run id makes it possible).

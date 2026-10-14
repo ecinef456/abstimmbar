@@ -2662,7 +2662,10 @@ class SectionTests(ApiTestCase):
         data = export_set(self.qset)
         # Section.title is a {"de","en"} map like every other translatable
         # field (#33 MR2 Task 6).
-        self.assertEqual(data["sections"], [{"title": {"de": "Begrüßung", "en": ""}}])
+        self.assertEqual(
+            data["sections"],
+            [{"title": {"de": "Begrüßung", "en": ""}, "description": {"de": "", "en": ""}}],
+        )
         self.assertEqual(data["questions"][0]["section"], 0)
         self.assertIsNone(data["questions"][1]["section"])
 
@@ -2671,6 +2674,129 @@ class SectionTests(ApiTestCase):
         self.assertEqual(
             imported.questions.get(position=0).section.title, "Begrüßung"
         )
+
+
+class SectionDescriptionTests(ApiTestCase):
+    """Optional rich-text description of a section, shown on the presenter's
+    interstitial slide only (translatable, sanitized like Question.text)."""
+
+    def setUp(self):
+        super().setUp()
+        self.qset = QuestionSet.objects.create(room=self.room, title_de="Beschreibungs-Set")
+
+    def test_create_with_description_map_is_sanitized(self):
+        response = self.client.post(
+            "/api/sections/",
+            {
+                "question_set": self.qset.pk,
+                "title": {"de": "Teil A", "en": "Part A"},
+                "description": {
+                    "de": "<p>Hallo <strong>Welt</strong><script>alert(1)</script></p>",
+                    "en": '<p onclick="x()">Hello</p>',
+                },
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        description = response.json()["description"]
+        self.assertEqual(set(description), {"de", "en"})
+        self.assertIn("<strong>Welt</strong>", description["de"])
+        self.assertNotIn("script", description["de"])
+        self.assertNotIn("onclick", description["en"])
+        from rooms.models import Section
+
+        section = Section.objects.get(pk=response.json()["id"])
+        self.assertNotIn("script", section.description_de)
+        self.assertIn("Hello", section.description_en)
+
+    def test_description_defaults_to_empty_map(self):
+        response = self.client.post(
+            "/api/sections/",
+            {"question_set": self.qset.pk, "title": "Teil A"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.json()["description"], {"de": "", "en": ""})
+
+    def test_update_sets_and_clears_description(self):
+        from rooms.models import Section
+
+        section = Section.objects.create(question_set=self.qset, title_de="Teil A")
+        url = f"/api/sections/{section.pk}/"
+        response = self.client.patch(
+            url, {"description": {"de": "<p>Intro</p>", "en": ""}},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["description"]["de"], "<p>Intro</p>")
+        # Title untouched by a description-only PATCH.
+        self.assertEqual(response.json()["title"]["de"], "Teil A")
+        # A blank map clears it (unlike a title, which keeps its old value).
+        response = self.client.patch(
+            url, {"description": {"de": "", "en": ""}}, content_type="application/json"
+        )
+        self.assertEqual(response.json()["description"], {"de": "", "en": ""})
+        # A PATCH without the key leaves it alone.
+        self.client.patch(
+            url, {"description": {"de": "<p>Wieder</p>", "en": ""}},
+            content_type="application/json",
+        )
+        response = self.client.patch(
+            url, {"title": {"de": "Teil B", "en": ""}}, content_type="application/json"
+        )
+        self.assertEqual(response.json()["description"]["de"], "<p>Wieder</p>")
+
+    def test_duplicate_export_import_round_trip(self):
+        from rooms.models import Section
+        from rooms.transfer import duplicate_set, export_set, import_set
+
+        Section.objects.create(
+            question_set=self.qset, title_de="Teil A",
+            description_de="<p>Einleitung</p>", description_en="<p>Intro</p>",
+        )
+        clone = duplicate_set(self.qset, self.room)
+        cloned = clone.sections.get()
+        self.assertEqual(
+            (cloned.description_de, cloned.description_en),
+            ("<p>Einleitung</p>", "<p>Intro</p>"),
+        )
+
+        data = export_set(self.qset)
+        self.assertEqual(
+            data["sections"][0]["description"],
+            {"de": "<p>Einleitung</p>", "en": "<p>Intro</p>"},
+        )
+        imported = import_set(self.room, data).sections.get()
+        self.assertEqual(
+            (imported.description_de, imported.description_en),
+            ("<p>Einleitung</p>", "<p>Intro</p>"),
+        )
+
+    def test_import_sanitizes_description_and_accepts_legacy_files(self):
+        from rooms.transfer import EXPORT_FORMAT, import_set
+
+        data = {
+            "format": EXPORT_FORMAT,
+            "title": {"de": "Import", "en": ""},
+            "sections": [
+                {
+                    "title": {"de": "Teil A", "en": ""},
+                    "description": {
+                        "de": "<p>ok<script>alert(1)</script></p>",
+                        "en": '<img src="x" onerror="alert(1)">',
+                    },
+                },
+                {"title": "Ohne Beschreibung"},
+                # v1: plain string -> canonical language.
+                {"title": "Alt", "description": "<p>alt</p><iframe></iframe>"},
+            ],
+            "questions": [],
+        }
+        sections = list(import_set(self.room, data).sections.order_by("position"))
+        self.assertNotIn("script", sections[0].description_de)
+        self.assertIn("ok", sections[0].description_de)
+        self.assertNotIn("onerror", sections[0].description_en or "")
+        self.assertFalse(sections[1].description_de)
+        self.assertEqual(sections[2].description_de, "<p>alt</p>")
 
 
 class OutlineReorderTests(ApiTestCase):

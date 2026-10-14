@@ -296,6 +296,9 @@ export interface Section {
   id: number;
   question_set: number;
   title: LocalizedText;
+  /** Optional rich-text (sanitized HTML), shown under the title on the
+   *  presenter's interstitial slide only. */
+  description?: LocalizedText;
   position: number;
 }
 
@@ -764,10 +767,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ question_set: setId, title }),
     }),
-  updateSection: (id: number, title: LocalizedText) =>
+  updateSection: (
+    id: number,
+    patch: { title?: LocalizedText; description?: LocalizedText },
+  ) =>
     request<Section>(`/api/sections/${id}/`, {
       method: "PATCH",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(patch),
     }),
   deleteSection: (id: number) =>
     request<void>(`/api/sections/${id}/`, { method: "DELETE" }),
