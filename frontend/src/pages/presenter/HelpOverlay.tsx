@@ -97,7 +97,7 @@ function buildCards(targets: Target[]): CardSpec[] {
 /** Ordered 1-D packing: each item wants to start at `want`; overlapping
  *  neighbours merge into clusters centred on their wishes, clamped to
  *  [lo, hi]. Keeps the order, so leader lines never cross. */
-function pack(items: { want: number; size: number }[], lo: number, hi: number): number[] {
+function pack(items: { want: number; size: number }[], lo: number, hi: number, gap = GAP): number[] {
   type Cluster = { first: number; last: number; start: number; size: number };
   const clusters: Cluster[] = [];
   const place = (c: Cluster) => {
@@ -105,7 +105,7 @@ function pack(items: { want: number; size: number }[], lo: number, hi: number): 
     let sum = 0;
     for (let i = c.first; i <= c.last; i++) {
       sum += items[i].want - offset;
-      offset += items[i].size + GAP;
+      offset += items[i].size + gap;
     }
     c.start = Math.max(lo, Math.min(hi - c.size, sum / (c.last - c.first + 1)));
   };
@@ -114,9 +114,9 @@ function pack(items: { want: number; size: number }[], lo: number, hi: number): 
     place(c);
     while (clusters.length) {
       const prev = clusters[clusters.length - 1];
-      if (prev.start + prev.size + GAP <= c.start) break;
+      if (prev.start + prev.size + gap <= c.start) break;
       clusters.pop();
-      c = { first: prev.first, last: c.last, start: 0, size: prev.size + GAP + c.size };
+      c = { first: prev.first, last: c.last, start: 0, size: prev.size + gap + c.size };
       place(c);
     }
     clusters.push(c);
@@ -126,7 +126,7 @@ function pack(items: { want: number; size: number }[], lo: number, hi: number): 
     let pos = c.start;
     for (let i = c.first; i <= c.last; i++) {
       out[i] = pos;
-      pos += items[i].size + GAP;
+      pos += items[i].size + gap;
     }
   }
   return out;
@@ -145,9 +145,19 @@ function layout(cards: CardSpec[], sizes: { w: number; h: number }[]): Placed[] 
   const byX = [...footerIdx].sort(
     (a, b) => cards[a].anchor.left + cards[a].anchor.right - (cards[b].anchor.left + cards[b].anchor.right),
   );
-  const total = byX.reduce((s, i) => s + sizes[i].w + GAP, -GAP);
-  const rows: number[][] = total <= vw - 2 * MARGIN ? [byX] : [byX.filter((_, k) => k % 2 === 0), byX.filter((_, k) => k % 2 === 1)];
-  let bottom = footerTop - 18;
+  // Spread out when there is room (less cramped on a big beamer): the widest
+  // gap that still fits one row, else two rows with a smaller gap.
+  const width = (row: number[], gap: number) => row.reduce((s, i) => s + sizes[i].w + gap, -gap);
+  const room = vw - 2 * MARGIN;
+  const oneRowGap = [32, 24, 16, GAP].find((g) => width(byX, g) <= room);
+  const rows: number[][] =
+    oneRowGap !== undefined ? [byX] : [byX.filter((_, k) => k % 2 === 0), byX.filter((_, k) => k % 2 === 1)];
+  const rowGap =
+    oneRowGap ?? [24, 16, GAP].find((g) => rows.every((r) => width(r, g) <= room)) ?? GAP;
+  // Vertical room: lift the cards further off the footer (longer, clearer
+  // leader lines) and space the rows more when the screen is tall enough.
+  const roomy = vh >= 700;
+  let bottom = footerTop - (roomy ? 44 : 18);
   for (const row of rows) {
     const h = Math.max(0, ...row.map((i) => sizes[i].h));
     // Keep clear of right-edge handles that sit at this row's height.
@@ -159,11 +169,12 @@ function layout(cards: CardSpec[], sizes: { w: number; h: number }[]): Placed[] 
       row.map((i) => ({ want: (cards[i].anchor.left + cards[i].anchor.right) / 2 - sizes[i].w / 2, size: sizes[i].w })),
       MARGIN,
       Math.min(vw - MARGIN, ...blocking),
+      rowGap,
     );
     row.forEach((i, k) => {
       placed[i] = { x: xs[k], y: bottom - sizes[i].h };
     });
-    bottom -= h + 14;
+    bottom -= h + (roomy ? 40 : 14);
   }
 
   const byY = [...edgeIdx].sort((a, b) => cards[a].anchor.top - cards[b].anchor.top);
@@ -171,10 +182,11 @@ function layout(cards: CardSpec[], sizes: { w: number; h: number }[]): Placed[] 
     byY.map((i) => ({ want: (cards[i].anchor.top + cards[i].anchor.bottom) / 2 - sizes[i].h / 2, size: sizes[i].h })),
     MARGIN,
     Math.max(MARGIN + 1, bottom),
+    roomy ? 20 : GAP,
   );
   byY.forEach((i, k) => {
     const a = cards[i].anchor;
-    const right = a.left - 16;
+    const right = a.left - (roomy ? 32 : 16);
     placed[i] = { x: Math.max(MARGIN, right - sizes[i].w), y: ys[k] };
   });
   return placed;
