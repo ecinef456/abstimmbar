@@ -4,9 +4,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, SquareStop, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import {
   api,
+  live,
   results,
   selfCheck,
   type GenerationJob,
@@ -794,6 +795,10 @@ export default function SetPage() {
   // Recording mode (#53): opt-in before presenting; carried to the beamer via
   // the present URL. Pro feature (hidden in easy mode).
   const [recordMode, setRecordMode] = useState(false);
+  // Unfinished run of this set (spec PR 2): the presenter's ✕ only leaves,
+  // so the survey is ended here („Umfrage beenden").
+  const [activeRun, setActiveRun] = useState<number | null>(null);
+  const [ending, setEnding] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -814,6 +819,10 @@ export default function SetPage() {
       setMaxQuestions(who.ai_generate_max_questions);
     });
     void refreshReviewHint();
+    live
+      .status(id)
+      .then((status) => setActiveRun(status.active_run))
+      .catch(() => setActiveRun(null));
     // Deep link from the app-wide status bar → open the review panel directly.
     if ((location.state as { openReview?: boolean } | null)?.openReview) {
       setReviewOpen(true);
@@ -994,10 +1003,27 @@ export default function SetPage() {
   }
 
   const toastTimer = useRef<number | undefined>(undefined);
-  function showToast(message: string) {
+  function showToast(message: string, ms = 1500) {
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     setToastMessage(message);
-    toastTimer.current = window.setTimeout(() => setToastMessage(""), 1500);
+    toastTimer.current = window.setTimeout(() => setToastMessage(""), ms);
+  }
+
+  /** „Umfrage beenden": finish the unfinished run — participants then see
+   *  the closing screen. */
+  async function endSurvey() {
+    if (activeRun === null || ending) return;
+    setEnding(true);
+    try {
+      await live.control(activeRun, { phase: "finished" });
+      setActiveRun(null);
+      showToast(t("Survey ended — participants now see the closing screen."), 4000);
+      setSet(await api.getQuestionSet(id));
+    } catch (err) {
+      showToast(String(err), 4000);
+    } finally {
+      setEnding(false);
+    }
   }
 
   async function copyQuestionLink(questionId: number) {
@@ -1718,6 +1744,20 @@ export default function SetPage() {
                     <Play aria-hidden className="h-4 w-4" />{t("Present")}
                   </Button>
                 </div>
+              )}
+              {/* The presenter's ✕ only leaves (spec PR 2): an unfinished
+                  run is ended here. */}
+              {activeRun !== null && SET_TYPES[set.type].runAction !== "self_check" && (
+                <Button
+                  variant="danger"
+                  data-testid="end-survey"
+                  title={t("Ends the survey — participants then see the closing screen.")}
+                  disabled={ending}
+                  onClick={() => void endSurvey()}
+                  className="inline-flex items-center gap-1.5 border border-red-200 dark:border-red-900"
+                >
+                  <SquareStop aria-hidden className="h-4 w-4" />{t("End survey")}
+                </Button>
               )}
               {/* Lernkontrolle (#75 phase 3): "run" means publishing the
                   standing link once; once published the panel below carries

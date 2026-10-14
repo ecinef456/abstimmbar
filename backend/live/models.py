@@ -77,6 +77,10 @@ class Run(TimeStampedModel):
     # Presenter pressed "reveal correct answers" (v2): server state, so
     # participant devices can highlight in sync with the beamer.
     answers_revealed = models.BooleanField(default=False)
+    # The presenter left the presentation (✕/Esc) without ending the run:
+    # participant devices show „pausiert" (more questions may follow). Cleared
+    # by any other presenter control and by (re)starting/resuming the run.
+    presenter_away = models.BooleanField(default=False)
     ended_at = models.DateTimeField(null=True, blank=True)
     # Recording mode (#53): when set, this run is "recorded" — viewers of the
     # recording can vote later via a per-question deep link keyed by this token

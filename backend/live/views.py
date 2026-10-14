@@ -1545,6 +1545,8 @@ def start_run(request, set_id):
                         else None
                     )
             run.ended_at = None
+            # The presenter is back: participants leave the „paused" screen.
+            run.presenter_away = False
             if mode == Run.Mode.SELF_PACED and run.first_opened_at is None:
                 run.first_opened_at = timezone.now()
                 if question_set.quiz_time_limit:
@@ -1586,6 +1588,24 @@ def control_run(request, run_id):
         raise Http404
     if not run.is_active:
         return Response({"detail": "Run is finished."}, status=409)
+
+    # Leave without ending (✕/Esc in the presenter): close an open vote and
+    # mark the presenter away so participant devices show „paused". The run
+    # stays unfinished — it is ended from the set overview, or resumed by
+    # presenting again.
+    if request.data.get("away"):
+        run.presenter_away = True
+        fields = ["presenter_away", "updated_at"]
+        if run.phase == Run.Phase.OPEN and run.mode == Run.Mode.LIVE:
+            run.phase = Run.Phase.CLOSED
+            fields.append("phase")
+        run.save(update_fields=fields)
+        broadcast(room)
+        return Response({"status": "ok", "phase": run.phase})
+    # Any other presenter action means the presenter is back.
+    if run.presenter_away:
+        run.presenter_away = False
+        run.save(update_fields=["presenter_away", "updated_at"])
 
     # Reveal correct answers (v2): server state so participant devices
     # highlight in sync with the beamer (presenter key "A").

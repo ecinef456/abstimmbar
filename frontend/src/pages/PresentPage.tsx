@@ -827,11 +827,6 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     }
   };
 
-  // A presenter tab opened via the editor's play button (window.open) keeps a
-  // window.opener and can close itself; a normally-opened tab cannot, so we
-  // only offer "Close window" in the former case (#deep-link-polish).
-  const canCloseWindow = typeof window !== "undefined" && window.opener != null;
-
   const reveal = state?.reveal_answers ?? "after_close";
   const revealed = state?.revealed ?? false;
   // Only single/multiple choice have a correct answer to reveal (#82/#83).
@@ -1275,6 +1270,20 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const leavePresentation = useCallback(() => {
     navigate(`/sets/${id}`);
   }, [navigate, id]);
+  // ✕ / Esc (spec PR 2): leave WITHOUT ending — an open vote is closed and
+  // participants see „paused"; the run is ended from the set overview (or
+  // resumed by presenting again). Always back to the set overview in the same
+  // tab — never closes the window, even when opened from the editor.
+  const leave = useCallback(async () => {
+    if (runId && !selfPaced) {
+      try {
+        await live.control(runId, { away: true });
+      } catch {
+        // leave anyway — the run stays as it is
+      }
+    }
+    leavePresentation();
+  }, [runId, selfPaced, leavePresentation]);
   // Closing slide reached in live mode, run not finished yet (see finish()).
   const [pendingFinish, setPendingFinish] = useState(false);
   const finishAndLeave = useCallback(async () => {
@@ -1387,10 +1396,10 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       } else if (key === "l") {
         toggleSolution();
       } else if (key === "escape") {
-        void finish();
+        void leave();
       }
     },
-    [runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mmStopCloses, pendingFinish, backFromClosing, finishAndLeave],
+    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mmStopCloses, pendingFinish, backFromClosing, finishAndLeave],
   );
 
   useEffect(() => {
@@ -1713,8 +1722,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               requestGoto(target - 1);
             }}
             onNext={confirmInterstitial}
-            onFinish={() => void finish()}
-            onCloseWindow={canCloseWindow ? () => window.close() : undefined}
+            onLeave={() => void leave()}
             onHelp={() => setShowHelp(true)}
             helpShown={showHelp}
           />
@@ -1830,8 +1838,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
           onSelectView={(seg) => selectView(seg as ViewSegment<WcView>)}
           joinShown={showJoin}
           onToggleJoin={() => setShowJoin((v) => !v)}
-          onFinish={() => void finish()}
-          onCloseWindow={canCloseWindow ? () => window.close() : undefined}
+          onLeave={() => void leave()}
           onHelp={() => setShowHelp(true)}
           helpShown={showHelp}
         />

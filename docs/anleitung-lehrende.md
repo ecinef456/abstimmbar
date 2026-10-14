@@ -72,7 +72,7 @@ ausprobieren und jederzeit löschen.
    Oktober 2026), stellt der Rundgang auch sie vor.
 5. Den Präsentationsmodus: Beitritt per QR- oder Raumcode, Abstimmung starten
    und stoppen, zwischen Frage, Ergebnis und Lösung umschalten, zur nächsten
-   Frage wechseln und beenden.
+   Frage wechseln und die Präsentation verlassen.
 6. Die Ergebnisse: wo Sie sie im Set aufrufen, frühere (archivierte)
    Durchführungen auswählen, als CSV exportieren oder löschen.
 
@@ -256,7 +256,18 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     „Ansehen“-Taste: Eine laufende Abstimmung schließt sie nie.
 - **‹ ›** bzw. die Pfeiltasten **← →** wechseln zur vorigen bzw. nächsten
   Frage.
-- Das rote **✕** (Esc) beendet die Präsentation und speichert die Ergebnisse.
+- Das rote **✕** (Esc) **verlässt** die Präsentation, ohne die Umfrage zu
+  beenden: Eine laufende Abstimmung wird geschlossen, Sie kehren zur Übersicht
+  des Fragensets zurück, und die Teilnehmenden sehen „Die Präsentation ist
+  gerade pausiert – es können noch weitere Fragen folgen.“ (mit einem Knopf,
+  um ihre Antworten anzusehen). Präsentieren Sie innerhalb von zwei Stunden
+  erneut, geht es dort weiter, wo Sie aufgehört haben; sobald Sie eine neue
+  Abstimmung starten, springen die Geräte der Teilnehmenden automatisch zur
+  Frage. Blättern Sie mit → über die letzte Frage hinaus, erscheint der
+  Schlussbildschirm; eine beliebige Taste beendet dann die Umfrage.
+- **Umfrage beenden:** In der Übersicht des Fragensets steht, solange eine
+  Durchführung läuft, der Knopf **Umfrage beenden**. Danach sehen die
+  Teilnehmenden den Schlussbildschirm; die Ergebnisse bleiben gespeichert.
 - Rechts außen öffnet **?** (oder die Taste H) die **Hilfe**: Der Bildschirm
   wird abgedunkelt, und an jedem gerade sichtbaren Knopf und an jeder Lasche am
   rechten Rand steht, was er tut und welche Taste dazugehört; unten in der

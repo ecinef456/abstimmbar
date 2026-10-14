@@ -301,7 +301,7 @@ export default function HelpOverlay({
   if (ids.has("toggle")) keyRows.push([t("S · Enter · Space"), t("Start / Stop")]);
   if (ids.has("prev") || ids.has("next")) keyRows.push(["← →", t("Previous / next question")]);
   if (ids.has("handle.zoom")) keyRows.push(["+ − 0", t("Zoom")]);
-  if (ids.has("end")) keyRows.push(["Esc", t("End")]);
+  if (ids.has("end")) keyRows.push(["Esc", t("Leave presentation")]);
   keyRows.push(["? / H", t("Help")]);
 
   const ready = placed !== null && placed.length === cards.length ? placed : null;

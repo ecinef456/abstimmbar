@@ -8,7 +8,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  AppWindow,
   BarChart3,
   BrushCleaning,
   ChevronLeft,
@@ -66,8 +65,11 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
     text: "Participants add terms again; the ratings are kept.",
   },
   toggle: { name: "Start / Stop", text: "Opens or closes voting on this question.", keys: "S" },
-  end: { name: "End", text: "Ends the presentation and stores the results.", keys: "Esc" },
-  "close-window": { name: "Close window", text: "Closes this presentation window." },
+  end: {
+    name: "Leave presentation",
+    text: "The survey stays open; end it in the set overview.",
+    keys: "Esc",
+  },
   prev: { name: "Previous question", text: "Goes back one question.", keys: "←" },
   next: { name: "Next question", text: "Moves on to the next question.", keys: "→" },
   help: { name: "Help", text: "Labels every control.", keys: "? / H" },
@@ -270,8 +272,8 @@ export function Footer(props: {
   disabledViews?: Set<string>;
   disabledViewReason?: string;
   onSelectView?: (seg: ViewSegment) => void;
-  onFinish: () => void;
-  onCloseWindow?: () => void;
+  /** ✕ / Esc: leave the presentation without ending the survey. */
+  onLeave: () => void;
   joinShown?: boolean;
   onToggleJoin?: () => void;
   /** "?" help (labels every control); hidden until wired. */
@@ -367,14 +369,6 @@ export function Footer(props: {
           </button>
         )}
         <div data-tour="present.nav" className="flex items-center gap-2">
-          {props.onCloseWindow && (
-            <FooterIconButton
-              help="close-window"
-              label={name("close-window")}
-              icon={AppWindow}
-              onClick={props.onCloseWindow}
-            />
-          )}
           <FooterIconButton help="prev" label={name("prev")} keys="←" icon={ChevronLeft} onClick={props.onPrev} />
           <FooterIconButton
             help="next"
@@ -397,13 +391,14 @@ export function Footer(props: {
             pressed={props.helpShown}
           />
         )}
-        {/* End sits last, set apart in red (it ends the session). */}
+        {/* Leave sits last, set apart in red (the survey itself stays open). */}
         <FooterIconButton
           help="end"
           label={name("end")}
           keys="Esc"
+          detail={t(PRESENTER_HELP.end.text)}
           icon={X}
-          onClick={props.onFinish}
+          onClick={props.onLeave}
           className="ml-2 border-red-600 bg-red-600 text-white hover:bg-red-700"
         />
       </div>

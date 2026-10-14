@@ -7641,3 +7641,89 @@ class MindmapRatingFixRoundTests(MindmapRatingTestCase):
 
     def stage_open(self, stage, value):
         return self.owner_mod("stage", stage=stage, open=value)
+
+
+class PresenterAwayTests(LiveTestCase):
+    """✕/Esc in the presenter leaves without ending (spec PR 2): the run is
+    marked ``presenter_away`` (participants see „paused"), an open vote is
+    closed, and the flag clears on any other control or on (re)start."""
+
+    def control(self, run, **data):
+        return self.client.post(
+            f"/api/runs/{run.pk}/control/", data, content_type="application/json"
+        )
+
+    def test_away_closes_open_vote_and_pauses_without_finishing(self):
+        run = self.open_question()
+        self.client.force_login(self.owner)
+        response = self.control(run, away=True)
+        self.assertEqual(response.status_code, 200)
+        run.refresh_from_db()
+        self.assertTrue(run.presenter_away)
+        self.assertEqual(run.phase, Run.Phase.CLOSED)
+        self.assertIsNone(run.ended_at)
+        self.assertTrue(build_payloads(self.room)["participant"]["paused"])
+        self.assertNotIn("paused", build_payloads(self.room)["presenter"])
+
+    def test_away_keeps_non_open_phase(self):
+        run = self.open_question()
+        run.phase = Run.Phase.RESULTS
+        run.save()
+        self.client.force_login(self.owner)
+        self.control(run, away=True)
+        run.refresh_from_db()
+        self.assertEqual(run.phase, Run.Phase.RESULTS)
+        self.assertTrue(run.presenter_away)
+
+    def test_other_control_clears_away(self):
+        run = self.open_question()
+        run.presenter_away = True
+        run.phase = Run.Phase.CLOSED
+        run.save()
+        self.client.force_login(self.owner)
+        self.control(run, phase="open")
+        run.refresh_from_db()
+        self.assertFalse(run.presenter_away)
+        self.assertNotIn("paused", build_payloads(self.room)["participant"])
+        run.presenter_away = True
+        run.save()
+        self.control(run, reveal=True)
+        run.refresh_from_db()
+        self.assertFalse(run.presenter_away)
+
+    def test_start_run_clears_away(self):
+        run = self.open_question()
+        run.presenter_away = True
+        run.save()
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            f"/api/question-sets/{self.question_set.pk}/start-run/",
+            {"existing": "continue"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.json()["run"], run.pk)
+        run.refresh_from_db()
+        self.assertFalse(run.presenter_away)
+
+    def test_finished_run_shows_no_paused(self):
+        run = self.open_question()
+        run.presenter_away = True
+        run.save()
+        self.client.force_login(self.owner)
+        self.assertEqual(self.control(run, phase="finished").status_code, 200)
+        participant = build_payloads(self.room)["participant"]
+        self.assertEqual(participant["phase"], "finished")
+        self.assertNotIn("paused", participant)
+        # A finished run can't be marked away any more.
+        self.assertEqual(self.control(run, away=True).status_code, 409)
+
+    def test_away_is_owner_only(self):
+        run = self.open_question()
+        stranger = User.objects.create_user(username="mallory")
+        self.client.force_login(stranger)
+        self.assertEqual(self.control(run, away=True).status_code, 404)
+        self.client.logout()
+        self.assertIn(self.control(run, away=True).status_code, (401, 403))
+        run.refresh_from_db()
+        self.assertFalse(run.presenter_away)
+        self.assertEqual(run.phase, Run.Phase.OPEN)

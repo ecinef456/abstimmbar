@@ -172,7 +172,7 @@ test('tour: sections, progress, Back across pages, skip section, arrow keys, min
     'Joining',
     'Start and stop voting',
     'Choose what the projector shows',
-    'Next question and end',
+    'Next question and leave',
     'Help on the projector',
   ]);
   await expect(page).toHaveURL(/\/sets\/\d+$/);
