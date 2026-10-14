@@ -674,6 +674,11 @@ export default function ResultsPage() {
                               rating={question.mindmap?.rating}
                             />
                           )}
+                          {question.kind === "matrix" && (
+                            <span className="text-slate-400">
+                              {t("Results for this question type follow on the beamer.")}
+                            </span>
+                          )}
                           {question.words && question.kind === "word_cloud" && (
                             <WordCloudResult
                               runId={run.run}

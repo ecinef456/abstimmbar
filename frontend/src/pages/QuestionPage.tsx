@@ -9,6 +9,8 @@ import {
   API_BASE_URL,
   api,
   type AnswerOption,
+  type MatrixCategory,
+  type MatrixCategoryMode,
   type MindmapRatingMode,
   type Question,
   type QuestionSet,
@@ -35,6 +37,7 @@ import MindmapSeedEditor, {
   type EditableSeedNode,
 } from "../components/MindmapSeedEditor";
 import HomeCrumb from "../components/HomeCrumb";
+import MatrixSettings, { matrixProblem } from "../components/MatrixSettings";
 import SortableList from "../components/SortableList";
 import TranslatableField from "../components/TranslatableField";
 import { Button, Field, InfoHint, MenuItem, MoreMenu, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
@@ -87,13 +90,13 @@ let nextClientId = -1;
 // query param on a new (unsaved) question.
 const QUESTION_KINDS = [
   "single_choice", "multiple_choice", "word_cloud", "likert",
-  "open_text", "priorities", "ordering", "mindmap",
+  "open_text", "priorities", "ordering", "mindmap", "matrix",
 ] as const;
 
 /** Per-kind default options for a brand-new question, moved out of
  * `SetPage.addQuestion` now that creation is deferred to the first save. */
 function defaultOptions(kind: string, template?: string | null): EditableOption[] {
-  if (kind === "word_cloud" || kind === "open_text" || kind === "likert" || kind === "mindmap") return [];
+  if (kind === "word_cloud" || kind === "open_text" || kind === "likert" || kind === "mindmap" || kind === "matrix") return [];
   // The binary preset starts as Ja/Nein; the editor's template quick-fill
   // lets the author switch to Wahr/Falsch or type their own (#79).
   const texts = template === "binary" ? ["Ja", "Nein"] : ["", "", ""];
@@ -260,6 +263,16 @@ export default function QuestionPage() {
   const [mindmapAiTranslate, setMindmapAiTranslate] = useState(true);
   const [mindmapAiTargetLang, setMindmapAiTargetLang] = useState<"" | "de" | "en">("");
   const [mindmapAiRestructure, setMindmapAiRestructure] = useState(true);
+  // Four-field matrix: axis labels, switches, card cap and categories.
+  const [matrixXFrom, setMatrixXFrom] = useState<LocalizedText>(emptyLoc);
+  const [matrixXTo, setMatrixXTo] = useState<LocalizedText>(emptyLoc);
+  const [matrixYFrom, setMatrixYFrom] = useState<LocalizedText>(emptyLoc);
+  const [matrixYTo, setMatrixYTo] = useState<LocalizedText>(emptyLoc);
+  const [matrixEdges, setMatrixEdges] = useState(false);
+  const [matrixDescriptions, setMatrixDescriptions] = useState(false);
+  const [matrixMaxPerPerson, setMatrixMaxPerPerson] = useState(10);
+  const [matrixCategoryMode, setMatrixCategoryMode] = useState<MatrixCategoryMode>("off");
+  const [matrixCategories, setMatrixCategories] = useState<MatrixCategory[]>([]);
   // Server refusal for the rating mode (locked while a running session has
   // ratings), shown at the field.
   const [ratingModeError, setRatingModeError] = useState("");
@@ -360,6 +373,15 @@ export default function QuestionPage() {
       setMindmapAiTranslate(data.mindmap_ai_translate ?? true);
       setMindmapAiTargetLang(data.mindmap_ai_target_lang ?? "");
       setMindmapAiRestructure(data.mindmap_ai_restructure ?? true);
+      setMatrixXFrom(data.matrix_x_from ?? emptyLoc);
+      setMatrixXTo(data.matrix_x_to ?? emptyLoc);
+      setMatrixYFrom(data.matrix_y_from ?? emptyLoc);
+      setMatrixYTo(data.matrix_y_to ?? emptyLoc);
+      setMatrixEdges(data.matrix_edges ?? false);
+      setMatrixDescriptions(data.matrix_descriptions ?? false);
+      setMatrixMaxPerPerson(data.matrix_max_per_person ?? 10);
+      setMatrixCategoryMode(data.matrix_category_mode ?? "off");
+      setMatrixCategories(data.matrix_categories ?? []);
       setTimeLimit(data.time_limit ? String(data.time_limit) : "");
       // Options keep the full {de, en} map so each can be edited bilingually
       // (#33 MR2 Task 9).
@@ -520,7 +542,9 @@ export default function QuestionPage() {
           ? t("Question text is required.")
           : mindmapProblem
             ? t(mindmapProblem.key, mindmapProblem.values)
-            : t("Add at least two answer options, each with text."),
+            : matrixIssue
+              ? t(matrixIssue.key, matrixIssue.values)
+              : t("Add at least two answer options, each with text."),
       );
       return false;
     }
@@ -585,13 +609,33 @@ export default function QuestionPage() {
               mindmap_ai_restructure: mindmapAiRestructure,
             }
           : {}),
+        // Matrix settings only for a matrix.
+        ...(question.kind === "matrix"
+          ? {
+              matrix_x_from: matrixXFrom,
+              matrix_x_to: matrixXTo,
+              matrix_y_from: matrixYFrom,
+              matrix_y_to: matrixYTo,
+              matrix_edges: matrixEdges,
+              matrix_descriptions: matrixDescriptions,
+              matrix_max_per_person: matrixMaxPerPerson,
+              matrix_category_mode: matrixCategoryMode,
+              matrix_categories:
+                matrixCategoryMode === "off"
+                  ? []
+                  : matrixCategories.map((c) => ({
+                      key: c.key,
+                      name: matrixCategoryMode === "named" ? c.name : { de: "", en: "" },
+                    })),
+            }
+          : {}),
         time_limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : null,
         // #91: report fields whose (non-canonical) translation now matches
         // what's being saved, so the API re-baselines their sync state.
         synced_fields: Array.from(new Set([...syncedFields, ...extraSynced])),
         options:
           question.kind === "word_cloud" || question.kind === "open_text" ||
-          question.kind === "mindmap"
+          question.kind === "mindmap" || question.kind === "matrix"
             ? []
             : question.kind === "likert"
               ? likertOptions()
@@ -770,10 +814,12 @@ export default function QuestionPage() {
   if (!question) return null;
   const isLikert = question.kind === "likert";
   const isMindmap = question.kind === "mindmap";
+  const isMatrix = question.kind === "matrix";
   const isChoice =
     question.kind !== "word_cloud" &&
     question.kind !== "open_text" &&
     !isMindmap &&
+    !isMatrix &&
     !isLikert;
   const isPriorities = question.kind === "priorities";
   const isOrdering = question.kind === "ordering";
@@ -802,7 +848,13 @@ export default function QuestionPage() {
   const mindmapProblem = isMindmap
     ? seedProblem(fromEditableSeed(mindmapSeed), mindmapDepth)
     : null;
-  const invalid = textMissing || optionsMissing || !!mindmapProblem;
+  const matrixValue = {
+    xFrom: matrixXFrom, xTo: matrixXTo, yFrom: matrixYFrom, yTo: matrixYTo,
+    edges: matrixEdges, descriptions: matrixDescriptions, maxPerPerson: matrixMaxPerPerson,
+    categoryMode: matrixCategoryMode, categories: matrixCategories,
+  };
+  const matrixIssue = isMatrix ? matrixProblem(matrixValue) : null;
+  const invalid = textMissing || optionsMissing || !!mindmapProblem || !!matrixIssue;
 
   // Serialized editable state — compared against the baseline to know whether
   // there are unsaved changes before paging to another question (#92).
@@ -824,6 +876,8 @@ export default function QuestionPage() {
       mindmapHighlight, mindmapSeed: fromEditableSeed(mindmapSeed),
       mindmapRatingMode, mindmapRatingBudget, mindmapRatingMulti, mindmapRatingLive,
       mindmapAiMerge, mindmapAiTranslate, mindmapAiTargetLang, mindmapAiRestructure,
+      matrixXFrom, matrixXTo, matrixYFrom, matrixYTo, matrixEdges, matrixDescriptions,
+      matrixMaxPerPerson, matrixCategoryMode, matrixCategories,
     });
   }
 
@@ -1444,6 +1498,23 @@ export default function QuestionPage() {
             </label>
 
           </div>
+        )}
+
+        {isMatrix && (
+          <MatrixSettings
+            value={matrixValue}
+            onChange={(v) => {
+              setMatrixXFrom(v.xFrom);
+              setMatrixXTo(v.xTo);
+              setMatrixYFrom(v.yFrom);
+              setMatrixYTo(v.yTo);
+              setMatrixEdges(v.edges);
+              setMatrixDescriptions(v.descriptions);
+              setMatrixMaxPerPerson(v.maxPerPerson);
+              setMatrixCategoryMode(v.categoryMode);
+              setMatrixCategories(v.categories);
+            }}
+          />
         )}
 
         {isMindmap && (

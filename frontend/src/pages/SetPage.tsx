@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, SquareStop, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Grid2x2, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, SquareStop, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import {
   api,
   live,
@@ -52,6 +52,7 @@ export const KIND_LABEL: Record<QuestionKind, string> = {
   priorities: "Priorities",
   ordering: "Ordering",
   mindmap: "Mind map",
+  matrix: "Four-field matrix",
 };
 
 // Kinds whose answers are options (mirror of backend Question.CHOICE_KINDS) —
@@ -489,6 +490,13 @@ const QUESTION_TYPES: {
     group: "open",
     label: "Mind map",
     description: "Build a mind map together, live on the beamer.",
+  },
+  {
+    kind: "matrix",
+    icon: Grid2x2,
+    group: "open",
+    label: "Four-field matrix",
+    description: "Sort cards into four fields between two axes.",
   },
 ];
 
