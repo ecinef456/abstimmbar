@@ -15,6 +15,7 @@ from django.db import IntegrityError, models
 
 from common.models import TimeStampedModel
 
+from . import matrix as mx
 from . import mindmap as mm
 from .wordlist import WORDS
 
@@ -303,6 +304,9 @@ class Question(TimeStampedModel):
         # Shared live tree of terms (stage 1): contributions are live
         # MindmapNode rows, not Votes; no AnswerOptions.
         MINDMAP = "mindmap", "Mindmap"
+        # Four-field matrix (stage 1): cards placed in the fields of a 2-axis
+        # cross; live MatrixCard rows, not Votes; no AnswerOptions.
+        MATRIX = "matrix", "Four-field matrix"
 
     # Kinds whose answers are AnswerOption rows (vs. free text).
     CHOICE_KINDS = ("single_choice", "multiple_choice", "likert")
@@ -310,7 +314,7 @@ class Question(TimeStampedModel):
     # is deliberately NOT here: its terms live in their own tables.
     TEXT_KINDS = ("word_cloud", "open_text")
     # Kinds that never have AnswerOption rows.
-    OPTIONLESS_KINDS = (*TEXT_KINDS, "mindmap")
+    OPTIONLESS_KINDS = (*TEXT_KINDS, "mindmap", "matrix")
 
     question_set = models.ForeignKey(
         QuestionSet, on_delete=models.CASCADE, related_name="questions"
@@ -447,6 +451,30 @@ class Question(TimeStampedModel):
         max_length=8, choices=settings.LANGUAGES, blank=True, default=""
     )
     mindmap_ai_restructure = models.BooleanField(default=True)
+    # Four-field matrix settings (rooms/matrix.py) — only meaningful for
+    # kind == MATRIX. The four axis labels are translatable (*_de/_en) and
+    # required in the canonical language.
+    matrix_x_from = models.CharField(max_length=mx.MATRIX_AXIS_LABEL_MAX, blank=True, default="")
+    matrix_x_to = models.CharField(max_length=mx.MATRIX_AXIS_LABEL_MAX, blank=True, default="")
+    matrix_y_from = models.CharField(max_length=mx.MATRIX_AXIS_LABEL_MAX, blank=True, default="")
+    matrix_y_to = models.CharField(max_length=mx.MATRIX_AXIS_LABEL_MAX, blank=True, default="")
+    # Cards may also be placed on the four axis lines.
+    matrix_edges = models.BooleanField(default=False)
+    # Participants enter a title + optional description per card.
+    matrix_descriptions = models.BooleanField(default=False)
+    # Cards one participant may place.
+    matrix_max_per_person = models.PositiveSmallIntegerField(
+        default=mx.MATRIX_DEFAULT_MAX_PER_PERSON,
+        validators=[
+            MinValueValidator(mx.MATRIX_MIN_MAX_PER_PERSON),
+            MaxValueValidator(mx.MATRIX_MAX_PER_PERSON_LIMIT),
+        ],
+    )
+    matrix_category_mode = models.CharField(
+        max_length=10, choices=mx.CATEGORY_MODE_CHOICES, default=mx.CATEGORY_OFF
+    )
+    # [{"key": palette key, "name": {lang: text}}], ≤ 6 (mx.clean_categories).
+    matrix_categories = models.JSONField(default=list, blank=True)
 
     class RevealAnswers(models.TextChoices):
         # Per-question override of when correct answers are highlighted (#28).

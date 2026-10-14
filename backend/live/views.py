@@ -36,6 +36,7 @@ from rooms.models import AnswerOption, Question, QuestionSet, Room
 
 from . import (
     ai_evaluation,
+    matrix,
     mindmap,
     ai_freetext,
     ai_freetext_summary,
@@ -178,6 +179,8 @@ def question_preview(request, question_id):
     }
     if question.kind == Question.Kind.MINDMAP:
         preview_state["mindmap"] = mindmap.preview_tree(question)
+    elif question.kind == Question.Kind.MATRIX:
+        preview_state["matrix_settings"] = matrix.settings_payload(question)
     response = render(
         request,
         "live/participant.html",
@@ -338,6 +341,10 @@ def vote(request, code):
                     {"detail": "Time is up."}, status=status.HTTP_409_CONFLICT
                 )
 
+    if question.kind == Question.Kind.MATRIX:
+        return Response(
+            {"detail": "Matrix cards are added via the matrix."}, status=400
+        )
     # Mind maps collect terms via the dedicated mind-map endpoints.
     if question.kind == Question.Kind.MINDMAP:
         return Response(
@@ -820,6 +827,207 @@ def mindmap_mine(request, code):
     return Response({"nodes": mindmap.own_node_ids(run, question, token)})
 
 
+# --- four-field matrix: cards on a 2-axis board, token-scoped ---------------
+
+
+def _matrix_context(request, code):
+    """(room, token, run, question) for a contributing matrix request, or a
+    refusal Response. Like ``_mindmap_context``: open phase of a live run
+    with this matrix question active and its countdown not expired."""
+    room = _room_by_code(code)
+    token = ParticipantToken.objects.filter(
+        room=room, key=request.data.get("token", "")
+    ).first()
+    if token is None:
+        return Response({"detail": "Unknown participant token."}, status=403)
+    run = active_run(room)
+    if (
+        run is None
+        or run.phase != Run.Phase.OPEN
+        or run.mode != Run.Mode.LIVE
+        or run.active_question is None
+    ):
+        return Response({"detail": "Voting is closed."}, status=status.HTTP_409_CONFLICT)
+    question = run.active_question
+    if question.kind != Question.Kind.MATRIX:
+        return Response({"detail": "Not a matrix question."}, status=400)
+    if str(request.data.get("question")) != str(question.pk):
+        return Response(
+            {"detail": "Question is not open."}, status=status.HTTP_409_CONFLICT
+        )
+    if question.time_limit and run.opened_at:
+        deadline = run.opened_at + timezone.timedelta(seconds=question.time_limit + 1)
+        if timezone.now() > deadline:
+            return Response({"detail": "Time is up."}, status=status.HTTP_409_CONFLICT)
+    return room, token, run, question
+
+
+def _text_field(data, field):
+    value = data.get(field, "")
+    return value if isinstance(value, str) else ""
+
+
+@api_view(["POST"])
+def matrix_add(request, code):
+    """Place a new card in ``zone``: ``{token, question, zone, title,
+    category?, description?}`` → 201 ``{card_id, mine}``."""
+    context = _matrix_context(request, code)
+    if isinstance(context, Response):
+        return context
+    room, token, run, question = context
+    try:
+        card = matrix.add_card(
+            run, question, token,
+            request.data.get("zone"),
+            _text_field(request.data, "title"),
+            _text_field(request.data, "category"),
+            _text_field(request.data, "description"),
+        )
+    except matrix.MatrixError as error:
+        return Response(error.body(), status=error.status)
+    broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
+    return Response(
+        {"card_id": card.pk, "mine": matrix.mine_payload(run, question, token)},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+def matrix_remove(request, code):
+    """Withdraw the caller's own card: ``{token, question, card}``."""
+    context = _matrix_context(request, code)
+    if isinstance(context, Response):
+        return context
+    room, token, run, question = context
+    try:
+        matrix.remove_card(run, question, token, mindmap._parse_id(request.data.get("card")))
+    except matrix.MatrixError as error:
+        return Response(error.body(), status=error.status)
+    broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
+    return Response({"status": "ok", "mine": matrix.mine_payload(run, question, token)})
+
+
+@api_view(["POST"])
+def matrix_mine(request, code):
+    """The CALLER's own cards in the active run, in any phase (so the page
+    still shows them after closing). Never anyone else's data."""
+    room = _room_by_code(code)
+    token = ParticipantToken.objects.filter(
+        room=room, key=request.data.get("token", "")
+    ).first()
+    if token is None:
+        return Response({"detail": "Unknown participant token."}, status=403)
+    run = active_run(room)
+    if run is None:
+        return Response({"mine": []})
+    question = Question.objects.filter(
+        question_set=run.question_set, kind=Question.Kind.MATRIX,
+        pk=mindmap._parse_id(request.data.get("question")),
+    ).first()
+    if question is None:
+        return Response({"detail": "Unknown question."}, status=404)
+    return Response({"mine": matrix.mine_payload(run, question, token)})
+
+
+def _matrix_moderate(request, run_id, question_id, action, http_status=200):
+    """Owner-only shell for the presenter endpoints: 404 for anyone else and
+    for non-matrix questions, MatrixError mapping, board echo + broadcast."""
+    run = get_object_or_404(
+        Run.objects.select_related("question_set__room"), pk=run_id
+    )
+    room = run.question_set.room
+    if not _require_owner(request.user, room):
+        raise Http404
+    question = get_object_or_404(
+        Question, pk=question_id, question_set=run.question_set,
+        kind=Question.Kind.MATRIX,
+    )
+    if not isinstance(request.data, dict):
+        return Response({"detail": "Invalid request."}, status=400)
+    try:
+        action(run, question, request.data)
+    except matrix.MatrixError as error:
+        return Response(error.body(), status=error.status)
+    broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
+    return Response(
+        {"matrix": matrix.board_payload(run, question, presenter=True)}, status=http_status
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_move(request, run_id, question_id):
+    """Presenter: ``{card, x, y}`` — drop a card (its stack) at a point."""
+    return _matrix_moderate(
+        request, run_id, question_id,
+        lambda run, q, d: matrix.move_card(
+            run, q, mindmap._parse_id(d.get("card")), d.get("x"), d.get("y")
+        ),
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_stack(request, run_id, question_id):
+    """Presenter: ``{card, onto}`` — put a card (with its stack) onto another."""
+    return _matrix_moderate(
+        request, run_id, question_id,
+        lambda run, q, d: matrix.stack_card(
+            run, q, mindmap._parse_id(d.get("card")), mindmap._parse_id(d.get("onto"))
+        ),
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_unstack(request, run_id, question_id):
+    """Presenter: ``{card}`` — take a card out of its stack."""
+    return _matrix_moderate(
+        request, run_id, question_id,
+        lambda run, q, d: matrix.unstack_card(run, q, mindmap._parse_id(d.get("card"))),
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_hide(request, run_id, question_id):
+    """Presenter: ``{card, hidden: bool}`` — hide/unhide for everyone."""
+
+    def action(run, question, data):
+        hidden = data.get("hidden")
+        if not isinstance(hidden, bool):
+            raise matrix.MatrixError("hidden must be true or false.")
+        matrix.set_hidden(run, question, mindmap._parse_id(data.get("card")), hidden)
+
+    return _matrix_moderate(request, run_id, question_id, action)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_teacher_add(request, run_id, question_id):
+    """Presenter adds a card: ``{zone, title, category?, description?}``."""
+    return _matrix_moderate(
+        request, run_id, question_id,
+        lambda run, q, d: matrix.add_teacher_card(
+            run, q, d.get("zone"), _text_field(d, "title"),
+            _text_field(d, "category"), _text_field(d, "description"),
+        ),
+        http_status=201,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_teacher_delete(request, run_id, question_id):
+    """Undo of a presenter's add: ``{card}``."""
+    return _matrix_moderate(
+        request, run_id, question_id,
+        lambda run, q, d: matrix.delete_teacher_card(
+            run, q, mindmap._parse_id(d.get("card"))
+        ),
+    )
+
+
 @api_view(["POST"])
 def mindmap_rate(request, code):
     """Rating phase: one rating step on an entry. ``{token, question, node,
@@ -923,6 +1131,8 @@ def _parse_answer(question, data):
 
 def _question_results(run, question):
     """Combined per-question results (all sources) for the viewer client."""
+    if question.kind == Question.Kind.MATRIX:
+        return {"matrix": matrix.board_payload(run, question, presenter=False)}
     if question.kind == Question.Kind.MINDMAP:
         return {"mindmap": mindmap.build_tree(run, question, presenter=False)}
     if question.kind in Question.TEXT_KINDS:
@@ -949,7 +1159,9 @@ def recording_questions(request, token):
     # Mind maps are built live only — a recording viewer can't contribute
     # after the fact, so they are not listed at all.
     questions = list(
-        run.question_set.questions.exclude(kind=Question.Kind.MINDMAP)
+        run.question_set.questions.exclude(
+            kind__in=(Question.Kind.MINDMAP, Question.Kind.MATRIX)
+        )
         .prefetch_related("options")
     )
     feedback = run.question_set.reveal_answers != "never"
@@ -1008,6 +1220,10 @@ def recording_vote(request, token):
     ).first()
     if question is None:
         return Response({"detail": "Unknown question."}, status=400)
+    if question.kind == Question.Kind.MATRIX:
+        return Response(
+            {"detail": "Matrix cards are added via the matrix."}, status=400
+        )
     if question.kind == Question.Kind.MINDMAP:
         # Mind maps are built live only; recordings cannot add terms.
         return Response(
@@ -2441,7 +2657,9 @@ def results_csv(request, set_id):
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
     header = ["durchfuehrung", "gestartet", "frage_nr", "frage", "antwort", "richtig",
-              "stimmen", "vor_ort", "aufzeichnung", "prozent", "bewertung"]
+              "stimmen", "vor_ort", "aufzeichnung", "prozent", "bewertung",
+              # Matrix cards only (empty for every other kind).
+              "beschreibung", "kategorie", "zone", "x", "y", "stapel"]
     writer.writerow(header)
     raw_writerow = writer.writerow
 
@@ -2481,6 +2699,16 @@ def results_csv(request, set_id):
                     )
                     writer.writerow(
                         base + [csv_safe(path), "", count, "", "", "", csv_safe(cell)]
+                    )
+            elif question.kind == Question.Kind.MATRIX:
+                # One row per visible card: title in "antwort", one vote each,
+                # the card's details in the trailing matrix columns.
+                for card in matrix.csv_rows(run, question):
+                    writer.writerow(
+                        base
+                        + [csv_safe(card["title"]), "", 1, "", "", "", ""]
+                        + [csv_safe(card[key]) for key in ("description", "category", "zone")]
+                        + [card["x"], card["y"], csv_safe(card["stack"])]
                     )
             elif question.kind in Question.TEXT_KINDS:
                 for word in words_with_counts(run, question, limit=100000):

@@ -18,7 +18,7 @@ from rest_framework import serializers
 from common.i18n_fields import LANGS, TranslatedMapMixin
 from common.serializers import TranslationSyncMixin
 
-from . import mindmap, set_types
+from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Room, Section, UploadedImage
 from .naming import generate_default_titles
 from .sanitize import clean_html, clean_media_url
@@ -390,7 +390,10 @@ class AnswerOptionSerializer(TranslatedMapMixin, serializers.ModelSerializer):
 class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.ModelSerializer):
     # text is a {"de","en"} map (#33 MR2); validate_text (HTML sanitizing)
     # keeps running — the mixin invokes it per language.
-    translated_fields = ("text", "mindmap_root")
+    translated_fields = (
+        "text", "mindmap_root",
+        "matrix_x_from", "matrix_x_to", "matrix_y_from", "matrix_y_to",
+    )
 
     # Stale-translation detection (#91): translation_stale (read) reports
     # which languages of `text` look out of date; synced_fields (write)
@@ -427,6 +430,9 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
             "mindmap_rating_mode", "mindmap_rating_budget", "mindmap_rating_multi",
             "mindmap_rating_live", "mindmap_ai_merge", "mindmap_ai_translate",
             "mindmap_ai_target_lang", "mindmap_ai_restructure",
+            "matrix_x_from", "matrix_x_to", "matrix_y_from", "matrix_y_to",
+            "matrix_edges", "matrix_descriptions", "matrix_max_per_person",
+            "matrix_category_mode", "matrix_categories",
             "reveal_answers", "before_question", "after_question", "is_after",
             "created_at", "updated_at",
         ]
@@ -542,6 +548,46 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                 attrs["mindmap_seed"] = mindmap.clean_seed(seed, depth, strict=True)
             except mindmap.SeedError as exc:
                 raise serializers.ValidationError({"mindmap_seed": str(exc)}) from exc
+        # Matrix: all four axis labels are required (canonical language);
+        # categories must fit the (possibly changed) mode.
+        if kind == Question.Kind.MATRIX:
+            canonical_lang = CONTENT_DEFAULT_LANGUAGE
+            for base in matrix.AXIS_LABEL_FIELDS:
+                col = f"{base}_{canonical_lang}"
+                label = attrs[col] if col in attrs else (
+                    getattr(self.instance, col, "") if self.instance else ""
+                )
+                if not (label or "").strip():
+                    raise serializers.ValidationError(
+                        {base: "This axis label is required."}
+                    )
+            if (
+                self.instance is None
+                or "kind" in attrs
+                or "matrix_category_mode" in attrs
+                or "matrix_categories" in attrs
+            ):
+                mode = attrs.get(
+                    "matrix_category_mode",
+                    getattr(self.instance, "matrix_category_mode", matrix.CATEGORY_OFF),
+                )
+                categories = attrs.get(
+                    "matrix_categories",
+                    getattr(self.instance, "matrix_categories", []),
+                )
+                try:
+                    attrs["matrix_categories"] = matrix.clean_categories(
+                        categories, mode
+                    )
+                except matrix.CategoryError as exc:
+                    raise serializers.ValidationError(
+                        {"matrix_categories": str(exc)}
+                    ) from exc
+        elif "kind" in attrs or "matrix_category_mode" in attrs or "matrix_categories" in attrs:
+            # Other kinds carry no matrix settings: never keep junk that a
+            # later kind change to matrix (or the SSE payloads) would trip on.
+            attrs["matrix_category_mode"] = matrix.CATEGORY_OFF
+            attrs["matrix_categories"] = []
         # A section must belong to the same set as the question.
         section = attrs.get("section")
         if section is not None:

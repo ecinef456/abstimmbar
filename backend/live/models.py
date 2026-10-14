@@ -381,3 +381,46 @@ class MindmapRating(models.Model):
         constraints: ClassVar = [
             models.UniqueConstraint(fields=["node", "token"], name="one_mindmap_rating_per_token")
         ]
+
+
+class MatrixCard(models.Model):
+    """One card on a run's four-field matrix board (see ``live.matrix``).
+
+    ``token`` is null for presenter-added cards (``teacher``). ``stack`` points
+    to the top card of the stack this card belongs to (null = a single card or
+    a top); members keep their own coordinates but render at their top's
+    position. ``placed`` marks cards moved by the presenter (never
+    auto-moved). ``hidden`` is the presenter's reversible moderation.
+    """
+
+    run = models.ForeignKey(Run, on_delete=models.CASCADE, related_name="matrix_cards")
+    question = models.ForeignKey(
+        "rooms.Question", on_delete=models.CASCADE, related_name="matrix_cards"
+    )
+    token = models.ForeignKey(
+        ParticipantToken,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="matrix_cards",
+    )
+    title = models.CharField(max_length=60)
+    description = models.CharField(max_length=200, blank=True, default="")
+    category = models.CharField(max_length=16, blank=True, default="")
+    zone = models.CharField(max_length=10)
+    x = models.FloatField()
+    y = models.FloatField()
+    placed = models.BooleanField(default=False)
+    stack = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="members"
+    )
+    hidden = models.BooleanField(default=False)
+    teacher = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering: ClassVar = ["created_at", "pk"]
+        indexes: ClassVar = [models.Index(fields=["run", "question"], name="matrixcard_run_question")]
+
+    def __str__(self):
+        return f"{self.title} (run {self.run_id})"
