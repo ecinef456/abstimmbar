@@ -8347,6 +8347,33 @@ class MatrixResultsTests(MatrixTestCase):
         self.assertIn("axes", item["matrix_settings"])
         self.assertEqual(item["votes"], 1)
 
+    def _item(self):
+        self.client.force_login(self.owner)
+        data = self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/results/"
+        ).json()["results"]
+        run = next(r for r in data if any(q["kind"] == "matrix" for q in r["questions"]))
+        return run, next(q for q in run["questions"] if q["kind"] == "matrix")
+
+    def test_votes_total_counts_participant_cards(self):
+        self.add(title="One")
+        self.add(token=self.tok2, title="Two")
+        mxs.add_teacher_card(self.run, self.xq, "q2", "Teacher")
+        run, _ = self._item()
+        # Participant cards count; the teacher's own card does not.
+        self.assertEqual(run["votes_total"], 2)
+
+    def test_count_excludes_members_of_a_hidden_top(self):
+        top = self.add(title="Top")
+        member = self.add(token=self.tok2, title="Member")
+        self.stacked(top, member)
+        self.assertEqual(self._item()[1]["matrix"]["count"], 2)
+        mxs.set_hidden(self.run, self.xq, top.pk, True)
+        _, item = self._item()
+        self.assertEqual(item["matrix"]["count"], 0)
+        # Hidden cards stay in the owner's payload, flagged.
+        self.assertEqual(len(item["matrix"]["cards"]), 2)
+
     def test_csv_columns_align_with_header(self):
         import csv
         import io

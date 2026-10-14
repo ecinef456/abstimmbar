@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Universität Osnabrück (virtUOS)
 
+import { localizedMap, type LocalizedText } from "@basicbar/ui";
+
 /** Colours of the four-field matrix categories (Okabe–Ito, colour-blind safe).
  *  Keys mirror backend rooms/matrix.MATRIX_PALETTE. Colour is never the only
  *  cue: named mode shows the name, colours mode a letter by list position
@@ -39,20 +41,23 @@ export function colorName(key: string, lang: "de" | "en"): string {
 /** Label of a category: `named` mode shows colour + name only; `colors` mode
  *  a letter by the category's POSITION in the list (A, B, ...), independent of
  *  its colour. `short` is the visible letter (empty in named mode), `name` the
- *  category name (named mode), `a11y` the accessible text. */
+ *  category name (named mode), `a11y` the accessible text — the one
+ *  translated string ("Colour A"), hence the caller passes its `t`. */
 export function categoryLabel(
-  categories: { key: string; name?: { de?: string; en?: string } }[],
+  categories: { key: string; name?: LocalizedText }[],
   key: string,
   mode: "off" | "colors" | "named",
   lang: "de" | "en",
+  t: (key: string, options?: Record<string, unknown>) => string,
 ): { short: string; name: string; a11y: string } {
   const index = categories.findIndex((c) => c.key === key);
   if (mode === "colors" && index >= 0) {
     const short = String.fromCharCode(65 + index);
-    return { short, name: "", a11y: (lang === "de" ? "Farbe " : "Colour ") + short };
+    return { short, name: "", a11y: t("Colour {{letter}}", { letter: short }) };
   }
   if (mode === "named" && index >= 0) {
-    const name = categories[index].name?.[lang] || categories[index].name?.de || categories[index].name?.en || "";
+    const names = localizedMap(categories[index].name);
+    const name = names[lang] || names.de || names.en || "";
     return { short: "", name, a11y: name };
   }
   return { short: "", name: "", a11y: colorName(key, lang) };

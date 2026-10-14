@@ -145,6 +145,42 @@ export interface MatrixCategory {
   name: LocalizedText;
 }
 
+/** One card on a matrix board (presenter/results payload). `stack` is the id
+ *  of the stack's top card (null for tops and loose cards); stacked cards
+ *  already carry their top's zone/x/y. `hidden` cards are only present in the
+ *  presenter/owner payloads. */
+export interface MatrixCard {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  zone: string;
+  x: number;
+  y: number;
+  stack: number | null;
+  hidden: boolean;
+  teacher: boolean;
+  placed: boolean;
+}
+
+export interface MatrixBoard {
+  cards: MatrixCard[];
+  /** Visible cards (hidden cards and members of a hidden top excluded). */
+  count: number;
+  contributors: number;
+}
+
+/** What a device needs to render the matrix (`matrix_settings`). */
+export interface MatrixSettingsPayload {
+  zones: string[];
+  edges: boolean;
+  descriptions: boolean;
+  max_per_person: number;
+  category_mode: MatrixCategoryMode;
+  categories: { key: string; name: LocalizedText }[];
+  axes: { x_from: LocalizedText; x_to: LocalizedText; y_from: LocalizedText; y_to: LocalizedText };
+}
+
 /** One predefined branch of a mindmap question (plain canonical-language
  *  text; level 1 = child of the root). */
 /** A predefined mindmap branch. `text`/`description` are `{de, en}` maps
@@ -1268,6 +1304,9 @@ export interface RunResults {
     ordering?: OrderingResults;
     /** Mindmap: visible tree (hidden nodes already excluded). */
     mindmap?: LiveMindmap;
+    /** Matrix: the whole board (hidden cards flagged) and its settings. */
+    matrix?: MatrixBoard;
+    matrix_settings?: MatrixSettingsPayload;
   }[];
 }
 

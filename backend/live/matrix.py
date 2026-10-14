@@ -371,6 +371,12 @@ def card_count(run, question):
     return _cards(run, question).count()
 
 
+def participant_card_total(run):
+    """Participant-added matrix cards of the whole run (teacher cards are the
+    presenter's own and not an answer) — part of the run's ``votes_total``."""
+    return MatrixCard.objects.filter(run=run, token__isnull=False).count()
+
+
 def contributor_count(run, question):
     return (
         _cards(run, question).filter(token__isnull=False).values("token").distinct().count()
@@ -395,7 +401,12 @@ def board_payload(run, question, presenter):
         })
     return {
         "cards": cards,
-        "count": sum(1 for c in cards if not c["hidden"]),
+        # Members of a hidden top are hidden with it (they stay in the owner's
+        # payload, flagged only on the top), so they do not count either.
+        "count": sum(
+            1 for c in cards
+            if not c["hidden"] and not (c["stack"] and c["stack"] in hidden_ids)
+        ),
         "contributors": contributor_count(run, question),
     }
 

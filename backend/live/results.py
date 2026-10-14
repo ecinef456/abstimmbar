@@ -427,9 +427,11 @@ def run_results(run):
         ),
         "ended_at": run.ended_at.isoformat() if run.ended_at else None,
         # All stored answers of the run: votes plus mind-map contributions
-        # (one per term a participant added), so a mind-map-only run is not
-        # shown as empty.
-        "votes_total": run.votes.count() + contribution_total(run),
+        # (one per term a participant added) and matrix cards (one per card a
+        # participant placed), so such a run is not shown as empty.
+        "votes_total": (
+            run.votes.count() + contribution_total(run) + matrix.participant_card_total(run)
+        ),
         # Recording mode (#53): total async votes in this run; the view shows
         # the on-site/recording split only when there are any.
         "recording_votes": run.votes.filter(source=Vote.Source.RECORDING).count(),
