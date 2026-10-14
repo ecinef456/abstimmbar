@@ -120,6 +120,14 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
   ]);
   await expect(footer(page).locator('[data-help="position"]')).toHaveText('1/2');
   await expectActive(page, 'view.question');
+  await expect(seg(page, 'toggle')).toContainText('Stop');
+  // A only looks: during an open vote with nothing live on screen it does
+  // nothing (never closes the vote); Ctrl+A is the browser's, not ours.
+  await page.keyboard.press('a');
+  await page.keyboard.press('Control+a');
+  await page.waitForTimeout(1000);
+  await expectActive(page, 'view.question');
+  await expect(seg(page, 'toggle')).toContainText('Stop');
   await shot(page, 'single-choice-open');
   await expectFitsAndNamed(page);
 
@@ -174,6 +182,9 @@ test('word cloud: Original only, AI views when the question has AI', async ({
   expect(await footerControls(page)).toEqual([
     'position', 'qr', 'view.question', 'view.wc.raw', 'toggle', 'end', 'prev', 'next',
   ]);
+  await page.keyboard.press('a'); // one live view only: nothing to cycle, still open
+  await expectActive(page, 'view.wc.raw');
+  await expect(seg(page, 'toggle')).toContainText('Stop');
   await page.keyboard.press('s'); // stop → results, the cloud stays
   await expectActive(page, 'view.wc.raw');
   await expect(seg(page, 'view.question')).not.toHaveAttribute('aria-disabled', 'true');
@@ -226,9 +237,19 @@ test('mind map: Mind map · Ranking after a rating, rating action as icon', asyn
     expect(r.ok(), await r.text()).toBeTruthy();
   }
   await control(api, runId, 'closed');
-  await control(api, runId, 'results');
 
+  // Closed rating, scores hidden: the map is on screen. Clicking its (active)
+  // segment or pressing A must not reveal the scores — only E does.
   await page.goto(`/sets/${seed.setId}/present?resume=continue`);
+  await expectActive(page, 'view.mm.raw');
+  await expect(seg(page, 'view.mm.ranking')).toHaveCount(0);
+  await seg(page, 'view.mm.raw').click();
+  await page.keyboard.press('a');
+  await page.waitForTimeout(1500); // give a (wrong) reveal time to arrive
+  await expect(seg(page, 'view.mm.ranking')).toHaveCount(0);
+  await expect(seg(page, 'view.question')).toHaveAttribute('aria-disabled', 'true');
+  await expect(seg(page, 'view.question')).toHaveAttribute('title', /—/);
+  await page.keyboard.press('e'); // reveal
   await expect(seg(page, 'view.mm.ranking')).toBeVisible();
   expect(await footerControls(page)).toEqual([
     'position', 'qr', 'view.question', 'view.mm.raw', 'view.mm.ranking',

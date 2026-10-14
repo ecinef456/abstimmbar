@@ -193,6 +193,7 @@ export function ViewSwitcher({
   segments,
   active,
   disabled,
+  disabledReason,
   onSelect,
 }: {
   segments: ViewSegment[];
@@ -200,6 +201,8 @@ export function ViewSwitcher({
   /** Segment ids that can't be chosen right now (e.g. "Question" while a
    *  live cloud is on screen). */
   disabled?: Set<string>;
+  /** Tooltip sentence on a disabled segment (why it can't be chosen). */
+  disabledReason?: string;
   onSelect: (seg: ViewSegment) => void;
 }) {
   const { t } = useTranslation();
@@ -224,7 +227,7 @@ export function ViewSwitcher({
             aria-checked={on}
             aria-label={label}
             aria-disabled={off || undefined}
-            title={`${label} (${key})`}
+            title={off && disabledReason ? `${label} — ${disabledReason}` : `${label} (${key})`}
             data-help={seg.id}
             data-testid={`view-${seg.id}`}
             onClick={(e) => {
@@ -259,6 +262,7 @@ export function Footer(props: {
   views?: ViewSegment[];
   activeView?: string;
   disabledViews?: Set<string>;
+  disabledViewReason?: string;
   onSelectView?: (seg: ViewSegment) => void;
   onFinish: () => void;
   onCloseWindow?: () => void;
@@ -304,6 +308,7 @@ export function Footer(props: {
             segments={props.views}
             active={props.activeView ?? "view.question"}
             disabled={props.disabledViews}
+            disabledReason={props.disabledViewReason}
             onSelect={props.onSelectView}
           />
         )}

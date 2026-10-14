@@ -1056,10 +1056,11 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     }
     if (phase === "open" || phase === "closed" || phase === "preview") {
       if (phase === "open") await live.control(runId, { phase: "closed" });
-      await live.control(runId, { phase: "results" });
       // "Results" means without the solution, also when it was revealed
-      // before the presenter went back to the question.
+      // before the presenter went back to the question (un-reveal first: no
+      // flash of the solution).
       if (revealed) await live.control(runId, { reveal: false });
+      await live.control(runId, { phase: "results" });
     }
   }, [runId, phase, revealed]);
 
@@ -1176,7 +1177,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     () => new Set(liveShown ? ["view.question"] : []),
     [liveShown],
   );
-  const selectView = useCallback(
+  const applyView = useCallback(
     (seg: ViewSegment<WcView>) => {
       if (seg.level === "question") {
         if (!liveShown) void showQuestion();
@@ -1197,12 +1198,25 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     },
     [liveShown, phase, revealed, showQuestion, showResults, showSolution],
   );
+  // A click on the segment already shown does nothing (e.g. a closed rating
+  // with hidden scores must not reveal them).
+  const selectView = useCallback(
+    (seg: ViewSegment<WcView>) => {
+      if (seg.id !== activeSegment.id) applyView(seg);
+    },
+    [activeSegment.id, applyView],
+  );
+  // A only looks — it never takes a question out of "open": during an open
+  // vote it cycles the result views of a live cloud / map (nothing else is
+  // on screen to switch); otherwise the whole list. Closing stays with S/E.
   const cycleView = useCallback(() => {
-    const usable = viewSegments.filter((sg) => !disabledViews.has(sg.id));
+    const usable = viewSegments.filter(
+      (sg) => !disabledViews.has(sg.id) && (phase !== "open" || (liveShown && sg.level === "results")),
+    );
     if (usable.length < 2) return;
     const i = usable.findIndex((sg) => sg.id === activeSegment.id);
     selectView(usable[(i + 1) % usable.length]);
-  }, [viewSegments, disabledViews, activeSegment.id, selectView]);
+  }, [viewSegments, disabledViews, phase, liveShown, activeSegment.id, selectView]);
   // E: to the first result view; from there back to the question (toggle);
   // an open vote closes onto it (word clouds / mind maps stay visible).
   const firstResults = viewSegments.find((sg) => sg.level === "results");
@@ -1214,9 +1228,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     } else if (activeSegment.id === firstResults.id && !revealed) {
       void showQuestion();
     } else {
-      selectView(firstResults);
+      applyView(firstResults);
     }
-  }, [firstResults, phase, activeSegment.id, revealed, showResults, showQuestion, selectView]);
+  }, [firstResults, phase, activeSegment.id, revealed, showResults, showQuestion, applyView]);
   // L: the solution, and back to the results.
   const toggleSolution = useCallback(() => {
     if (!hasSolution) return;
@@ -1242,6 +1256,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       }
       if (!runId) return;
       const key = event.key.toLowerCase();
+      // Ctrl/Cmd/Alt + letter belongs to the browser / OS (Ctrl+A, Cmd+L, …),
+      // never to a presenter shortcut.
+      if ((event.ctrlKey || event.metaKey || event.altKey) && key.length === 1) return;
       // Shift+arrows pan the mind map (MindMap's own listener) — they must
       // not also navigate between questions.
       if (event.shiftKey && key.startsWith("arrow") && mmShown) return;
@@ -1726,6 +1743,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
           views={viewSegments}
           activeView={activeSegment.id}
           disabledViews={disabledViews}
+          disabledViewReason={t("The results are shown live while the vote is open.")}
           onSelectView={(seg) => selectView(seg as ViewSegment<WcView>)}
           joinShown={showJoin}
           onToggleJoin={() => setShowJoin((v) => !v)}
