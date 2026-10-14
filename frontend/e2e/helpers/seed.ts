@@ -153,6 +153,36 @@ export async function createRoomWithQuestions(
   }
 }
 
+/** A matrix question in `setId` (fields as the editor sends them). Defaults:
+ *  axes altbacken/modern × nutzlos/nützlich, edges and descriptions on,
+ *  max 2 cards per person, named categories Idee/Risiko. */
+export async function createMatrixQuestion(
+  api: Api,
+  setId: number,
+  overrides: Record<string, unknown> = {},
+): Promise<number> {
+  const q = await api.post('/api/questions/', {
+    question_set: setId,
+    kind: 'matrix',
+    text: T('<p>Wohin gehört die Idee?</p>', '<p>Where does the idea belong?</p>'),
+    options: [],
+    matrix_x_from: T('altbacken', 'old-fashioned'),
+    matrix_x_to: T('modern', 'modern'),
+    matrix_y_from: T('nutzlos', 'useless'),
+    matrix_y_to: T('nützlich', 'useful'),
+    matrix_edges: true,
+    matrix_descriptions: true,
+    matrix_max_per_person: 2,
+    matrix_category_mode: 'named',
+    matrix_categories: [
+      { key: 'blue', name: T('Idee', 'Idea') },
+      { key: 'orange', name: T('Risiko', 'Risk') },
+    ],
+    ...overrides,
+  });
+  return q.id;
+}
+
 export async function startRun(api: Api, setId: number): Promise<number> {
   const r = await api.post(`/api/question-sets/${setId}/start-run/`, {
     mode: 'live',

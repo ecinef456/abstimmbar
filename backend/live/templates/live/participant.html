@@ -99,6 +99,82 @@ survives the live updates.
   <p class="soft" id="mm-empty" style="margin:8px 0 0 12px" hidden></p>
 </section>
 
+{% comment %}
+Four-field matrix: a mini axis cross (zone picker) + category chips + title/
+description + "add card", and the caller's own cards. Participants never see
+anyone else's cards (the board lives on the beamer). Script: the mx* block.
+{% endcomment %}
+<style>
+  .mx-board{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:". top ." "left grid right" ". bottom .";gap:6px;align-items:center;margin-top:12px}
+  .mx-axis{font-size:12px;font-weight:700;color:var(--ink-soft);text-align:center;line-height:1.25}
+  .mx-ytop{grid-area:top}.mx-ybottom{grid-area:bottom}
+  .mx-xleft{grid-area:left;writing-mode:vertical-rl;transform:rotate(180deg);max-width:34px}
+  .mx-xright{grid-area:right;writing-mode:vertical-rl;max-width:34px}
+  .mx-gridwrap{grid-area:grid;position:relative}
+  .mx-grid{aspect-ratio:1/1;display:grid;grid-template:1fr 1fr / 1fr 1fr;gap:2px;background:var(--field-line);border:2px solid var(--field-line);border-radius:14px;overflow:hidden}
+  .mx-zone{position:relative;width:auto;margin:0;min-height:44px;border:0;border-radius:0;padding:8px;text-align:center;font-size:13px;font-weight:600;line-height:1.25;display:flex;align-items:center;justify-content:center;background:var(--surface);color:var(--ink)}
+  .mx-edges .mx-zone{padding:8px 24px}
+  .mx-zone[aria-pressed="true"]{background:var(--brand-soft);outline:3px solid var(--brand-strong);outline-offset:-3px;color:var(--ink)}
+  .mx-tick{display:none;position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;background:var(--brand-strong);color:var(--surface);align-items:center;justify-content:center}
+  [aria-pressed="true"] > .mx-tick{display:inline-flex}
+  .mx-edge{position:absolute;width:44px;height:44px;min-height:44px;margin:0;padding:0;border-radius:50%;border:2px solid var(--field-line);background:var(--surface);color:var(--ink-soft);display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%);z-index:2}
+  .mx-edge::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--ink-soft)}
+  .mx-edge[aria-pressed="true"]{background:var(--brand-strong);border-color:var(--brand-strong);outline:none}
+  .mx-edge[aria-pressed="true"]::before{display:none}
+  .mx-edge .mx-tick{display:none;position:static;background:none;color:var(--surface)}
+  .mx-edge[aria-pressed="true"] > .mx-tick{display:inline-flex}
+  .mx-zone:disabled,.mx-edge:disabled{opacity:.6}
+  .mx-cap{margin:16px 0 4px;font-size:14px;font-weight:700}
+  .mx-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .mx-chip{width:auto;margin:0;min-height:44px;padding:8px 14px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;text-align:left}
+  .mx-chip[aria-checked="true"]{background:var(--brand-soft);border:2px solid var(--brand-strong);padding:7px 13px}
+  .mx-dot{flex:none;width:14px;height:14px;border-radius:50%;display:inline-block}
+  .mx-num{font-weight:700}
+  #matrix label.mx-cap{display:block}
+  #matrix textarea{font:inherit;width:100%;margin-top:6px;padding:12px 14px;border:1px solid var(--field-line);border-radius:14px;background:var(--surface);color:var(--ink);resize:vertical}
+  #matrix input[type=text]{margin-top:6px}
+  #mx-add{margin-top:14px}
+  #mx-mine{list-style:none;padding:0;margin:0}
+  #mx-mine li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+  .mx-card-body{flex:1;min-width:0}
+  .mx-card-title{font-weight:600;line-height:1.3}
+  .mx-del{flex:none;width:44px;height:44px;min-height:44px;margin:0;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;color:var(--ink-soft)}
+  .mx-msg{margin-top:8px;font-size:14px;font-weight:600}
+  .mx-msg.err{color:var(--danger-strong)}
+</style>
+<section id="matrix" hidden>
+  <p class="soft" id="mx-countdown" aria-live="polite" hidden></p>
+  <div class="question-text" id="mx-question"></div>
+  <p id="mx-status" aria-live="polite" style="margin-top:6px;font-weight:600;font-size:14px;color:var(--ink-soft)" hidden></p>
+  <div id="mx-form">
+    <p class="mx-cap" id="mx-zone-cap">{% trans "Choose a field" %}</p>
+    <div class="mx-board" id="mx-board">
+      <div class="mx-axis mx-ytop" id="mx-ytop"></div>
+      <div class="mx-axis mx-xleft" id="mx-xleft"></div>
+      <div class="mx-gridwrap" id="mx-zones" role="group" aria-labelledby="mx-zone-cap">
+        <div class="mx-grid" id="mx-grid"></div>
+      </div>
+      <div class="mx-axis mx-xright" id="mx-xright"></div>
+      <div class="mx-axis mx-ybottom" id="mx-ybottom"></div>
+    </div>
+    <div id="mx-cats-wrap" hidden>
+      <p class="mx-cap" id="mx-cat-cap">{% trans "Choose a category" %}</p>
+      <div class="mx-chips" id="mx-cats" role="radiogroup" aria-labelledby="mx-cat-cap"></div>
+    </div>
+    <label class="mx-cap" for="mx-title">{% trans "Title" %}</label>
+    <input type="text" id="mx-title" maxlength="60" autocomplete="off" style="margin-top:6px">
+    <div id="mx-desc-wrap" hidden>
+      <label class="mx-cap" for="mx-desc">{% trans "Description (optional)" %}</label>
+      <textarea id="mx-desc" maxlength="200" rows="3"></textarea>
+    </div>
+    <button class="primary" id="mx-add" type="button" disabled>{% trans "Add card" %}</button>
+    <p class="mx-msg" id="mx-msg" aria-live="polite" hidden></p>
+    <p class="mx-msg" id="mx-limit" hidden>{% trans "You have reached the maximum number of cards." %}</p>
+  </div>
+  <h2 class="mx-cap" id="mx-mine-head" style="font-size:16px;margin-top:22px"></h2>
+  <ul id="mx-mine"></ul>
+</section>
+
 <section id="resultsview" hidden>
   <div class="question-text" id="results-question"></div>
   <div id="results-list" style="margin-top:12px"></div>
@@ -436,6 +512,15 @@ survives the live updates.
     aiChecking: "{% trans 'Checking …' %}",
     aiAssessment: "{% trans 'AI assessment' %}",
     aiUnavailable: "{% trans 'AI assessment is not available right now — only the model solution is shown.' %}",
+    // Four-field matrix.
+    mxVotingClosed: "{% trans 'Voting is closed.' %}",
+    mxCards: "{% trans 'Your cards ({n} of {max})' %}",
+    mxColor: "{% trans 'Colour {n}' %}",
+    mxBetween: "{% trans 'between {a} and {b}' %}",
+    mxDelete: "{% trans 'Delete card “{title}”' %}",
+    mxAdded: "{% trans 'Card added.' %}",
+    mxLimit: "{% trans 'You have reached the maximum number of cards.' %}",
+    mxNoCards: "{% trans 'You have not added any cards yet.' %}",
     // Mind map (stage 1).
     mmAddRoot: "{% trans 'Add a term' %}",
     mmAddChild: "{% trans 'Add a subterm to “{term}”' %}",
@@ -494,7 +579,7 @@ survives the live updates.
       Object.values(v).find(Boolean) || "";
   }
   const sections = ["waiting", "question", "done", "closed", "paused", "finished",
-                    "resultsview", "review", "quiz", "quiz-done", "recording", "mindmap",
+                    "resultsview", "review", "quiz", "quiz-done", "recording", "mindmap", "matrix",
                     "check", "check-done", "check-unavailable"].reduce(
     (acc, id) => (acc[id] = document.getElementById(id), acc), {});
   const subtitle = document.getElementById("subtitle");
@@ -2045,6 +2130,7 @@ survives the live updates.
     if (state.paused && phase !== "open") {
       window.clearInterval(countdownTimer);
       window.clearInterval(mmTimer);
+      window.clearInterval(mxTimer);
       // Like the finished screen: the review button only if I answered something.
       document.getElementById("paused-review").hidden = history.order.length === 0;
       show("paused");
@@ -2058,7 +2144,16 @@ survives the live updates.
       show("mindmap");
       return;
     }
+    // Four-field matrix: own cards only; the board is on the beamer.
+    if (mxIsMatrix()) {
+      window.clearInterval(countdownTimer);
+      window.clearInterval(mmTimer);
+      renderMatrix();
+      show("matrix");
+      return;
+    }
     window.clearInterval(mmTimer);
+    window.clearInterval(mxTimer);
     if (phase === "open" && state.question) {
       const q = state.question;
       const mark = voteMark();
@@ -3220,6 +3315,383 @@ survives the live updates.
       mmBusy = false;
     }
   }
+
+  // --- four-field matrix: zone picker + own cards -----------------------------
+  // The participant only ever handles their OWN cards: they come from the
+  // mine endpoint (once per run:question and page load) and from every
+  // add/remove response. The static parts (axis cross, chips) are rebuilt
+  // only when the question or its settings change, so typing survives the
+  // live state broadcasts. Palette: same as frontend/src/matrixPalette.ts.
+  const MX_PALETTE = {
+    blue: { hex: "#0072B2", number: 1 }, orange: { hex: "#E69F00", number: 2 },
+    green: { hex: "#009E73", number: 3 }, red: { hex: "#D55E00", number: 4 },
+    purple: { hex: "#CC79A7", number: 5 }, sky: { hex: "#56B4E9", number: 6 },
+  };
+  const MX_ICONS = {
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  };
+  function mxIcon(name, size) {
+    // Constant markup only — safe to inject.
+    return '<svg class="ic" xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
+      '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"' +
+      ' stroke-linejoin="round" aria-hidden="true">' + MX_ICONS[name] + "</svg>";
+  }
+  let mxKey = null;            // run:question the DOM / local state belongs to
+  let mxSig = "";              // signature of what the static parts were built from
+  let mxMine = [];             // own cards: { id, title, description, category, zone }
+  let mxZone = null, mxCategory = null;
+  let mxBusy = false, mxExpired = false, mxEndsAt = null, mxTimer = null;
+  let mxQuestionHtml = null, mxPreviewId = -1000;
+  const mxMineFetched = new Set();
+  const mxEl = (id) => document.getElementById(id);
+
+  const mxIsMatrix = () => !!(state && state.question && state.question.kind === "matrix" &&
+    state.matrix_settings && ["open", "closed", "results"].includes(state.phase));
+  const mxCanAdd = () => state.phase === "open" && !mxExpired;
+  const mxSettings = () => state.matrix_settings;
+  const mxRemaining = () => Math.max(0, mxSettings().max_per_person - mxMine.length);
+
+  // Axis label of the participant's language.
+  const mxAxis = (name) => locText(mxSettings().axes[name]);
+  function mxZoneName(zone) {
+    const xt = mxAxis("x_to"), xf = mxAxis("x_from"), yt = mxAxis("y_to"), yf = mxAxis("y_from");
+    // Written y first ("nützlich & modern"): the vertical end is the headline.
+    const q = { q1: yt + " & " + xt, q2: yt + " & " + xf, q3: yf + " & " + xf, q4: yf + " & " + xt };
+    const between = (a, b) => I18N.mxBetween.replace("{a}", q[a]).replace("{b}", q[b]);
+    switch (zone) {
+      case "e_top": return between("q2", "q1");
+      case "e_right": return between("q1", "q4");
+      case "e_bottom": return between("q3", "q4");
+      case "e_left": return between("q2", "q3");
+      default: return q[zone] || zone;
+    }
+  }
+  function mxCategoryInfo(key) {
+    const s = mxSettings();
+    const i = s.categories.findIndex((c) => c.key === key);
+    const pal = MX_PALETTE[key] || { hex: "var(--ink-soft)", number: i + 1 };
+    const name = s.category_mode === "named" && i >= 0 ? locText(s.categories[i].name) : "";
+    return { hex: pal.hex, number: pal.number, name };
+  }
+
+  function mxSetMine(list) {
+    mxMine = Array.isArray(list) ? list : [];
+  }
+
+  async function mxFetchMine(key, questionId) {
+    let data = null;
+    try {
+      const response = await post(`/api/live/rooms/${CODE}/matrix/mine/`, { token, question: questionId });
+      if (response.ok) data = await response.json();
+    } catch { /* keep the local list */ }
+    if (!data || !Array.isArray(data.mine)) { mxMineFetched.delete(key); return; }
+    if (mxKey !== key) return;
+    mxSetMine(data.mine);
+    if (mxIsMatrix()) renderMatrix();
+  }
+
+  function mxCountdown() {
+    const box = mxEl("mx-countdown");
+    window.clearInterval(mxTimer);
+    // A re-opened question gets a fresh deadline — adding again.
+    if ((state.ends_at || null) !== mxEndsAt) { mxEndsAt = state.ends_at || null; mxExpired = false; }
+    if (!state.ends_at || state.phase !== "open") { box.hidden = true; return; }
+    box.hidden = false;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((Date.parse(state.ends_at) - Date.now()) / 1000));
+      box.textContent = "⏱ " + (left > 0 ? I18N.countdownLeft.replace("{n}", String(left)) : I18N.timeUp);
+      if (left <= 0) {
+        window.clearInterval(mxTimer);
+        if (!mxExpired) { mxExpired = true; if (mxIsMatrix()) renderMatrix(); } // → read-only
+      }
+    };
+    tick();
+    if (!mxExpired) mxTimer = window.setInterval(tick, 250);
+  }
+
+  // The static parts: axis labels, zone buttons, category chips.
+  function mxBuild() {
+    const s = mxSettings();
+    mxEl("mx-ytop").textContent = mxAxis("y_to");
+    mxEl("mx-ybottom").textContent = mxAxis("y_from");
+    mxEl("mx-xleft").textContent = mxAxis("x_from");
+    mxEl("mx-xright").textContent = mxAxis("x_to");
+    const wrap = mxEl("mx-zones"), grid = mxEl("mx-grid");
+    for (const old of wrap.querySelectorAll(".mx-edge")) old.remove();
+    grid.replaceChildren();
+    grid.classList.toggle("mx-edges", !!s.edges);
+    const edgePos = { e_top: ["50%", "25%"], e_right: ["75%", "50%"], e_bottom: ["50%", "75%"], e_left: ["25%", "50%"] };
+    // Reading order: top row (q2, q1), bottom row (q3, q4), then the edges.
+    for (const zone of ["q2", "q1", "q3", "q4"].concat(s.edges ? ["e_top", "e_right", "e_bottom", "e_left"] : [])) {
+      const isEdge = zone.startsWith("e_");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.zone = zone;
+      b.className = isEdge ? "mx-edge" : "mx-zone";
+      b.setAttribute("aria-label", mxZoneName(zone));
+      b.setAttribute("aria-pressed", "false");
+      if (!isEdge) b.append(document.createTextNode(mxZoneName(zone)));
+      const tick = document.createElement("span");
+      tick.className = "mx-tick";
+      tick.innerHTML = mxIcon("check", 14);
+      b.append(tick);
+      b.addEventListener("click", () => { mxZone = zone; mxSyncSelection(); });
+      if (isEdge) {
+        // The edge buttons sit on the axis lines; they live in the grid's
+        // wrapper (not the clipped grid) so the whole circle stays tappable.
+        b.style.left = edgePos[zone][0]; b.style.top = edgePos[zone][1];
+        wrap.appendChild(b);
+      } else {
+        grid.appendChild(b);
+      }
+    }
+    const catsWrap = mxEl("mx-cats-wrap"), cats = mxEl("mx-cats");
+    cats.replaceChildren();
+    catsWrap.hidden = s.category_mode === "off";
+    s.categories.forEach((c) => {
+      if (s.category_mode === "off") return;
+      const info = mxCategoryInfo(c.key);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "mx-chip";
+      b.dataset.key = c.key;
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", "false");
+      const dot = document.createElement("span");
+      dot.className = "mx-dot"; dot.style.background = info.hex;
+      dot.setAttribute("aria-hidden", "true");
+      const label = document.createElement("span");
+      if (s.category_mode === "named") {
+        const num = document.createElement("span");
+        num.className = "mx-num"; num.textContent = String(info.number);
+        label.append(num, document.createTextNode(" " + info.name));
+      } else {
+        label.textContent = I18N.mxColor.replace("{n}", String(info.number));
+      }
+      b.append(dot, label);
+      b.addEventListener("click", () => { mxCategory = c.key; mxSyncSelection(); });
+      b.addEventListener("keydown", (event) => {
+        const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+        if (!(event.key in keys)) return;
+        event.preventDefault();
+        const chips = [...cats.children];
+        const next = chips[(chips.indexOf(b) + keys[event.key] + chips.length) % chips.length];
+        mxCategory = next.dataset.key;
+        mxSyncSelection();
+        next.focus();
+      });
+      cats.appendChild(b);
+    });
+    mxEl("mx-desc-wrap").hidden = !s.descriptions;
+  }
+
+  // Selected state of zones/chips + the add button's enabled state.
+  function mxSyncSelection() {
+    const s = mxSettings();
+    for (const b of mxEl("mx-zones").querySelectorAll("[data-zone]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.zone === mxZone));
+    }
+    const chips = [...mxEl("mx-cats").children];
+    chips.forEach((b, i) => {
+      const on = b.dataset.key === mxCategory;
+      b.setAttribute("aria-checked", String(on));
+      // Roving tabindex of a radio group.
+      b.tabIndex = on || (!mxCategory && i === 0) ? 0 : -1;
+    });
+    const canAdd = mxCanAdd() && mxRemaining() > 0 && !!mxZone &&
+      (s.category_mode === "off" || !!mxCategory) && !!mxEl("mx-title").value.trim();
+    mxEl("mx-add").disabled = !canAdd || mxBusy;
+  }
+
+  function mxMessage(text, isError) {
+    const box = mxEl("mx-msg");
+    box.textContent = text || "";
+    box.hidden = !text;
+    box.classList.toggle("err", !!isError);
+  }
+
+  function mxErrorText(detail) {
+    switch (detail) {
+      case "Card limit reached.": return I18N.mxLimit;
+      case "Time is up.": return I18N.timeUp;
+      case "Voting is closed.": case "Question is not open.": return I18N.mxVotingClosed;
+      default: return I18N.mmFailed;
+    }
+  }
+
+  function renderMatrix() {
+    const q = state.question, s = mxSettings();
+    const key = (state.run_id ?? "") + ":" + q.id;
+    if (mxKey !== key) {
+      mxKey = key;
+      mxSig = "";
+      mxMine = [];
+      mxZone = null; mxCategory = null;
+      mxExpired = false;
+      mxQuestionHtml = null;
+      mxEl("mx-title").value = "";
+      mxEl("mx-desc").value = "";
+      mxMessage("");
+    }
+    if (!PREVIEW && token && !mxMineFetched.has(key)) {
+      mxMineFetched.add(key);
+      void mxFetchMine(key, q.id);
+    }
+    const html = locText(q.text);
+    if (mxQuestionHtml !== html) {
+      mxQuestionHtml = html;
+      mxEl("mx-question").innerHTML = html;
+    }
+    mxCountdown();
+    const sig = JSON.stringify(s) + "|" + (document.documentElement.lang || "");
+    if (sig !== mxSig) {
+      mxSig = sig;
+      mxBuild();
+      // A selection that no longer exists in the rebuilt settings is dropped.
+      if (mxZone && !s.zones.includes(mxZone)) mxZone = null;
+      if (mxCategory && !s.categories.some((c) => c.key === mxCategory)) mxCategory = null;
+    }
+    const canAdd = mxCanAdd(), remaining = mxRemaining();
+    const status = mxEl("mx-status");
+    status.hidden = canAdd;
+    if (!canAdd) status.textContent = mxExpired ? I18N.timeUp : I18N.mxVotingClosed;
+    // Form controls: usable only while adding is possible and cards are left.
+    const usable = canAdd && remaining > 0;
+    for (const b of mxEl("mx-zones").querySelectorAll("button")) b.disabled = !usable;
+    for (const b of mxEl("mx-cats").children) b.disabled = !usable;
+    mxEl("mx-title").disabled = !usable;
+    mxEl("mx-desc").disabled = !usable;
+    mxEl("mx-limit").hidden = !(canAdd && remaining === 0);
+    mxSyncSelection();
+
+    // Own cards.
+    mxEl("mx-mine-head").textContent = I18N.mxCards
+      .replace("{n}", String(mxMine.length)).replace("{max}", String(s.max_per_person));
+    const list = mxEl("mx-mine");
+    list.replaceChildren();
+    for (const card of mxMine) {
+      const li = document.createElement("li");
+      if (s.category_mode !== "off") {
+        const info = mxCategoryInfo(card.category);
+        const dot = document.createElement("span");
+        dot.className = "mx-dot"; dot.style.background = info.hex;
+        dot.setAttribute("aria-hidden", "true");
+        const num = document.createElement("span");
+        num.className = "mx-num"; num.textContent = String(info.number);
+        const tag = document.createElement("span");
+        tag.style.cssText = "flex:none;display:inline-flex;align-items:center;gap:4px";
+        if (info.name) tag.title = info.name;
+        tag.append(dot, num);
+        li.append(tag);
+      }
+      const body = document.createElement("div");
+      body.className = "mx-card-body";
+      const title = document.createElement("div");
+      title.className = "mx-card-title"; title.textContent = card.title;
+      const zone = document.createElement("div");
+      zone.className = "soft"; zone.textContent = mxZoneName(card.zone);
+      body.append(title, zone);
+      li.append(body);
+      if (canAdd) {
+        const del = document.createElement("button");
+        del.type = "button"; del.className = "mx-del";
+        del.setAttribute("aria-label", I18N.mxDelete.replace("{title}", card.title));
+        del.innerHTML = mxIcon("trash", 20);
+        del.addEventListener("click", () => void mxRemove(card.id));
+        li.append(del);
+      }
+      list.appendChild(li);
+    }
+  }
+
+  async function mxSubmit() {
+    const s = mxSettings();
+    const titleInput = mxEl("mx-title");
+    const title = titleInput.value.trim().split(/\s+/).join(" ");
+    if (mxBusy || !mxCanAdd() || !mxZone || !title ||
+        (s.category_mode !== "off" && !mxCategory) || mxRemaining() === 0) return;
+    const description = s.descriptions
+      ? mxEl("mx-desc").value.trim().split(/\s+/).join(" ") : "";
+    const key = mxKey;
+    const body = { token, question: state.question.id, zone: mxZone, title };
+    if (s.category_mode !== "off") body.category = mxCategory;
+    if (description) body.description = description;
+    const done = (list) => {
+      mxSetMine(list);
+      titleInput.value = ""; mxEl("mx-desc").value = "";
+      mxMessage(I18N.mxAdded, false);
+      renderMatrix();
+      if (mxRemaining() > 0) titleInput.focus();
+    };
+    if (PREVIEW) {
+      // Editor preview: no run — simulate locally so the author can try it.
+      done(mxMine.concat([{ id: mxPreviewId--, title, description,
+        category: s.category_mode === "off" ? "" : mxCategory, zone: mxZone }]));
+      return;
+    }
+    mxBusy = true;
+    mxEl("mx-add").disabled = true;
+    try {
+      let response, data = {};
+      try {
+        response = await post(`/api/live/rooms/${CODE}/matrix/add/`, body);
+        data = await response.json().catch(() => ({}));
+      } catch { mxMessage(I18N.mmFailed, true); return; }
+      if (mxKey !== key || !mxIsMatrix()) return;
+      if (response.status === 201) {
+        done(data.mine);
+      } else {
+        mxMessage(mxErrorText(data.detail), true);
+        // The limit may have been reached from another tab: resync.
+        if (response.status === 409) { mxMineFetched.delete(key); mxRefetch(key); }
+      }
+    } finally {
+      mxBusy = false;
+      if (mxIsMatrix()) mxSyncSelection();
+    }
+  }
+  function mxRefetch(key) {
+    mxMineFetched.add(key);
+    void mxFetchMine(key, state.question.id);
+  }
+
+  async function mxRemove(id) {
+    if (mxBusy || !mxCanAdd()) return;
+    const key = mxKey;
+    if (PREVIEW) {
+      mxSetMine(mxMine.filter((c) => c.id !== id));
+      mxMessage("");
+      renderMatrix();
+      return;
+    }
+    mxBusy = true;
+    try {
+      let response, data = {};
+      try {
+        response = await post(`/api/live/rooms/${CODE}/matrix/remove/`,
+          { token, question: state.question.id, card: id });
+        data = await response.json().catch(() => ({}));
+      } catch { mxMessage(I18N.mmFailed, true); return; }
+      if (mxKey !== key || !mxIsMatrix()) return;
+      if (response.ok) {
+        mxSetMine(data.mine);
+        mxMessage("");
+        renderMatrix();
+      } else {
+        mxMessage(mxErrorText(data.detail), true);
+        if (response.status === 404) { mxRefetch(key); }
+      }
+    } finally {
+      mxBusy = false;
+    }
+  }
+
+  mxEl("mx-add").addEventListener("click", () => void mxSubmit());
+  mxEl("mx-title").addEventListener("input", mxSyncSelection);
+  mxEl("mx-title").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); void mxSubmit(); }
+  });
 
   // --- recording mode (#53): async viewer of a recorded run ------------------
   // Self-contained (no SSE): loads the recorded run's questions, lets the
