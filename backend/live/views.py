@@ -2657,7 +2657,9 @@ def results_csv(request, set_id):
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=";")
     header = ["durchfuehrung", "gestartet", "frage_nr", "frage", "antwort", "richtig",
-              "stimmen", "vor_ort", "aufzeichnung", "prozent", "bewertung"]
+              "stimmen", "vor_ort", "aufzeichnung", "prozent", "bewertung",
+              # Matrix cards only (empty for every other kind).
+              "beschreibung", "kategorie", "zone", "x", "y", "stapel"]
     writer.writerow(header)
     raw_writerow = writer.writerow
 
@@ -2699,15 +2701,15 @@ def results_csv(request, set_id):
                         base + [csv_safe(path), "", count, "", "", "", csv_safe(cell)]
                     )
             elif question.kind == Question.Kind.MATRIX:
-                # The board's own header row, then one row per card (after the
-                # shared leading columns; wider than the fixed CSV schema).
-                # Free-text columns (title, description, category, stack_top)
-                # are formula-escaped; the numeric x/y must stay numbers.
-                for row in matrix.csv_rows(run, question):
-                    writer.writerow(base + [
-                        csv_safe(cell) if i in (0, 1, 2, 6) else cell
-                        for i, cell in enumerate(row)
-                    ])
+                # One row per visible card: title in "antwort", one vote each,
+                # the card's details in the trailing matrix columns.
+                for card in matrix.csv_rows(run, question):
+                    writer.writerow(
+                        base
+                        + [csv_safe(card["title"]), "", 1, "", "", "", ""]
+                        + [csv_safe(card[key]) for key in ("description", "category", "zone")]
+                        + [card["x"], card["y"], csv_safe(card["stack"])]
+                    )
             elif question.kind in Question.TEXT_KINDS:
                 for word in words_with_counts(run, question, limit=100000):
                     writer.writerow(

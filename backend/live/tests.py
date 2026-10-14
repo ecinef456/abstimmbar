@@ -7543,7 +7543,7 @@ class MindmapRatingResultsTests(MindmapRatingTestCase):
             f"/api/question-sets/{self.question_set.pk}/results.csv"
         ).content.decode("utf-8-sig")
         lines = body.splitlines()
-        self.assertTrue(lines[0].endswith(";prozent;bewertung"))
+        self.assertTrue(lines[0].endswith(";prozent;bewertung;beschreibung;kategorie;zone;x;y;stapel"))
         self.assertIn(";Wind > Rotor;;1;;;;3", body)
         self.assertIn(";Solar;;2;;;;1", body)
         # Formula-injection guard for participant text stays in place.
@@ -7590,7 +7590,7 @@ class MindmapRatingFixRoundTests(MindmapRatingTestCase):
         self.assertNotIn("scores", rating)
         self.assertNotIn("ranking", rating)
         self.assertEqual(rating["raters"], 1)
-        self.assertIn(";Wind;;1;;;;\r\n", self.csv())
+        self.assertIn(";Wind;;1;;;;;;;;;;\r\n", self.csv())
         # Reveal (results phase) or a finished run: scores again.
         self.set_phase(Run.Phase.RESULTS)
         rating = self.results_rating()
@@ -8027,13 +8027,20 @@ class MatrixServiceTests(MatrixTestCase):
         m = self.add(title="Member", category="red")
         self.stacked(top, m)
         rows = mxs.csv_rows(self.run, self.xq)
-        self.assertEqual(rows[0], ["title", "description", "category", "zone", "x", "y", "stack_top", "hidden", "teacher"])
-        self.assertEqual(rows[1][:4], ["Top", "", "Idee", "q1"])
-        self.assertEqual(rows[1][6], "")
-        self.assertEqual(rows[2][2], "Risiko")
-        self.assertEqual(rows[2][6], "Top")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            {k: rows[0][k] for k in ("title", "description", "category", "zone", "stack")},
+            {"title": "Top", "description": "", "category": "Idee", "zone": "q1", "stack": ""},
+        )
+        self.assertRegex(rows[0]["x"], r"^-?\d\.\d\d$")
+        self.assertEqual(rows[1]["category"], "Risiko")
+        self.assertEqual(rows[1]["stack"], "Top")
         self.configure(matrix_category_mode="colors")
-        self.assertEqual(mxs.csv_rows(self.run, self.xq)[1][2], "blue")
+        self.assertEqual(mxs.csv_rows(self.run, self.xq)[0]["category"], "blue")
+        self.configure(matrix_category_mode="off", matrix_categories=[])
+        self.assertEqual(mxs.csv_rows(self.run, self.xq)[0]["category"], "")
+        mxs.set_hidden(self.run, self.xq, top.pk, True)
+        self.assertEqual(mxs.csv_rows(self.run, self.xq), [])
 
 
 class MatrixAnsweredTests(MatrixTestCase):
@@ -8248,14 +8255,32 @@ class MatrixResultsTests(MatrixTestCase):
         self.assertIn("axes", item["matrix_settings"])
         self.assertEqual(item["votes"], 1)
 
-    def test_csv_contains_header_and_title(self):
-        self.add(title="Visible card")
+    def test_csv_columns_align_with_header(self):
+        import csv
+        import io
+        top = self.add(title="=Top card", description="")
+        member = self.add(title="Member")
+        self.stacked(top, member)
+        hidden = self.add(title="Hidden card")
+        mxs.set_hidden(self.run, self.xq, hidden.pk, True)
         self.client.force_login(self.owner)
         body = self.client.get(
             f"/api/question-sets/{self.question_set.pk}/results.csv"
         ).content.decode("utf-8-sig")
-        self.assertIn("title;description;category;zone;x;y;stack_top;hidden;teacher", body)
-        self.assertIn("Visible card", body)
+        rows = list(csv.reader(io.StringIO(body), delimiter=";"))
+        header = rows[0]
+        self.assertEqual(header[-6:], ["beschreibung", "kategorie", "zone", "x", "y", "stapel"])
+        for row in rows[1:]:
+            self.assertEqual(len(row), len(header), row)
+        cards = [dict(zip(header, r, strict=True)) for r in rows[1:] if r[3] == "Where?"]
+        self.assertEqual(len(cards), 2)
+        by_title = {c["antwort"]: c for c in cards}
+        self.assertNotIn("Hidden card", by_title)
+        self.assertEqual(by_title["'=Top card"]["stapel"], "")
+        self.assertEqual(by_title["Member"]["stapel"], "'=Top card")
+        self.assertEqual(by_title["Member"]["stimmen"], "1")
+        self.assertEqual(by_title["Member"]["zone"], "q1")
+        self.assertRegex(by_title["Member"]["x"], r"^-?\d\.\d\d$")
 
     def test_vote_endpoint_refuses_matrix(self):
         r = self.vote(self.tok.key, question=self.xq.pk, text="x")

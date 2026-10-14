@@ -377,10 +377,11 @@ def board_payload(run, question, presenter):
     }
 
 
-CSV_HEADER = ["title", "description", "category", "zone", "x", "y", "stack_top", "hidden", "teacher"]
-
-
 def csv_rows(run, question):
+    """One dict per VISIBLE card for the results CSV (hidden cards and the
+    members of a hidden top are left out, like the participant board):
+    ``title, description, category, zone, x, y, stack`` (``stack`` = title of
+    the stack's top card for members, else empty)."""
     canonical = seed_langs()[0]
     names = {
         c["key"]: (c.get("name") or {}).get(canonical, "") or c["key"]
@@ -388,14 +389,22 @@ def csv_rows(run, question):
     }
     rows = list(_cards(run, question))
     titles = {c.pk: c.title for c in rows}
-    result = [list(CSV_HEADER)]
+    hidden_ids = {c.pk for c in rows if c.hidden}
+    result = []
     for c in rows:
-        category = names.get(c.category, c.category) if question.matrix_category_mode == CATEGORY_NAMED else c.category
-        result.append([
-            c.title, c.description, category, c.zone, f"{round(c.x, 2):g}", f"{round(c.y, 2):g}",
-            titles.get(c.stack_id, "") if c.stack_id else "",
-            "true" if c.hidden else "false", "true" if c.teacher else "false",
-        ])
+        if c.hidden or (c.stack_id and c.stack_id in hidden_ids):
+            continue
+        if question.matrix_category_mode == CATEGORY_OFF:
+            category = ""
+        elif question.matrix_category_mode == CATEGORY_NAMED:
+            category = names.get(c.category, c.category)
+        else:
+            category = c.category
+        result.append({
+            "title": c.title, "description": c.description, "category": category,
+            "zone": c.zone, "x": f"{c.x:.2f}", "y": f"{c.y:.2f}",
+            "stack": titles.get(c.stack_id, "") if c.stack_id else "",
+        })
     return result
 
 
