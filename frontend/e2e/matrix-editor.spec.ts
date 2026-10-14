@@ -138,6 +138,46 @@ test('category colours can be chosen; used colours are disabled; "+ Kategorie" t
   expect(stored.matrix_categories.map((c: any) => c.key)).toEqual(['purple', 'orange', 'blue']);
 });
 
+test('axis inputs sit around the coordinate graph; stacked without overflow on phones', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  // The old bottom preview is gone.
+  await expect(page.getByTestId('matrix-preview')).toHaveCount(0);
+
+  const box = async (name: string) =>
+    (await page.getByRole('textbox', { name, exact: true }).boundingBox())!;
+  const graph = (await page.getByTestId('matrix-axes-graph').boundingBox())!;
+  const top = await box('y-Achse bis');
+  const bottom = await box('y-Achse von');
+  const left = await box('x-Achse von');
+  const right = await box('x-Achse bis');
+  expect(top.y + top.height).toBeLessThanOrEqual(graph.y + 4);
+  expect(bottom.y).toBeGreaterThanOrEqual(graph.y + graph.height - 4);
+  expect(left.x + left.width).toBeLessThanOrEqual(graph.x + 4);
+  expect(right.x).toBeGreaterThanOrEqual(graph.x + graph.width - 4);
+
+  // Phone width: stacked top, left, right, bottom; no horizontal overflow.
+  await page.setViewportSize({ width: 324, height: 800 });
+  await expect(page.getByTestId('matrix-axes-graph')).toBeHidden();
+  const ys = [
+    (await box('y-Achse bis')).y,
+    (await box('x-Achse von')).y,
+    (await box('x-Achse bis')).y,
+    (await box('y-Achse von')).y,
+  ];
+  expect(ys).toEqual([...ys].sort((a, b) => a - b));
+  for (const hint of ['oben', 'links', 'rechts', 'unten']) {
+    await expect(page.getByText(hint, { exact: true })).toBeVisible();
+  }
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
 test('"Alle Felder übersetzen" fills every matrix field (axes and category names)', async ({
   page,
   trackRoom,

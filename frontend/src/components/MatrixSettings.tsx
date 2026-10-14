@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Universität Osnabrück (virtUOS)
 
-/** Settings panel of the four-field matrix question (axes, edges,
- *  description, cards per person, categories) with a small live preview. */
+/** Settings panel of the four-field matrix question (axes around a drawn
+ *  coordinate cross, edges, description, cards per person, categories). */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
-import { getDefaultContentLang, localizedMap, localizedText, type LocalizedText } from "@basicbar/ui";
+import { getDefaultContentLang, localizedMap, type LocalizedText } from "@basicbar/ui";
 import type { MatrixCategory, MatrixCategoryMode } from "../api";
-import { MATRIX_PALETTE, paletteEntry, type MatrixColor } from "../matrixPalette";
+import { MATRIX_PALETTE, type MatrixColor } from "../matrixPalette";
 import TranslatableField from "./TranslatableField";
 import { SegmentedControl, ToggleSwitch } from "./ui";
 
@@ -70,23 +70,6 @@ export function matrixProblem(
   }
   return null;
 }
-
-function Swatch({ colorKey }: { colorKey: string }) {
-  const entry = paletteEntry(colorKey);
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        aria-hidden
-        className="inline-block h-4 w-4 flex-none rounded-full border border-slate-900/20 dark:border-white/30"
-        style={{ backgroundColor: entry?.hex }}
-      />
-      <span className="text-sm font-medium tabular-nums text-slate-700 dark:text-slate-300">
-        {entry?.number}
-      </span>
-    </span>
-  );
-}
-
 
 /** Radio row of the palette colours for one category. Colours taken by another
  *  category are disabled; the number is always shown (colour is never the only
@@ -158,60 +141,29 @@ function ColorPicker({
   );
 }
 
-function Preview({ value }: { value: MatrixSettingsValue }) {
-  const { t } = useTranslation();
-  const label = "absolute max-w-[40%] truncate text-xs text-slate-600 dark:text-slate-400";
-  const dot = "absolute h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-500";
+/** Drawn coordinate cross with arrowheads at the four axis ends. Purely
+ *  decorative: it shows where each label input ends up on the participant page. */
+function AxesGraph() {
   return (
-    <div className="grid gap-3" data-testid="matrix-preview">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t("Preview")}</span>
-      <div className="px-16 pb-5 pt-5">
-        <div
-          aria-hidden
-          className="relative aspect-square w-full max-w-[12rem] rounded-md border border-slate-400 dark:border-slate-500"
-        >
-          <span className="absolute left-1/2 top-0 h-full border-l border-slate-300 dark:border-slate-600" />
-          <span className="absolute left-0 top-1/2 w-full border-t border-slate-300 dark:border-slate-600" />
-          <span className={`${label} left-1/2 top-0 -translate-x-1/2 -translate-y-full`}>
-            {localizedText(value.yTo)}
-          </span>
-          <span className={`${label} bottom-0 left-1/2 -translate-x-1/2 translate-y-full`}>
-            {localizedText(value.yFrom)}
-          </span>
-          <span className={`${label} right-full top-1/2 -translate-y-1/2 pr-1`}>
-            {localizedText(value.xFrom)}
-          </span>
-          <span className={`${label} left-full top-1/2 -translate-y-1/2 pl-1`}>
-            {localizedText(value.xTo)}
-          </span>
-          {value.edges && (
-            <>
-              <span className={`${dot} left-1/2 top-0 -translate-x-1/2 -translate-y-1/2`} />
-              <span className={`${dot} bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2`} />
-              <span className={`${dot} left-0 top-1/2 -translate-x-1/2 -translate-y-1/2`} />
-              <span className={`${dot} right-0 top-1/2 translate-x-1/2 -translate-y-1/2`} />
-            </>
-          )}
-        </div>
-      </div>
-      {value.categoryMode !== "off" && value.categories.length > 0 && (
-        <ul className="flex flex-wrap gap-2" aria-label={t("Categories")}>
-          {value.categories.map((category) => (
-            <li
-              key={category.key}
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 px-2.5 py-1 dark:border-slate-600"
-            >
-              <Swatch colorKey={category.key} />
-              {value.categoryMode === "named" && (
-                <span className="text-sm text-slate-700 dark:text-slate-300">
-                  {localizedText(category.name)}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <svg
+      aria-hidden
+      data-testid="matrix-axes-graph"
+      viewBox="0 0 120 120"
+      className="hidden h-36 w-36 flex-none text-slate-500 md:block dark:text-slate-400"
+    >
+      <rect
+        x="12" y="12" width="96" height="96" rx="4"
+        fill="none" stroke="currentColor" strokeOpacity="0.35" strokeDasharray="3 3"
+      />
+      <g stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="6" y1="60" x2="114" y2="60" />
+        <line x1="60" y1="6" x2="60" y2="114" />
+        <polyline points="12,54 6,60 12,66" />
+        <polyline points="108,54 114,60 108,66" />
+        <polyline points="54,12 60,6 66,12" />
+        <polyline points="54,108 60,114 66,108" />
+      </g>
+    </svg>
   );
 }
 
@@ -255,13 +207,18 @@ export default function MatrixSettings({
   const axis = (
     id: "xFrom" | "xTo" | "yFrom" | "yTo",
     label: string,
+    hint: string,
+    place: string,
   ) => (
-    <TranslatableField
-      label={label}
-      value={value[id]}
-      onChange={(next) => patch({ [id]: clamp(next, AXIS_LABEL_MAX) })}
-      inputClassName="max-w-xs"
-    />
+    <div className={`grid min-w-0 gap-1 ${place}`}>
+      <span className="text-xs font-medium text-slate-500 md:hidden dark:text-slate-400">{hint}</span>
+      <TranslatableField
+        label={label}
+        value={value[id]}
+        onChange={(next) => patch({ [id]: clamp(next, AXIS_LABEL_MAX) })}
+        inputClassName="max-w-xs"
+      />
+    </div>
   );
 
   const problem = matrixProblem(value);
@@ -277,11 +234,15 @@ export default function MatrixSettings({
 
       <div className="grid gap-3">
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t("Axes")}</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {axis("xFrom", t("x-axis from"))}
-          {axis("xTo", t("x-axis to"))}
-          {axis("yFrom", t("y-axis from"))}
-          {axis("yTo", t("y-axis to"))}
+        {/* md+: label inputs around the drawn cross (top, left | graph | right,
+            bottom). Below md the graph is hidden and the inputs stack in the
+            order top, left, right, bottom, each with a short position hint. */}
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-x-4">
+          {axis("yTo", t("y-axis to"), t("top"), "md:col-span-3 md:justify-self-center md:w-full md:max-w-xs")}
+          {axis("xFrom", t("x-axis from"), t("left"), "md:justify-self-end md:w-full md:max-w-xs")}
+          <AxesGraph />
+          {axis("xTo", t("x-axis to"), t("right"), "md:justify-self-start md:w-full md:max-w-xs")}
+          {axis("yFrom", t("y-axis from"), t("bottom"), "md:col-span-3 md:justify-self-center md:w-full md:max-w-xs")}
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {t("x runs from left to right, y from bottom to top.")}
@@ -392,7 +353,6 @@ export default function MatrixSettings({
         )}
       </div>
 
-      <Preview value={value} />
     </fieldset>
   );
 }
