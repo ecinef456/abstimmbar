@@ -14,7 +14,7 @@ from rest_framework import serializers
 from common.i18n_fields import TranslatedMapMixin, resolve_translated_text
 from live.models import MindmapContribution, MindmapNode, ParticipantToken, Run, Vote
 
-from . import ai_generate, set_types
+from . import ai_generate, matrix, set_types
 from .images import InvalidImageError, normalize_image
 from .models import AnswerOption, Question, QuestionSet, Room, UploadedImage
 from .onboarding import seed_example_room
@@ -4950,6 +4950,96 @@ class MatrixAuthoringTests(ApiTestCase):
         self.assertEqual(question.matrix_categories, [])
         self.assertEqual(question.matrix_max_per_person, 10)
         self.assertEqual(len(question.matrix_x_from_de), 40)
+
+
+class MatrixFinalReviewTests(MatrixAuthoringTests):
+    """Whole-branch review fixes: move guard, import gating, kind changes."""
+
+    def test_move_with_matrix_cards_blocked(self):
+        from live.models import MatrixCard
+
+        question = Question.objects.get(pk=self._create().json()["id"])
+        target = QuestionSet.objects.create(room=self.room, title="Andere")
+        run = Run.objects.create(question_set=self.question_set)
+        for teacher in (False, True):
+            MatrixCard.objects.all().delete()
+            MatrixCard.objects.create(
+                run=run, question=question, title="C", zone="q1", x=0.5, y=0.5,
+                token=None if teacher else ParticipantToken.objects.create(room=self.room),
+                teacher=teacher,
+            )
+            response = self.client.post(
+                f"/api/questions/{question.pk}/move/", {"question_set": target.pk},
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 409, teacher)
+            question.refresh_from_db()
+            self.assertEqual(question.question_set, self.question_set)
+
+    def test_move_matrix_without_cards_allowed(self):
+        question = Question.objects.get(pk=self._create().json()["id"])
+        target = QuestionSet.objects.create(room=self.room, title="Andere")
+        response = self.client.post(
+            f"/api/questions/{question.pk}/move/", {"question_set": target.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_set_has_results_counts_matrix_cards(self):
+        from live.models import MatrixCard
+
+        question = Question.objects.get(pk=self._create().json()["id"])
+        run = Run.objects.create(question_set=self.question_set)
+        MatrixCard.objects.create(
+            run=run, question=question, title="C", zone="q1", x=0.5, y=0.5,
+            token=ParticipantToken.objects.create(room=self.room),
+        )
+        listing = self.client.get(f"/api/question-sets/?room={self.room.pk}").json()
+        self.assertTrue(listing["results"][0]["has_results"])
+
+    def test_import_rejects_matrix_outside_live_poll(self):
+        from .transfer import import_set
+
+        with self.assertRaises(serializers.ValidationError):
+            import_set(self.room, {
+                "format": "abstimmbar-set-v2",
+                "title": {"de": "Quiz", "en": ""},
+                "type": "self_paced",
+                "questions": [{"kind": "matrix", "text": {"de": "<p>Q</p>", "en": ""}}],
+            })
+
+    def test_non_matrix_kinds_normalise_matrix_fields(self):
+        created = self._create(kind="single_choice").json()
+        response = self.client.patch(
+            f"/api/questions/{created['id']}/",
+            {"matrix_category_mode": "colors", "matrix_categories": [{"junk": 1}]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        question = Question.objects.get(pk=created["id"])
+        self.assertEqual(question.matrix_category_mode, "off")
+        self.assertEqual(question.matrix_categories, [])
+
+    def test_kind_change_to_matrix_revalidates_stored_categories(self):
+        from live.state import build_payloads
+
+        created = self._create(kind="single_choice").json()
+        # Junk that reached the database some other way (legacy rows).
+        Question.objects.filter(pk=created["id"]).update(
+            matrix_category_mode="colors", matrix_categories=[{"junk": 1}]
+        )
+        response = self.client.patch(
+            f"/api/questions/{created['id']}/", {"kind": "matrix", **self.AXES},
+            content_type="application/json",
+        )
+        self.assertIn(response.status_code, (200, 400), response.content)
+        question = Question.objects.get(pk=created["id"])
+        if response.status_code == 200:
+            for category in question.matrix_categories:
+                self.assertIn(category["key"], matrix.MATRIX_PALETTE)
+        else:
+            self.assertEqual(question.kind, "single_choice")
+        build_payloads(self.room)  # must not raise
 
 
 class MindmapAuthoringTests(ApiTestCase):

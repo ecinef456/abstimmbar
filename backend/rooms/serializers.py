@@ -563,6 +563,7 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                     )
             if (
                 self.instance is None
+                or "kind" in attrs
                 or "matrix_category_mode" in attrs
                 or "matrix_categories" in attrs
             ):
@@ -582,6 +583,11 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                     raise serializers.ValidationError(
                         {"matrix_categories": str(exc)}
                     ) from exc
+        elif "kind" in attrs or "matrix_category_mode" in attrs or "matrix_categories" in attrs:
+            # Other kinds carry no matrix settings: never keep junk that a
+            # later kind change to matrix (or the SSE payloads) would trip on.
+            attrs["matrix_category_mode"] = matrix.CATEGORY_OFF
+            attrs["matrix_categories"] = []
         # A section must belong to the same set as the question.
         section = attrs.get("section")
         if section is not None:

@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 
 from common import documents
 from common.i18n_fields import resolve_translated_text, translated_map
-from live.models import MindmapContribution, MindmapNode, Vote
+from live.models import MatrixCard, MindmapContribution, MindmapNode, Vote
 
 from . import ai_generate, ai_prompts, generation, set_types
 from .images import InvalidImageError, normalize_image
@@ -450,6 +450,11 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
             | Exists(
                 MindmapContribution.objects.filter(
                     node__run__question_set=OuterRef("pk")
+                )
+            )
+            | Exists(
+                MatrixCard.objects.filter(
+                    run__question_set=OuterRef("pk"), teacher=False
                 )
             ),
         )
@@ -904,9 +909,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
             )
         # Results live on the source set's runs — moving the question would
         # orphan its votes there. Copy instead, or delete the results first.
-        if question.votes.exists() or MindmapNode.objects.filter(
-            question=question, contributions__isnull=False
-        ).exists():
+        if (
+            question.votes.exists()
+            or MindmapNode.objects.filter(
+                question=question, contributions__isnull=False
+            ).exists()
+            or MatrixCard.objects.filter(question=question).exists()
+        ):
             return Response(
                 {"detail": "Zu dieser Frage liegen Ergebnisse vor. Bitte erst "
                            "die Ergebnisse löschen oder das Set kopieren."},

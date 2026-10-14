@@ -27,6 +27,8 @@ MATRIX_AXIS_LABEL_MAX = 40
 MATRIX_DEFAULT_MAX_PER_PERSON = 10
 MATRIX_MIN_MAX_PER_PERSON = 1
 MATRIX_MAX_PER_PERSON_LIMIT = 100
+# Overall cap per run + question (participant and teacher cards together).
+MATRIX_MAX_CARDS = 500
 
 CATEGORY_OFF = "off"
 CATEGORY_COLORS = "colors"
