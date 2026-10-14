@@ -1095,5 +1095,8 @@
   "Click anywhere or press Esc to close.": "Zum Schließen irgendwo klicken oder Esc drücken.",
   "The live view stays on screen until the results are shown.": "Die Live-Ansicht bleibt bis zu den Ergebnissen sichtbar.",
   "Any key ends the survey · ← back to the last question": "Beliebige Taste beendet die Umfrage · ← zurück zur letzten Frage",
-  "Any key returns to the overview": "Beliebige Taste führt zurück zur Übersicht"
+  "Any key returns to the overview": "Beliebige Taste führt zurück zur Übersicht",
+  "Jump to a question": "Zu einer Frage springen",
+  "Which question is on screen — click to jump to another one.": "Welche Frage gerade zu sehen ist – Klick springt zu einer anderen.",
+  "Question {{n}}": "Frage {{n}}"
 }

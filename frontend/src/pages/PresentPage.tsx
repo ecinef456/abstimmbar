@@ -22,7 +22,7 @@ import {
   type WordCloudAIWord as AiWord,
   type WordCloudModeration,
 } from "../api";
-import { localizedText, RichText } from "@basicbar/ui";
+import { localizedText, RichText, stripHtml } from "@basicbar/ui";
 import LikertResult from "../components/LikertResult";
 import { useTourSignal } from "../tour/signals";
 import ResultBar, { type BarState } from "../results/ResultBar";
@@ -920,6 +920,11 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
 
   // Navigate, but first show the section interstitial when entering a
   // section for the first time this run (v2 "Zwischenfolie").
+  // Plain-text question titles for the footer's jump menu ("3/12").
+  const jumpTitles = useMemo(
+    () => questions.map((q) => stripHtml(localizedText(q.text)).replace(/\s+/g, " ").trim()),
+    [questions],
+  );
   const requestGoto = useCallback(
     (index: number) => {
       if (!runId || questions.length === 0) return;
@@ -1804,6 +1809,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
           count={questions.length}
           onPrev={goPrev}
           onNext={advanceNext}
+          questionTitles={jumpTitles}
+          onJump={(i) => requestGoto(i)}
           onToggle={() =>
             phase === "open"
               ? // Word clouds jump straight to results on close so the cloud

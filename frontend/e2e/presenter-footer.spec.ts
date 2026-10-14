@@ -159,8 +159,18 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
   await seg(page, 'view.solution').click();
   await expectActive(page, 'view.solution');
 
+  // "1/2" opens a jump menu: Esc only closes the menu (the presentation
+  // stays), picking an entry jumps there.
+  await seg(page, 'position').click();
+  const jump = page.getByRole('menu', { name: /Jump to a question|Zu einer Frage springen/ });
+  await expect(jump.getByRole('menuitem')).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await expect(jump).toBeHidden();
+  await expect(footer(page).locator('[data-help="position"]')).toHaveText('1/2');
+  await seg(page, 'position').click();
+  await jump.getByRole('menuitem').nth(1).click();
+
   // Likert: Question · Results, no solution.
-  await page.keyboard.press('ArrowRight');
   await expect(footer(page).locator('[data-help="position"]')).toHaveText('2/2');
   await expect(seg(page, 'view.solution')).toHaveCount(0);
   expect(await footerControls(page)).toEqual([

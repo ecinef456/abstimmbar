@@ -5,7 +5,7 @@
  *  switcher for everything the beamer can show for the question, keys in the
  *  tooltips. Every control carries `data-help="<id>"`; `PRESENTER_HELP` has
  *  its name, a short sentence and its key (the "?" help overlay renders them). */
-import type { MouseEvent, ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AppWindow,
@@ -40,7 +40,7 @@ export interface HelpEntry {
 /** Name, sentence and key of every footer control and right-edge handle, by
  *  its `data-help` id. View segments: `view.<kind>.<view>`. */
 export const PRESENTER_HELP: Record<string, HelpEntry> = {
-  position: { name: "Position", text: "Which question of the set is on screen." },
+  position: { name: "Position", text: "Which question is on screen — click to jump to another one." },
   qr: { name: "QR code", text: "Shows the QR code and join link.", keys: "Q" },
   "view.question": { name: "Question", text: "Shows the question without results." },
   "view.results": { name: "Results", text: "Shows the results.", keys: "E" },
@@ -279,6 +279,9 @@ export function Footer(props: {
   helpShown?: boolean;
   /** Question-specific action icons left of Start/Stop (mind-map rating). */
   extra?: ReactNode;
+  /** Plain-text titles of all questions: makes "3/12" a jump menu. */
+  questionTitles?: string[];
+  onJump?: (index: number) => void;
 }) {
   const { t } = useTranslation();
   const isSection = props.variant === "section";
@@ -301,9 +304,19 @@ export function Footer(props: {
   return (
     <footer className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-3 text-sm text-slate-500">
       <div className="flex min-w-0 items-center gap-3">
-        <span data-help="position" title={positionLabel} aria-label={positionLabel} className="tabular-nums">
-          {position}
-        </span>
+        {props.questionTitles && props.onJump && props.questionTitles.length > 1 ? (
+          <JumpMenu
+            label={positionLabel}
+            position={position}
+            titles={props.questionTitles}
+            current={props.index}
+            onJump={props.onJump}
+          />
+        ) : (
+          <span data-help="position" title={positionLabel} aria-label={positionLabel} className="tabular-nums">
+            {position}
+          </span>
+        )}
         {!isSection && props.onToggleJoin && (
           <FooterIconButton
             help="qr"
@@ -395,5 +408,106 @@ export function Footer(props: {
         />
       </div>
     </footer>
+  );
+}
+
+/** "3/12" as a button: a list of all questions above the footer to jump to
+ *  one directly. Keys inside the menu never reach the presenter shortcuts
+ *  (Esc closes the menu, ↑/↓ move, Enter picks). */
+function JumpMenu({
+  label,
+  position,
+  titles,
+  current,
+  onJump,
+}: {
+  label: string;
+  position: string;
+  titles: string[];
+  current: number;
+  onJump: (index: number) => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    itemRefs.current[Math.max(0, current)]?.focus();
+    itemRefs.current[Math.max(0, current)]?.scrollIntoView({ block: "nearest" });
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open, current]);
+
+  const close = () => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // The presenter listens on window: keep every key in here.
+    e.stopPropagation();
+    const items = itemRefs.current.filter(Boolean) as HTMLButtonElement[];
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const next = e.key === "ArrowDown" ? Math.min(items.length - 1, at + 1) : Math.max(0, at - 1);
+      items[next]?.focus();
+    }
+  };
+
+  return (
+    <div ref={ref} className="relative" onKeyDown={open ? onKeyDown : undefined}>
+      <button
+        ref={buttonRef}
+        type="button"
+        data-help="position"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`${label} — ${t("Jump to a question")}`}
+        title={`${label} — ${t("Jump to a question")}`}
+        onClick={(e) => {
+          blurOnMouse(e);
+          setOpen((v) => !v);
+        }}
+        className={`inline-flex h-9 items-center rounded-lg px-2 tabular-nums hover:bg-slate-100 hover:text-slate-800 ${open ? "bg-slate-100 text-slate-800" : ""} ${FOCUS}`}
+      >
+        {position}
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={t("Jump to a question")}
+          className="absolute bottom-full left-0 z-40 mb-2 max-h-[60vh] w-[min(28rem,calc(100vw-3rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          {titles.map((title, i) => (
+            <button
+              key={i}
+              ref={(el) => {
+                itemRefs.current[i] = el;
+              }}
+              type="button"
+              role="menuitem"
+              aria-current={i === current ? "true" : undefined}
+              onClick={() => {
+                setOpen(false);
+                if (i !== current) onJump(i);
+              }}
+              className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm hover:bg-slate-50 focus:bg-slate-100 focus:outline-none ${i === current ? "font-semibold text-brand-800" : "text-slate-700"}`}
+            >
+              <span className="w-6 shrink-0 text-right tabular-nums text-slate-500">{i + 1}</span>
+              <span className="min-w-0 truncate">{title || t("Question {{n}}", { n: i + 1 })}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
