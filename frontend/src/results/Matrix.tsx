@@ -52,7 +52,7 @@ export interface MatrixInteraction {
    *  zone (hysteresis) and position. */
   onMove(cardId: number, x: number, y: number, via: "pointer" | "keyboard"): Promise<unknown> | void;
   onStack(cardId: number, ontoId: number): void;
-  onOpen(cardId: number): void;
+  onOpen(cardId: number, byKeyboard: boolean): void;
 }
 
 export interface MatrixProps {
@@ -239,6 +239,10 @@ export default function Matrix({
   const reduced = useReducedMotion();
   const [plotRef, box] = useBox<HTMLDivElement>();
   const results = mode === "results";
+  // The management board on a phone: titles only (the list below carries the
+  // details); the beamer keeps its descriptions at any size.
+  const narrow = results && box != null && box.width < 480;
+  const showDescriptions = detailed && !narrow;
   // Dark theme only in the management UI; the beamer stays light.
   const dk = (classes: string) => (results ? classes : "");
 
@@ -267,6 +271,13 @@ export default function Matrix({
   // --- Newly arrived cards flash for ~1 s (present mode, not reduced). ---
   const seenRef = useRef<Set<number> | null>(null);
   const [fresh, setFresh] = useState<Set<number>>(() => new Set());
+  // One timer per arrival, cleared only on unmount: a second batch arriving
+  // within the second must not cancel the first one's expiry.
+  const freshTimers = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    const timers = freshTimers.current;
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, []);
   const idsKey = board.cards.map((c) => c.id).join(",");
   useEffect(() => {
     const ids = new Set(board.cards.map((c) => c.id));
@@ -276,11 +287,11 @@ export default function Matrix({
     const added = [...ids].filter((id) => !seen.has(id));
     if (added.length === 0) return;
     setFresh((prev) => new Set([...prev, ...added]));
-    const timer = window.setTimeout(
-      () => setFresh((prev) => new Set([...prev].filter((id) => !added.includes(id)))),
-      1000,
-    );
-    return () => window.clearTimeout(timer);
+    const timer = window.setTimeout(() => {
+      freshTimers.current.delete(timer);
+      setFresh((prev) => new Set([...prev].filter((id) => !added.includes(id))));
+    }, 1000);
+    freshTimers.current.add(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey]);
 
@@ -300,6 +311,8 @@ export default function Matrix({
     for (const el of document.elementsFromPoint(clientX, clientY)) {
       const hit = (el as HTMLElement).closest?.("[data-card-id]") as HTMLElement | null;
       if (!hit || !plotRef.current?.contains(hit)) continue;
+      // A hidden card (shown to the presenter on request) is no stack target.
+      if (hit.dataset.hidden === "true") continue;
       const id = Number(hit.dataset.cardId);
       if (id !== self) return id;
     }
@@ -517,12 +530,12 @@ export default function Matrix({
                       onPointerMove,
                       onPointerUp: (e: ReactPointerEvent<HTMLElement>) => endDrag(e, true),
                       onPointerCancel: (e: ReactPointerEvent<HTMLElement>) => endDrag(e, false),
-                      onClick: () => {
+                      onClick: (e: { detail: number }) => {
                         if (suppressClick.current) {
                           suppressClick.current = false;
                           return;
                         }
-                        interactive.onOpen(card.id);
+                        interactive.onOpen(card.id, e.detail === 0);
                       },
                       onKeyDown: (e: ReactKeyboardEvent<HTMLElement>) => onKeyDown(e, card),
                       onBlur: (e: { relatedTarget: EventTarget | null }) => {
@@ -537,7 +550,7 @@ export default function Matrix({
                 data-hidden={isHidden ? "true" : undefined}
                 data-stack-target={isTarget ? "true" : undefined}
                 data-fresh={isFresh ? "true" : undefined}
-                className={`absolute max-w-[22%] rounded-md border-l-[5px] px-2 py-1 text-left leading-tight ${
+                className={`absolute ${narrow ? "max-w-[34%]" : "max-w-[22%]"} rounded-md border-l-[5px] px-2 py-1 text-left leading-tight ${
                   interactive
                     ? `cursor-grab touch-none focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
                         dragging ? "z-20 cursor-grabbing" : ""
@@ -561,7 +574,7 @@ export default function Matrix({
                     : null),
                 }}
               >
-                <span className="flex items-start gap-1">
+                <span className={`flex items-start gap-1 ${narrow ? "flex-wrap" : ""}`}>
                   {cat.short && (
                     <span aria-hidden className={`font-bold text-slate-700 ${dk("dark:text-slate-300")}`}>
                       {cat.short}
@@ -577,7 +590,7 @@ export default function Matrix({
                     </span>
                   )}
                 </span>
-                {detailed && card.description && (
+                {showDescriptions && card.description && (
                   <span className={`mt-0.5 line-clamp-3 block text-[0.85em] text-slate-600 [overflow-wrap:anywhere] ${dk("dark:text-slate-300")}`}>
                     {card.description}
                   </span>

@@ -168,6 +168,13 @@ export default function MatrixPanel({
 
   // --- Card dialog --------------------------------------------------------
   const [openId, setOpenId] = useState<number | null>(null);
+  // How the dialog was opened: only a keyboard-opened one hands the focus
+  // back to its card (a focus-visible card would then be moved by the arrows).
+  const openedByKeyboard = useRef(false);
+  const onOpenCard = useCallback((id: number, byKeyboard: boolean) => {
+    openedByKeyboard.current = byKeyboard;
+    setOpenId(id);
+  }, []);
   /** Close the dialog. Keyboard: focus back on the card. Mouse: no card is
    *  left focused (a clicker's arrows must navigate, not move it). */
   const closeDialog = useCallback(
@@ -176,7 +183,7 @@ export default function MatrixPanel({
       setOpenId(null);
       if (id == null) return;
       window.requestAnimationFrame(() => {
-        if (!byKeyboard) {
+        if (!byKeyboard || !openedByKeyboard.current) {
           (document.activeElement as HTMLElement | null)?.blur?.();
           return;
         }
@@ -244,12 +251,16 @@ export default function MatrixPanel({
         )?.focus({ preventScroll: true }),
       ),
     );
-  const closeHandles = () => {
-    const active = document.activeElement;
+  /** Keyboard close returns the focus to the handle; a mouse close leaves no
+   *  button focused (a focused button would swallow a clicker's keys). */
+  const closeHandles = (byKeyboard: boolean) => {
+    const active = document.activeElement as HTMLElement | null;
     if (drawerOpen && drawerRef.current?.contains(active)) {
-      window.requestAnimationFrame(() => pencilRef.current?.focus({ preventScroll: true }));
+      if (byKeyboard) window.requestAnimationFrame(() => pencilRef.current?.focus({ preventScroll: true }));
+      else active?.blur();
     } else if (zoomOpen && zoomPanelRef.current?.contains(active)) {
-      zoomToggleRef.current?.focus({ preventScroll: true });
+      if (byKeyboard) zoomToggleRef.current?.focus({ preventScroll: true });
+      else active?.blur();
     }
     setDrawerOpen(false);
     setZoomOpen(false);
@@ -294,7 +305,7 @@ export default function MatrixPanel({
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        closeHandles();
+        closeHandles(true);
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -332,7 +343,7 @@ export default function MatrixPanel({
               onToggleCategory={toggleCategory}
               legendHelp="mx.legend"
               showHidden={showHidden}
-              interactive={{ onMove, onStack, onOpen: setOpenId }}
+              interactive={{ onMove, onStack, onOpen: onOpenCard }}
             />
           </div>
         )}
@@ -412,7 +423,7 @@ export default function MatrixPanel({
         showHidden={showHidden}
         onShowHidden={setShowHidden}
         hiddenCount={board.cards.filter((c) => c.hidden).length}
-        onClose={closeHandles}
+        onClose={(byKeyboard) => closeHandles(byKeyboard)}
         onAdd={(body) => call(() => live.matrixAdd(runId, questionId, body))}
       />
 
@@ -643,7 +654,7 @@ function AddDrawer({
   showHidden: boolean;
   onShowHidden: (v: boolean) => void;
   hiddenCount: number;
-  onClose: () => void;
+  onClose: (byKeyboard: boolean) => void;
   onAdd: (body: { zone: string; title: string; category: string; description: string }) => Promise<MatrixBoard | null>;
 }) {
   const { t } = useTranslation();
@@ -693,7 +704,7 @@ function AddDrawer({
         <h2 className="text-sm font-semibold text-slate-600">{t("Add card")}</h2>
         <button
           type="button"
-          onClick={onClose}
+          onClick={(e) => onClose(e.detail === 0)}
           aria-label={t("Close")}
           className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
         >

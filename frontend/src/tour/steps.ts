@@ -229,7 +229,7 @@ export const proTour: TourStep[] = [
     ]),
   q("matrix", "Four-field matrix",
     "Participants place cards on a coordinate graph with two axes you label — for example effort against benefit. Optionally, cards can also sit on the axis lines, carry a description and a coloured category.",
-    [{ key: "On the projector you move the cards, stack similar ones, hide or add your own — and open a card to read it.", modes: ["pro"] }]),
+    [{ key: "On the projector you move the cards, stack similar ones, hide or add your own — and open a card to read it." }]),
   { id: "question.lang-tabs", page: "question", target: "question.lang-tabs", kind: "info", modes: ["pro"],
     titleKey: "Author in two languages", bodyKey: "Rich text, options and images — with German/English tabs." },
   ]),

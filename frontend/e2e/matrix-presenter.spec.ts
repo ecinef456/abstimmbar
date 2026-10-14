@@ -165,7 +165,9 @@ test('live cards, dragging with hysteresis, stacking, dialog, hiding, teacher ca
   // Esc closes the dialog (not the presentation); focus back on the card.
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(card(page, ids.altlast)).toBeFocused();
+  // Opened with the mouse: no card is left focused (it would be :focus-visible
+  // after Esc and the clicker's arrows would move it).
+  await expect(card(page, ids.altlast)).not.toBeFocused();
   await expect(page).toHaveURL(/\/present/);
 
   // Hide a card: gone from the board …
@@ -321,4 +323,63 @@ test('after a keyboard move, a click ends the keyboard session: → navigates ag
   // Moving on from an open vote asks first — the presenter navigated.
   await expect(page.getByRole('heading', { name: 'Abstimmung läuft noch' })).toBeVisible();
   expect(moves).toEqual([]);
+});
+
+test('new-card highlight expires for every batch, also when batches arrive 600 ms apart', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  const s = await seed(page, trackRoom);
+  await openPresenter(page, s.room.setId);
+  await expect(board(page).locator('[data-card-id]')).toHaveCount(4);
+  const first = await s.add(s.tokens[2], 'q4', 'Erste neue', 'blue');
+  await page.waitForTimeout(600);
+  const second = await s.add(s.tokens[2], 'q4', 'Zweite neue', 'blue');
+  await expect(card(page, first)).toBeVisible();
+  await expect(card(page, second)).toBeVisible();
+  await page.waitForTimeout(1500);
+  await expect(board(page).locator('[data-fresh]')).toHaveCount(0);
+});
+
+test('dropping onto a hidden card does not stack (and the server refuses it)', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  const s = await seed(page, trackRoom);
+  const { ids } = s;
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/hide`, { card: ids.altlast, hidden: true });
+  const refused = await page.request.post(`${API_BASE_URL}/api/runs/${s.runId}/matrix/${s.questionId}/stack`, {
+    data: { card: ids.feedback, onto: ids.altlast },
+    headers: { 'X-CSRFToken': (await csrfToken(page.request)) ?? '' },
+  });
+  expect(refused.status()).toBe(400);
+  expect((await refused.json()).detail).toBe('Cannot stack onto a hidden card.');
+
+  await openPresenter(page, s.room.setId);
+  await page.locator('[data-help="handle.mx-edit"]').click();
+  const drawer = page.getByTestId('matrix-drawer');
+  await drawer.getByRole('checkbox', { name: 'Ausgeblendete anzeigen' }).check();
+  await drawer.getByRole('button', { name: 'Schließen' }).click();
+  await expect(card(page, ids.altlast)).toHaveAttribute('data-hidden', 'true');
+  const stacks: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && /\/matrix\/\d+\/stack$/.test(r.url())) stacks.push(r.url());
+  });
+  await drag(page, ids.feedback, await centre(page, ids.altlast), 'move');
+  expect(stacks).toEqual([]);
+  expect((await s.serverCard(ids.feedback)).stack).toBeNull();
+  expect((await s.serverCard(ids.feedback)).hidden).toBe(false);
+});
+
+test('mouse-closed drawer leaves no handle focused', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  const s = await seed(page, trackRoom);
+  await openPresenter(page, s.room.setId);
+  const focusedInHandles = () =>
+    page.evaluate(() => {
+      const a = document.activeElement as HTMLElement | null;
+      return !!a && a !== document.body && !!a.closest('[data-help^="handle."], [data-testid="matrix-drawer"], [data-beamer-inset]');
+    });
+  await page.locator('[data-help="handle.mx-edit"]').click();
+  const drawer = page.getByTestId('matrix-drawer');
+  await drawer.getByLabel('Titel').click(); // focus inside the drawer
+  await drawer.getByRole('button', { name: 'Schließen' }).click();
+  await expect(drawer).toHaveAttribute('inert', '');
+  expect(await focusedInHandles()).toBe(false);
 });

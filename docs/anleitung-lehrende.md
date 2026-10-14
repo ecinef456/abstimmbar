@@ -341,10 +341,11 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   der Beamer zeigt das Brett, solange die Abstimmung läuft und in der
   Ergebnisansicht. Die Fußleiste schaltet zwischen **Frage** und **Matrix** um
   (A wechselt die Ansicht, E führt zur Matrix); Stoppen (S) oder E lässt das
-  Brett stehen. Im Experten-Modus moderieren Sie direkt am Beamer:
-  - **Ziehen:** Karten lassen sich mit Maus oder Finger ziehen und rutschen
-    mit leichtem Nachlauf aus. Das Feld wechselt erst, wenn Sie die Karte
-    deutlich über eine Grenze ziehen; das Zielfeld leuchtet beim Ziehen auf.
+  Brett stehen. Sie moderieren direkt am Beamer:
+  - **Ziehen:** Karten lassen sich mit Maus oder Finger ziehen. Das Feld
+    wechselt erst, wenn Sie die Karte deutlich über eine Grenze ziehen
+    (sonst rutscht sie zurück in ihr Feld); das Zielfeld leuchtet beim
+    Ziehen auf.
   - **Stapeln:** Legen Sie eine Karte auf eine andere, bilden beide einen
     Stapel („×2“, „×3“ …) – praktisch für gleiche oder ähnliche Beiträge.
   - **Öffnen:** Ein Klick auf eine Karte öffnet sie mit Beschreibung und, bei

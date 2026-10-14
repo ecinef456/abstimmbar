@@ -186,7 +186,7 @@ def _top(card):
     return card.stack if card.stack_id else card
 
 
-def _free_slot(run, question, zone, exclude_pk=None):
+def free_slot(run, question, zone, exclude_pk=None):
     occupied = [
         (x, y)
         for x, y in _cards(run, question)
@@ -216,7 +216,7 @@ def _validated(question, zone, title, category, description):
 
 
 def _create(run, question, token, zone, title, category, description, teacher):
-    x, y = _free_slot(run, question, zone)
+    x, y = free_slot(run, question, zone)
     return MatrixCard.objects.create(
         run=run, question=question, token=token, title=title, description=description,
         category=category, zone=zone, x=x, y=y, teacher=teacher,
@@ -319,6 +319,8 @@ def stack_card(run, question, card_id, onto_id):
         target = _top(_get(run, question, onto_id))
         if moving.pk == target.pk:
             raise MatrixError("Cannot stack a card onto itself.")
+        if target.hidden:
+            raise MatrixError("Cannot stack onto a hidden card.")
         # The whole moving stack takes the target's zone and position; the
         # members of a hidden top become hidden too.
         place = {"stack": target, "zone": target.zone, "x": target.x, "y": target.y}
@@ -340,7 +342,7 @@ def unstack_card(run, question, card_id):
         elif not card.members.exists():
             raise MatrixError("Card is not stacked.")
         _detach(card)
-        card.x, card.y = _free_slot(run, question, card.zone, exclude_pk=card.pk)
+        card.x, card.y = free_slot(run, question, card.zone, exclude_pk=card.pk)
         card.placed = False
         card.save(update_fields=["x", "y", "zone", "placed"])
         return card

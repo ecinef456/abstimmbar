@@ -7948,6 +7948,20 @@ class MatrixServiceTests(MatrixTestCase):
         self.assertRefused(400, mxs.stack_card, self.run, self.xq, b.pk, a.pk)
         self.assertRefused(400, mxs.stack_card, self.run, self.xq, a.pk, a.pk)
 
+    def test_stack_onto_hidden_card_refused(self):
+        target, moving = self.add(title="Target"), self.add(title="Moving")
+        mxs.set_hidden(self.run, self.xq, target.pk, True)
+        with self.assertRaises(mxs.MatrixError) as ctx:
+            mxs.stack_card(self.run, self.xq, moving.pk, target.pk)
+        self.assertEqual(ctx.exception.status, 400)
+        self.assertEqual(ctx.exception.detail, "Cannot stack onto a hidden card.")
+        moving.refresh_from_db()
+        self.assertIsNone(moving.stack_id)
+
+    def test_free_slot_is_public(self):
+        x, y = mxs.free_slot(self.run, self.xq, "q1")
+        self.assertTrue(-1 <= x <= 1 and -1 <= y <= 1)
+
     def test_unstack_member(self):
         top, m = self.add(title="T"), self.add(title="M")
         self.stacked(top, m)

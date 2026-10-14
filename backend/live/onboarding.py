@@ -145,7 +145,7 @@ def _seed_matrix(run, question, tokens):
         if onto:
             mx.stack_card(run, question, card.pk, by_title[onto].pk)
     zone, title, cat, description = MATRIX_TEACHER_CARD
-    x, y = mx._free_slot(run, question, zone)
+    x, y = mx.free_slot(run, question, zone)
     MatrixCard.objects.create(
         run=run, question=question, title=title, description=description,
         category=keys[cat], zone=zone, x=x, y=y, teacher=True,
