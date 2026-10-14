@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { getDefaultContentLang, localizedMap, localizedText, type LocalizedText } from "@basicbar/ui";
 import type { MatrixCategory, MatrixCategoryMode } from "../api";
-import { MATRIX_PALETTE, paletteEntry } from "../matrixPalette";
+import { MATRIX_PALETTE, paletteEntry, type MatrixColor } from "../matrixPalette";
 import TranslatableField from "./TranslatableField";
 import { SegmentedControl, ToggleSwitch } from "./ui";
 
@@ -31,6 +31,16 @@ export const MATRIX_MAX_CATEGORIES = MATRIX_PALETTE.length;
 const MATRIX_MIN_CATEGORIES = 2;
 const AXIS_LABEL_MAX = 40;
 const NAME_MAX = 40;
+
+// English source strings of the colour names (translated in de/translation.json).
+const COLOR_NAME: Record<MatrixColor, string> = {
+  blue: "blue",
+  orange: "orange",
+  green: "green",
+  red: "red",
+  purple: "purple",
+  sky: "sky blue",
+};
 
 const emptyName: LocalizedText = { de: "", en: "" };
 
@@ -74,6 +84,77 @@ function Swatch({ colorKey }: { colorKey: string }) {
         {entry?.number}
       </span>
     </span>
+  );
+}
+
+
+/** Radio row of the palette colours for one category. Colours taken by another
+ *  category are disabled; the number is always shown (colour is never the only
+ *  cue). Arrow keys move the selection to the next free colour. */
+function ColorPicker({
+  value,
+  taken,
+  label,
+  onPick,
+}: {
+  value: string;
+  taken: Set<string>;
+  label: string;
+  onPick: (key: MatrixColor) => void;
+}) {
+  const { t } = useTranslation();
+  const free = MATRIX_PALETTE.filter((entry) => entry.key === value || !taken.has(entry.key));
+  function onKeyDown(event: React.KeyboardEvent) {
+    const step =
+      event.key === "ArrowRight" || event.key === "ArrowDown"
+        ? 1
+        : event.key === "ArrowLeft" || event.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (!step) return;
+    event.preventDefault();
+    const at = free.findIndex((entry) => entry.key === value);
+    const next = free[(at + step + free.length) % free.length];
+    onPick(next.key);
+    // Move focus with the selection (roving tabindex).
+    const group = event.currentTarget as HTMLElement;
+    requestAnimationFrame(() =>
+      group.querySelector<HTMLElement>(`[data-color="${next.key}"]`)?.focus(),
+    );
+  }
+  return (
+    <div role="radiogroup" aria-label={label} onKeyDown={onKeyDown} className="flex flex-wrap gap-1.5">
+      {MATRIX_PALETTE.map((entry) => {
+        const selected = entry.key === value;
+        const unavailable = !selected && taken.has(entry.key);
+        return (
+          <button
+            key={entry.key}
+            type="button"
+            role="radio"
+            data-color={entry.key}
+            aria-checked={selected}
+            disabled={unavailable}
+            tabIndex={selected ? 0 : -1}
+            aria-label={t("Color {{n}} ({{name}})", { n: entry.number, name: t(COLOR_NAME[entry.key]) })}
+            title={unavailable ? t("Already used by another category") : undefined}
+            onClick={() => onPick(entry.key)}
+            className={`inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-1.5 text-xs font-semibold tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
+              selected
+                ? "border-slate-900 ring-2 ring-slate-900 dark:border-white dark:ring-white"
+                : "border-slate-300 dark:border-slate-600"
+            } ${unavailable ? "cursor-not-allowed opacity-35" : "hover:bg-slate-100 dark:hover:bg-slate-800"} text-slate-700 dark:text-slate-300`}
+          >
+            <span
+              aria-hidden
+              className="inline-block h-4 w-4 flex-none rounded-full border border-slate-900/20 dark:border-white/30"
+              style={{ backgroundColor: entry.hex }}
+            />
+            <span aria-hidden>{entry.number}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -251,9 +332,20 @@ export default function MatrixSettings({
           <div className="grid gap-2">
             <ul className="grid gap-2">
               {value.categories.map((category, index) => (
-                <li key={category.key} className="flex items-end gap-3">
-                  <span className="flex h-9 w-12 flex-none items-center">
-                    <Swatch colorKey={category.key} />
+                <li key={category.key} className="flex flex-wrap items-end gap-x-3 gap-y-2">
+                  <span className="flex h-9 flex-none items-center">
+                    <ColorPicker
+                      value={category.key}
+                      taken={new Set(value.categories.map((c) => c.key))}
+                      label={t("Color of category {{n}}", { n: index + 1 })}
+                      onPick={(key) =>
+                        patch((prev) => ({
+                          categories: prev.categories.map((c) =>
+                            c.key === category.key ? { ...c, key } : c,
+                          ),
+                        }))
+                      }
+                    />
                   </span>
                   {value.categoryMode === "named" && (
                     <TranslatableField

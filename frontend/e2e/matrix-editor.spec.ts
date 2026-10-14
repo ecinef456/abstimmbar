@@ -94,6 +94,50 @@ test('create a matrix question with axes, edges and named categories; it persist
   await expect(page.getByRole('textbox', { name: 'Name der Kategorie 3' })).toHaveValue('Chance');
 });
 
+test('category colours can be chosen; used colours are disabled; "+ Kategorie" takes the next free one', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  await fillQuestionText(page, 'Welche Farbe?');
+  await page.getByRole('textbox', { name: 'x-Achse von' }).fill('a');
+  await page.getByRole('textbox', { name: 'x-Achse bis' }).fill('b');
+  await page.getByRole('textbox', { name: 'y-Achse von' }).fill('c');
+  await page.getByRole('textbox', { name: 'y-Achse bis' }).fill('d');
+  await page.getByRole('radio', { name: 'nur Farben' }).click();
+
+  const first = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 1' });
+  const second = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 2' });
+  await expect(first.getByRole('radio', { name: 'Farbe 1 (blau)' })).toBeChecked();
+  await expect(second.getByRole('radio', { name: 'Farbe 2 (orange)' })).toBeChecked();
+  // A colour used by another category cannot be picked.
+  await expect(first.getByRole('radio', { name: 'Farbe 2 (orange)' })).toBeDisabled();
+  await first.getByRole('radio', { name: 'Farbe 5 (violett)' }).click();
+  await expect(first.getByRole('radio', { name: 'Farbe 5 (violett)' })).toBeChecked();
+  // The freed colour is available to the other category; the new one is taken.
+  await expect(second.getByRole('radio', { name: 'Farbe 1 (blau)' })).toBeEnabled();
+  await expect(second.getByRole('radio', { name: 'Farbe 5 (violett)' })).toBeDisabled();
+  // Keyboard: arrow keys move to the next free colour.
+  await second.getByRole('radio', { name: 'Farbe 2 (orange)' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(second.getByRole('radio', { name: 'Farbe 3 (grün)' })).toBeChecked();
+  await second.getByRole('radio', { name: 'Farbe 2 (orange)' }).click();
+
+  await page.getByRole('button', { name: '+ Kategorie' }).click();
+  await expect(
+    page.getByRole('radiogroup', { name: 'Farbe der Kategorie 3' }).getByRole('radio', { name: 'Farbe 1 (blau)' }),
+  ).toBeChecked();
+
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  const api = apiClient(page.request);
+  const listed = await api.get(`/api/questions/?question_set=${seed.setId}`);
+  const items = Array.isArray(listed) ? listed : listed.results;
+  const stored = await api.get(`/api/questions/${items[0].id}/`);
+  expect(stored.matrix_categories.map((c: any) => c.key)).toEqual(['purple', 'orange', 'blue']);
+});
+
 test('"Alle Felder übersetzen" fills every matrix field (axes and category names)', async ({
   page,
   trackRoom,
