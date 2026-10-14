@@ -84,8 +84,7 @@ class OnboardingSeedOnWhoamiTests(TestCase):
         room = rooms.get()
         question_set = room.question_sets.get()
         kinds = set(question_set.questions.values_list("kind", flat=True))
-        # TODO(matrix PR3): the example room gains a matrix question.
-        self.assertEqual(kinds, set(Question.Kind.values) - {"matrix"})
+        self.assertEqual(kinds, set(Question.Kind.values))
 
     @override_settings(**LT_OFF)
     def test_second_whoami_does_not_duplicate_the_room(self):

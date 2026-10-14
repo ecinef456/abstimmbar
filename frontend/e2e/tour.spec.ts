@@ -13,8 +13,8 @@ test.use({ locale: 'en-US', viewport: { width: 1280, height: 860 } });
 
 async function login(page: Page) {
   await page.goto(`${API_BASE_URL}/oidc/authenticate/`);
-  await page.getByRole('textbox', { name: /Username or email|Benutzername/ }).fill('demo');
-  await page.getByRole('textbox', { name: /Password|Passwort/ }).fill('demo');
+  await page.getByRole('textbox', { name: /Username or email|Benutzername/ }).fill(process.env.TOUR_USER ?? 'demo');
+  await page.getByRole('textbox', { name: /Password|Passwort/ }).fill('demo'); // password is 'demo' for all dev users
   await page.getByRole('button', { name: /Sign In|Anmelden/ }).click();
   await page.waitForURL('http://localhost:5174/**');
 }
@@ -63,8 +63,12 @@ test('tour: sections, progress, Back across pages, skip section, arrow keys, min
   await login(page);
   const kinds = await exampleKinds(page);
   const hasMindmap = kinds.includes('mindmap');
+  const hasMatrix = kinds.includes('matrix');
 
   await page.goto('/');
+  // A fresh account (TOUR_USER) gets the welcome dialog first.
+  const skip = page.getByRole('dialog').getByRole('button', { name: 'Skip' });
+  if (await skip.isVisible({ timeout: 2000 }).catch(() => false)) await skip.click();
   await page.getByRole('button', { name: 'Help' }).click();
   await page.getByRole('menuitem', { name: 'Start tour' }).click();
 
@@ -138,6 +142,10 @@ test('tour: sections, progress, Back across pages, skip section, arrow keys, min
     expect(titles.indexOf('Mind map')).toBe(titles.indexOf('Ordering') + 1);
   } else {
     expect(titles).not.toContain('Mind map');
+  }
+  if (hasMatrix) {
+    expect(titles).toContain('Four-field matrix');
+    expect(titles.indexOf('Four-field matrix')).toBe(titles.indexOf('Mind map') + 1);
   }
   expect(parts.section).toBe('Presenting');
   expect(parts.current).toBe(1);

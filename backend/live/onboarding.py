@@ -9,6 +9,7 @@ picker (the earlier run = an archived Durchführung), CSV export and the set's
 "archive results" action are explorable right away. Both runs lie in the
 past: Easy mode then auto-archives on the next presentation and Expert gets
 the start dialog, so the example runs are never continued by accident.
+The matrix question gets example cards (``MATRIX_CARDS``) instead of votes.
 The mind map question gets example contributions (``MINDMAP_TERMS``) under
 its seeded branches instead of votes. Deterministic (fixed seed) so tests and screenshots are stable.
 """
@@ -19,8 +20,9 @@ from django.utils import timezone
 
 from rooms.models import Question
 
+from . import matrix as mx
 from . import mindmap as mm
-from .models import MindmapNode, OrderingResponse, ParticipantToken, PriorityScore, Run, Vote
+from .models import MatrixCard, MindmapNode, OrderingResponse, ParticipantToken, PriorityScore, Run, Vote
 
 # (days ago, participants) per run, older first.
 EXAMPLE_RUNS = ((14, 9), (2, 12))
@@ -49,6 +51,20 @@ MINDMAP_TERMS = [
     ("Methoden", "Live-Umfragen", (6,)),
     ("Methoden", "Diskussion", (7,)),
 ]
+
+# Matrix example cards: (zone, title, category, description, stacked onto the
+# title of another card or ""). The first category key is "In person", the
+# second "Digital"; the teacher card is added by the presenter, not a token.
+MATRIX_CARDS = [
+    ("q1", "Planspiel", 0, "Rollen verteilen, Entscheidungen live aushandeln.", ""),
+    ("q2", "Eigene Lehrvideos", 1, "Aufwendig in der Produktion, danach passiv.", ""),
+    ("q3", "Frontalvorlesung", 0, "", ""),
+    ("q3", "Folien zum Download", 1, "", "Frontalvorlesung"),
+    ("q4", "Live-Umfragen", 1, "Mit dem Smartphone, ohne Vorbereitung.", ""),
+    ("q4", "Murmelgruppen", 0, "Zwei Minuten Austausch mit der Sitznachbarin.", ""),
+    ("e_top", "Exkursion", 0, "Sehr aktivierend und sehr aufwendig.", ""),
+]
+MATRIX_TEACHER_CARD = ("e_right", "Peer Instruction", 0, "Abstimmen, diskutieren, erneut abstimmen.")
 
 # Relative weights for the 5 likert agreement steps (negative first).
 LIKERT_WEIGHTS = [1, 2, 3, 5, 4]
@@ -115,6 +131,27 @@ def _seed_mindmap(run, question, tokens):
                 mm.add_term(run, question, tokens[index], branches[branch].pk, term)
 
 
+def _seed_matrix(run, question, tokens):
+    """Place the example cards through the live helpers (auto-placement,
+    stacking), plus one presenter-added card (the run is already finished,
+    so it is created directly)."""
+    keys = [c["key"] for c in question.matrix_categories]
+    by_title = {}
+    for index, (zone, title, cat, description, onto) in enumerate(MATRIX_CARDS):
+        card = mx.add_card(
+            run, question, tokens[index % len(tokens)], zone, title, keys[cat], description
+        )
+        by_title[title] = card
+        if onto:
+            mx.stack_card(run, question, card.pk, by_title[onto].pk)
+    zone, title, cat, description = MATRIX_TEACHER_CARD
+    x, y = mx._free_slot(run, question, zone)
+    MatrixCard.objects.create(
+        run=run, question=question, title=title, description=description,
+        category=keys[cat], zone=zone, x=x, y=y, teacher=True,
+    )
+
+
 def seed_example_results(question_set):
     """Create the two finished example runs (see module docstring)."""
     rng = random.Random(78)
@@ -135,12 +172,14 @@ def seed_example_results(question_set):
         )
         for token in tokens[:participants]:
             for question in questions:
-                if question.kind == Question.Kind.MINDMAP:
+                if question.kind in (Question.Kind.MINDMAP, Question.Kind.MATRIX):
                     continue
                 _answer(rng, run, question, token)
         for question in questions:
             if question.kind == Question.Kind.MINDMAP:
                 _seed_mindmap(run, question, tokens[:participants])
+            elif question.kind == Question.Kind.MATRIX:
+                _seed_matrix(run, question, tokens[:participants])
         # auto_now_add/auto_now fields: back-date after the fact.
         Run.objects.filter(pk=run.pk).update(created_at=started, updated_at=ended)
         Vote.objects.filter(run=run).update(created_at=started)
