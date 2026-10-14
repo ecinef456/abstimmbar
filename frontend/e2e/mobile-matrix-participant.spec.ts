@@ -242,6 +242,8 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(view.locator('#mx-empty')).toBeHidden();
         // Screen-reader category text next to the card.
         await expect(cards.first().locator('.mx-sr')).toHaveText(/Idee/);
+        // Named mode shows colour + name only: no letters or numbers.
+        await expect(view.locator('.mx-num')).toHaveCount(0);
         // Selected chip shows a check (not colour alone).
         await expect(view.getByRole('radio', { name: /Idee/ }).locator('.mx-tick')).toBeVisible();
 
@@ -294,9 +296,9 @@ for (const scheme of ['light', 'dark'] as const) {
           matrix_descriptions: false,
           matrix_category_mode: 'colors',
           matrix_categories: [
+            { key: 'sky', name: { de: '', en: '' } },
             { key: 'blue', name: { de: '', en: '' } },
-            { key: 'orange', name: { de: '', en: '' } },
-            { key: 'green', name: { de: '', en: '' } },
+            { key: 'red', name: { de: '', en: '' } },
           ],
         });
         const runId = await startRun(api, room.setId);
@@ -304,14 +306,18 @@ for (const scheme of ['light', 'dark'] as const) {
         await page.goto(`${API_BASE_URL}/p/${room.code}/`);
         const view = page.locator('#matrix');
         await expect(view.locator('#mx-zones button')).toHaveCount(4);
+        // Letters follow the list position, not the colour (sky, blue, red -> A, B, C).
+        await expect(view.locator('#mx-cats .mx-num')).toHaveText(['A', 'B', 'C']);
         await expect(view.getByRole('radio')).toHaveCount(3);
-        await expect(view.getByRole('radio', { name: 'Farbe 2' })).toBeVisible();
+        await expect(view.getByRole('radio', { name: 'Farbe B' })).toBeVisible();
         await expect(view.getByRole('textbox', { name: /Beschreibung/ })).toHaveCount(0);
         await view.getByRole('button', { name: ZONE.q4, exact: true }).click();
-        await view.getByRole('radio', { name: 'Farbe 3' }).click();
+        await view.getByRole('radio', { name: 'Farbe C' }).click();
         await view.getByRole('textbox', { name: 'Titel' }).fill('Grün unten rechts');
         await view.getByRole('button', { name: 'Karte hinzufügen' }).click();
         await expect(view.locator('#mx-mine li')).toHaveCount(1);
+        await expect(view.locator('#mx-mine li .mx-sr')).toHaveText('Farbe C');
+        await expect(view.locator('#mx-mine li .mx-num')).toHaveText('C');
         await expectNoHorizontalOverflow(page, 'matrix colours, no edges');
       } finally {
         await page.close();

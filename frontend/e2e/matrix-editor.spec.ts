@@ -109,24 +109,24 @@ test('category colours can be chosen; used colours are disabled; "+ Kategorie" t
 
   const first = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 1' });
   const second = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 2' });
-  await expect(first.getByRole('radio', { name: 'Farbe 1 (blau)' })).toBeChecked();
-  await expect(second.getByRole('radio', { name: 'Farbe 2 (orange)' })).toBeChecked();
+  await expect(first.getByRole('radio', { name: 'Blau', exact: true })).toBeChecked();
+  await expect(second.getByRole('radio', { name: 'Orange', exact: true })).toBeChecked();
   // A colour used by another category cannot be picked.
-  await expect(first.getByRole('radio', { name: 'Farbe 2 (orange)' })).toBeDisabled();
-  await first.getByRole('radio', { name: 'Farbe 5 (violett)' }).click();
-  await expect(first.getByRole('radio', { name: 'Farbe 5 (violett)' })).toBeChecked();
+  await expect(first.getByRole('radio', { name: 'Orange', exact: true })).toBeDisabled();
+  await first.getByRole('radio', { name: 'Violett', exact: true }).click();
+  await expect(first.getByRole('radio', { name: 'Violett', exact: true })).toBeChecked();
   // The freed colour is available to the other category; the new one is taken.
-  await expect(second.getByRole('radio', { name: 'Farbe 1 (blau)' })).toBeEnabled();
-  await expect(second.getByRole('radio', { name: 'Farbe 5 (violett)' })).toBeDisabled();
+  await expect(second.getByRole('radio', { name: 'Blau', exact: true })).toBeEnabled();
+  await expect(second.getByRole('radio', { name: 'Violett', exact: true })).toBeDisabled();
   // Keyboard: arrow keys move to the next free colour.
-  await second.getByRole('radio', { name: 'Farbe 2 (orange)' }).focus();
+  await second.getByRole('radio', { name: 'Orange', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
-  await expect(second.getByRole('radio', { name: 'Farbe 3 (grün)' })).toBeChecked();
-  await second.getByRole('radio', { name: 'Farbe 2 (orange)' }).click();
+  await expect(second.getByRole('radio', { name: 'Grün', exact: true })).toBeChecked();
+  await second.getByRole('radio', { name: 'Orange', exact: true }).click();
 
   await page.getByRole('button', { name: '+ Kategorie' }).click();
   await expect(
-    page.getByRole('radiogroup', { name: 'Farbe der Kategorie 3' }).getByRole('radio', { name: 'Farbe 1 (blau)' }),
+    page.getByRole('radiogroup', { name: 'Farbe der Kategorie 3' }).getByRole('radio', { name: 'Blau', exact: true }),
   ).toBeChecked();
 
   await page.getByRole('button', { name: 'Speichern', exact: true }).click();
@@ -136,6 +136,36 @@ test('category colours can be chosen; used colours are disabled; "+ Kategorie" t
   const items = Array.isArray(listed) ? listed : listed.results;
   const stored = await api.get(`/api/questions/${items[0].id}/`);
   expect(stored.matrix_categories.map((c: any) => c.key)).toEqual(['purple', 'orange', 'blue']);
+});
+
+test('colors mode labels categories A, B, C by position, not by colour; named mode shows no letters', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  await page.getByRole('radio', { name: 'nur Farben' }).click();
+  await page.getByRole('button', { name: '+ Kategorie' }).click();
+  const g1 = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 1' });
+  const g2 = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 2' });
+  const g3 = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 3' });
+  // Pick sky, blue, red out of palette order (free the blue first).
+  await g3.getByRole('radio', { name: 'Rot', exact: true }).click();
+  await g1.getByRole('radio', { name: 'Hellblau', exact: true }).click();
+  await g2.getByRole('radio', { name: 'Blau', exact: true }).click();
+  await expect(g1.getByRole('radio', { name: 'Hellblau', exact: true })).toBeChecked();
+  await expect(g2.getByRole('radio', { name: 'Blau', exact: true })).toBeChecked();
+  await expect(g3.getByRole('radio', { name: 'Rot', exact: true })).toBeChecked();
+  // Swatches carry no number; the colour name is also the tooltip text.
+  await expect(g1.getByRole('radio', { name: 'Hellblau', exact: true })).toHaveText('');
+  await expect(g1.getByRole('radio', { name: 'Hellblau', exact: true })).toHaveAttribute('title', 'Hellblau');
+  // Letters by position.
+  const letters = page.getByTestId('matrix-category-letter');
+  await expect(letters).toHaveText(['A', 'B', 'C']);
+  // Named mode: no letters anywhere.
+  await page.getByRole('radio', { name: 'mit Namen' }).click();
+  await expect(letters).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Name der Kategorie 1' }).first()).toBeVisible();
 });
 
 test('changing a colour keeps focus, the name and its language tab', async ({ page, trackRoom }) => {
@@ -148,13 +178,13 @@ test('changing a colour keeps focus, the name and its language tab', async ({ pa
   await page.getByRole('textbox', { name: 'Name der Kategorie 1' }).fill('Idea');
 
   const group = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 1' });
-  await group.getByRole('radio', { name: 'Farbe 1 (blau)' }).focus();
+  await group.getByRole('radio', { name: 'Blau', exact: true }).focus();
   // Category 2 holds orange (2): ArrowRight skips it -> green (3), then red (4).
   await page.keyboard.press('ArrowRight');
-  await expect(group.getByRole('radio', { name: 'Farbe 3 (grün)' })).toBeChecked();
+  await expect(group.getByRole('radio', { name: 'Grün', exact: true })).toBeChecked();
   await page.keyboard.press('ArrowRight');
-  await expect(group.getByRole('radio', { name: 'Farbe 4 (rot)' })).toBeChecked();
-  await expect(group.getByRole('radio', { name: 'Farbe 4 (rot)' })).toBeFocused();
+  await expect(group.getByRole('radio', { name: 'Rot', exact: true })).toBeChecked();
+  await expect(group.getByRole('radio', { name: 'Rot', exact: true })).toBeFocused();
   // The name field kept its value and its active (English) language tab.
   await expect(page.getByRole('textbox', { name: 'Name der Kategorie 1' })).toHaveValue('Idea');
   await expect(

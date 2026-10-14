@@ -3327,11 +3327,12 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   // mine endpoint (once per run:question and page load) and from every
   // add/remove response. The static parts (axis cross, chips) are rebuilt
   // only when the question or its settings change, so typing survives the
-  // live state broadcasts. Palette: same as frontend/src/matrixPalette.ts.
+  // live state broadcasts. Palette and label rule (named: name only; colors:
+  // letter A, B, ... by list position): same as frontend/src/matrixPalette.ts.
   const MX_PALETTE = {
-    blue: { hex: "#0072B2", number: 1 }, orange: { hex: "#E69F00", number: 2 },
-    green: { hex: "#009E73", number: 3 }, red: { hex: "#D55E00", number: 4 },
-    purple: { hex: "#CC79A7", number: 5 }, sky: { hex: "#56B4E9", number: 6 },
+    blue: { hex: "#0072B2" }, orange: { hex: "#E69F00" },
+    green: { hex: "#009E73" }, red: { hex: "#D55E00" },
+    purple: { hex: "#CC79A7" }, sky: { hex: "#56B4E9" },
   };
   const MX_ICONS = {
     plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
@@ -3377,9 +3378,10 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   function mxCategoryInfo(key) {
     const s = mxSettings();
     const i = s.categories.findIndex((c) => c.key === key);
-    const pal = MX_PALETTE[key] || { hex: "var(--ink-soft)", number: i + 1 };
+    const pal = MX_PALETTE[key] || { hex: "var(--ink-soft)" };
     const name = s.category_mode === "named" && i >= 0 ? locText(s.categories[i].name) : "";
-    return { hex: pal.hex, number: pal.number, name };
+    const letter = s.category_mode === "colors" && i >= 0 ? String.fromCharCode(65 + i) : "";
+    return { hex: pal.hex, letter, name };
   }
 
   function mxSetMine(list) {
@@ -3476,11 +3478,14 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       dot.setAttribute("aria-hidden", "true");
       const label = document.createElement("span");
       if (s.category_mode === "named") {
-        const num = document.createElement("span");
-        num.className = "mx-num"; num.textContent = String(info.number);
-        label.append(num, document.createTextNode(" " + info.name));
+        label.textContent = info.name;
       } else {
-        label.textContent = I18N.mxColor.replace("{n}", String(info.number));
+        const num = document.createElement("span");
+        num.className = "mx-num"; num.textContent = info.letter;
+        num.setAttribute("aria-hidden", "true");
+        const sr = document.createElement("span");
+        sr.className = "mx-sr"; sr.textContent = I18N.mxColor.replace("{n}", info.letter);
+        label.append(num, sr);
       }
       const tick = document.createElement("span");
       tick.className = "mx-tick";
@@ -3602,16 +3607,20 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
         const dot = document.createElement("span");
         dot.className = "mx-dot"; dot.style.background = info.hex;
         dot.setAttribute("aria-hidden", "true");
-        const num = document.createElement("span");
-        num.className = "mx-num"; num.textContent = String(info.number);
-        num.setAttribute("aria-hidden", "true");
         const sr = document.createElement("span");
         sr.className = "mx-sr";
-        sr.textContent = info.name || I18N.mxColor.replace("{n}", String(info.number));
+        sr.textContent = info.name || I18N.mxColor.replace("{n}", info.letter);
         const tag = document.createElement("span");
         tag.style.cssText = "flex:none;display:inline-flex;align-items:center;gap:4px";
         if (info.name) tag.title = info.name;
-        tag.append(dot, num, sr);
+        if (info.letter) {
+          const num = document.createElement("span");
+          num.className = "mx-num"; num.textContent = info.letter;
+          num.setAttribute("aria-hidden", "true");
+          tag.append(dot, num, sr);
+        } else {
+          tag.append(dot, sr);
+        }
         li.append(tag);
       }
       const body = document.createElement("div");

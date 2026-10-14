@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { getDefaultContentLang, localizedMap, type LocalizedText } from "@basicbar/ui";
 import type { MatrixCategory, MatrixCategoryMode } from "../api";
-import { MATRIX_PALETTE, type MatrixColor } from "../matrixPalette";
+import { MATRIX_PALETTE, colorName, type MatrixColor } from "../matrixPalette";
 import TranslatableField from "./TranslatableField";
 import { SegmentedControl, ToggleSwitch } from "./ui";
 
@@ -31,16 +31,6 @@ export const MATRIX_MAX_CATEGORIES = MATRIX_PALETTE.length;
 const MATRIX_MIN_CATEGORIES = 2;
 const AXIS_LABEL_MAX = 40;
 const NAME_MAX = 40;
-
-// English source strings of the colour names (translated in de/translation.json).
-const COLOR_NAME: Record<MatrixColor, string> = {
-  blue: "blue",
-  orange: "orange",
-  green: "green",
-  red: "red",
-  purple: "purple",
-  sky: "sky blue",
-};
 
 const emptyName: LocalizedText = { de: "", en: "" };
 
@@ -72,8 +62,8 @@ export function matrixProblem(
 }
 
 /** Radio row of the palette colours for one category. Colours taken by another
- *  category are disabled; the number is always shown (colour is never the only
- *  cue). Arrow keys move the selection to the next free colour. */
+ *  category are disabled; swatches show only the colour (name as accessible
+ *  name and tooltip; the category row carries the letter). Arrow keys move the selection to the next free colour. */
 function ColorPicker({
   value,
   taken,
@@ -85,7 +75,8 @@ function ColorPicker({
   label: string;
   onPick: (key: MatrixColor) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language.startsWith("de") ? "de" : "en";
   const free = MATRIX_PALETTE.filter((entry) => entry.key === value || !taken.has(entry.key));
   function onKeyDown(event: React.KeyboardEvent) {
     const step =
@@ -110,6 +101,7 @@ function ColorPicker({
       {MATRIX_PALETTE.map((entry) => {
         const selected = entry.key === value;
         const unavailable = !selected && taken.has(entry.key);
+        const name = colorName(entry.key, lang);
         return (
           <button
             key={entry.key}
@@ -119,10 +111,10 @@ function ColorPicker({
             aria-checked={selected}
             disabled={unavailable}
             tabIndex={selected ? 0 : -1}
-            aria-label={t("Color {{n}} ({{name}})", { n: entry.number, name: t(COLOR_NAME[entry.key]) })}
-            title={unavailable ? t("Already used by another category") : undefined}
+            aria-label={name}
+            title={unavailable ? `${name} – ${t("Already used by another category")}` : name}
             onClick={() => onPick(entry.key)}
-            className={`inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-full border px-1.5 text-xs font-semibold tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 ${
               selected
                 ? "border-slate-900 ring-2 ring-slate-900 dark:border-white dark:ring-white"
                 : "border-slate-300 dark:border-slate-600"
@@ -133,7 +125,6 @@ function ColorPicker({
               className="inline-block h-4 w-4 flex-none rounded-full border border-slate-900/20 dark:border-white/30"
               style={{ backgroundColor: entry.hex }}
             />
-            <span aria-hidden>{entry.number}</span>
           </button>
         );
       })}
@@ -300,7 +291,16 @@ export default function MatrixSettings({
                 // Index key: the row (colour picker focus, name field's active language
                 // tab) must survive a colour change, which changes category.key.
                 <li key={index} className="flex flex-wrap items-end gap-x-3 gap-y-2">
-                  <span className="flex h-9 flex-none items-center">
+                  <span className="flex h-9 flex-none items-center gap-2">
+                    {value.categoryMode === "colors" && (
+                      <span
+                        data-testid="matrix-category-letter"
+                        aria-hidden
+                        className="w-4 text-center text-sm font-semibold text-slate-700 dark:text-slate-300"
+                      >
+                        {String.fromCharCode(65 + index)}
+                      </span>
+                    )}
                     <ColorPicker
                       value={category.key}
                       taken={new Set(value.categories.map((c) => c.key))}
