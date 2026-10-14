@@ -21,7 +21,10 @@ Projects:
   and the translation-controls drag smoke test (`translation-controls.spec.ts`),
   and the guided tour (`tour.spec.ts`: sections/progress, Back across a page
   change, "Skip section", ←/→, mind map step shown only if the demo user's
-  example set has one; read-only on the example room, restores it if missing),
+  example set has one — otherwise a visible `skip-reason` annotation is recorded;
+  read-only on the example room, restores it if missing; set `TOUR_USER=<keycloak
+  user>` to run it as a fresh dev account, password `demo` like all dev users,
+  whose example room then includes the matrix),
   and the presenter footer (`presenter-footer.spec.ts`: icon bar per question
   kind, view switcher, keys A/E/L, axe on the footer, no overflow at 1280 px;
   `FOOTER_SHOTS=<dir>` saves footer screenshots), and the presenter "?" help

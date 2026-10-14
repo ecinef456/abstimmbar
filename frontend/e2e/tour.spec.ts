@@ -64,6 +64,12 @@ test('tour: sections, progress, Back across pages, skip section, arrow keys, min
   const kinds = await exampleKinds(page);
   const hasMindmap = kinds.includes('mindmap');
   const hasMatrix = kinds.includes('matrix');
+  if (!hasMatrix) {
+    const reason =
+      'example room predates the matrix question — matrix tour step not exercised (restore the example room to cover it)';
+    test.info().annotations.push({ type: 'skip-reason', description: reason });
+    console.log(`tour.spec: ${reason}`);
+  }
 
   await page.goto('/');
   // A fresh account (TOUR_USER) gets the welcome dialog first.

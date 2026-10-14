@@ -155,8 +155,8 @@ Folgende Fragetypen stehen zur Verfügung:
   **Kanten erlauben** (Karten dürfen auch auf den Achsenlinien liegen, also
   zwischen zwei Feldern), **Beschreibungen auf Karten** (zusätzlich zum Titel),
   **Karten pro Person** und **Kategorien**: *aus*, *nur Farben* (bis zu sechs
-  Farben, auf Smartphone und Beamer als Buchstaben A–F nach Reihenfolge
-  benannt) oder *mit Namen* (Farbe plus Name, z. B. „Präsenz“ und
+  Farben, die Sie frei aus der Palette wählen; auf Smartphone und Beamer als
+  Buchstaben A–F nach Reihenfolge benannt) oder *mit Namen* (Farbe plus Name, z. B. „Präsenz“ und
   „Digital“). Mindestens zwei Kategorien sind nötig. Teilnehmende wählen auf dem
   Smartphone ein Feld (die „+“-Flächen), geben Titel (und ggf. Beschreibung und
   Kategorie) ein und sehen unter „Ihre Karten“, wie viele sie noch
@@ -359,8 +359,8 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     größer oder kleiner. Ein Klick auf eine Kategorie in der Legende blendet ihre
     Karten aus bzw. wieder ein.
   - **Tastatur:** Mit Tab erreichen Sie die Karten, Enter öffnet eine Karte,
-    die Pfeiltasten verschieben sie (Umschalt für größere Schritte). Eine
-    Mausbewegung beendet die Tastatursteuerung wieder. **?** beschriftet alle
+    die Pfeiltasten verschieben sie (Umschalt für größere Schritte). Ein
+    Mausklick beendet die Tastatursteuerung wieder. **?** beschriftet alle
     Bedienelemente.
 - **Wortwolken bearbeiten (Experten-Modus):** Ziehen Sie einen Begriff auf
   einen anderen, um beide zusammenzuführen; mit × blenden Sie einen Begriff aus.
@@ -395,7 +395,8 @@ Fragenset über **„Ergebnisse"**. Dort können Sie:
 
 - die Auswertung je Frage einsehen (inkl. Wortwolke, Likert-Balken, Prioritäten,
   Sortierung und Vier-Felder-Matrix – dort als Brett und als Liste der Karten
-  nach Feldern gruppiert; ausgeblendete Karten sind markiert); richtige Antworten sind hier immer grün mit „Richtig“
+  nach Feldern gruppiert; ausgeblendete Karten sind markiert); richtige
+  Antworten sind hier immer grün mit „Richtig“
   markiert,
 - über das Auswahlfeld oben **frühere Durchführungen** wählen — jede
   Präsentation wird als eigene Durchführung gespeichert,
