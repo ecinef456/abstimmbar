@@ -137,6 +137,10 @@ def build_payloads(room):
         mindmap.ensure_seed(run, question)
 
     participant = dict(base)
+    # Presenter left without ending (✕/Esc): devices show „paused". Only on
+    # an unfinished run — ``active_run`` never returns a finished one.
+    if run.presenter_away:
+        participant["paused"] = True
     if ends_at:
         participant["ends_at"] = ends_at
     if question and run.phase == Run.Phase.OPEN:

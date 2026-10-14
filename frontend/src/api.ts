@@ -1334,6 +1334,9 @@ export const live = {
   status: (setId: number) =>
     request<{
       active_run: number | null;
+      active_run_phase: string | null;
+      /** Past the lobby, left by the presenter, or carrying answers. */
+      active_run_in_use: boolean;
       has_votes: boolean;
       active_run_has_votes: boolean;
       recently_started: boolean;
@@ -1358,7 +1361,14 @@ export const live = {
     ),
   control: (
     runId: number,
-    data: { phase?: string; question?: number | null; reveal?: boolean; recording?: boolean },
+    data: {
+      phase?: string;
+      question?: number | null;
+      reveal?: boolean;
+      recording?: boolean;
+      /** Leave without ending: closes an open vote, participants see „paused". */
+      away?: boolean;
+    },
   ) =>
     request<{ status: string; phase?: string; recording_token?: string }>(
       `/api/runs/${runId}/control/`,

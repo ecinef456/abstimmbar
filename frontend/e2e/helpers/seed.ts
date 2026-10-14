@@ -116,14 +116,17 @@ export async function createRoomWithQuestions(
   label: string,
   /** Called as soon as the room exists, before anything else can fail. */
   onRoomCreated?: (roomId: number) => void,
+  /** Title prefix; "E2E Mobile" rooms are swept by mobile.setup — specs
+   *  that may run alongside it use another one. */
+  prefix = 'E2E Mobile',
 ): Promise<Omit<Seed, 'runId'>> {
   const api = apiClient(request);
   // Room titles are unique per owner; parallel tests need their own suffix.
   const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const room = await api.post('/api/rooms/', {
     title: T(
-      `E2E Mobile ${label} – ein ziemlich langer Raumtitel für Überlauf-Tests ${unique}`,
-      `E2E Mobile ${label} ${unique}`,
+      `${prefix} ${label} – ein ziemlich langer Raumtitel für Überlauf-Tests ${unique}`,
+      `${prefix} ${label} ${unique}`,
     ),
     description: T('<p>Beschreibung für den Überlauf-Test</p>'),
   });

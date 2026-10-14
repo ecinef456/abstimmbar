@@ -160,11 +160,15 @@ msgstr "Die Abstimmung ist beendet."
 msgid "View my answers"
 msgstr "Meine Antworten ansehen"
 
+#: live/templates/live/participant.html:130
+msgid "The presentation is paused – more questions may follow."
+msgstr "Die Präsentation ist gerade pausiert – es können noch weitere Fragen folgen."
+
 #: live/templates/live/participant.html:129
 msgid "You have not answered anything in this round yet."
 msgstr "Sie haben in dieser Runde noch nichts beantwortet."
 
-#: live/templates/live/participant.html:131
+#: live/templates/live/participant.html:130
 msgid "Back"
 msgstr "Zurück"
 

@@ -21,7 +21,14 @@ Projects:
   and the translation-controls drag smoke test (`translation-controls.spec.ts`),
   and the guided tour (`tour.spec.ts`: sections/progress, Back across a page
   change, "Skip section", ←/→, mind map step shown only if the demo user's
-  example set has one; read-only on the example room, restores it if missing).
+  example set has one; read-only on the example room, restores it if missing),
+  and the presenter footer (`presenter-footer.spec.ts`: icon bar per question
+  kind, view switcher, keys A/E/L, axe on the footer, no overflow at 1280 px;
+  `FOOTER_SHOTS=<dir>` saves footer screenshots), and the presenter "?" help
+  (`presenter-help.spec.ts`: ?/H/button open and close, one label card per
+  visible control and handle without overlaps, Esc closes only the help, no
+  shortcuts while open, axe on the overlay; `HELP_SHOTS=<dir>` saves
+  screenshots).
 - `phone-chromium` / `phone-firefox` — 324×756 px (Galaxy Z Fold7 front
   screen), `mobile-*.spec.ts` only: layout checks (`mobile-layout.spec.ts`,
   tour popover in `mobile-tour.spec.ts`) and

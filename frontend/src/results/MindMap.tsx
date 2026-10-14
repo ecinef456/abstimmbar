@@ -693,6 +693,7 @@ export default function MindMap({
   maxDepth = 8,
   withDescriptions = false,
   zoomHandleTop,
+  onDetailedChange,
   keyboard = true,
   memoryKey,
   rating,
@@ -722,6 +723,8 @@ export default function MindMap({
   /** Beamer: the zoom controls become a collapsible right-edge handle at
    *  this viewport y (px); otherwise they sit bottom right in the map. */
   zoomHandleTop?: number;
+  /** Beamer: offer compact / detailed (descriptions) in the zoom handle. */
+  onDetailedChange?: (detailed: boolean) => void;
   /** Zoom/pan keys (+ / − / 0 / F, Shift+arrows) on the window. */
   keyboard?: boolean;
   /** Identifies the map (run + question) so the branch sides are kept. */
@@ -1859,7 +1862,39 @@ export default function MindMap({
           style={{ top: zoomHandleTop }}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          {zoomOpen && <div className="flex items-center pl-1">{zoomButtons}</div>}
+          {zoomOpen && (
+            <div className="flex items-center pl-1">
+              {onDetailedChange && (
+                <div
+                  role="radiogroup"
+                  aria-label={t("Display")}
+                  className="mr-1 flex items-center rounded-full border border-slate-200 p-0.5 text-xs font-medium"
+                >
+                  {([false, true] as const).map((d) => (
+                    <button
+                      key={String(d)}
+                      type="button"
+                      role="radio"
+                      aria-checked={detailed === d}
+                      data-testid={d ? "mm-detailed" : "mm-compact"}
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        onDetailedChange(d);
+                      }}
+                      className={`rounded-full px-2.5 py-1 ${
+                        detailed === d
+                          ? "bg-brand-100 text-brand-800"
+                          : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      {d ? t("Detailed") : t("Compact")}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {zoomButtons}
+            </div>
+          )}
           <button
             type="button"
             className="p-3 hover:text-slate-800"
@@ -1868,6 +1903,7 @@ export default function MindMap({
               setZoomOpen((o) => !o);
             }}
             aria-expanded={zoomOpen}
+            data-help="handle.zoom"
             aria-label={zoomOpen ? t("Hide zoom controls") : t("Zoom")}
             title={zoomOpen ? t("Hide zoom controls") : t("Zoom")}
           >

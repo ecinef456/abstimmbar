@@ -1729,7 +1729,7 @@ export default function QuestionPage() {
             </label>
             <p className="mt-1 text-xs text-slate-400">
               {t(
-                "In addition to the automatic upper/lower case correction. In presentation mode, switch between Original, Cleaned up and Grouped with the “a” key / “View” button.",
+                "In addition to the automatic upper/lower case correction. In presentation mode, choose Original, Cleaned up or Grouped in the view switcher (or step through them with A).",
               )}
             </p>
             {/* What "Cleaned up" merges (beyond case). All off = case only. */}
@@ -1953,7 +1953,7 @@ export default function QuestionPage() {
             </label>
             <p className="mt-1 text-xs text-slate-400">
               {t(
-                "In presentation mode, switch to Key statements or Grouped with the “a” key / “View” button. The beamer then shows AI statements with counts instead of the answers.",
+                "In presentation mode, choose Key statements or Grouped in the view switcher (or step there with A). The beamer then shows AI statements with counts instead of the answers.",
               )}
             </p>
             {wordcloudAiEnabled && (

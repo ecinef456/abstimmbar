@@ -124,6 +124,13 @@ survives the live updates.
   <p class="soft">{% trans "You can see the results on the screen." %}</p>
 </section>
 
+{# Presenter left (✕/Esc) without ending: more questions may follow; a new vote jumps there. #}
+<section id="paused" class="center" hidden>
+  <div class="emoji"><svg class="ic" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/></svg></div>
+  <p id="paused-text">{% trans "The presentation is paused – more questions may follow." %}</p>
+  <button class="primary" id="paused-review" style="margin-top:6px" hidden>{% trans "View my answers" %}</button>
+</section>
+
 {# Closing screen after the vote ends (#24): review button + info Markdown. #}
 <style>
   #closing{margin-top:28px;text-align:left;border-top:1px solid var(--line);padding-top:20px}
@@ -486,7 +493,7 @@ survives the live updates.
     return v[lang] || v["{{ CONTENT_DEFAULT_LANGUAGE|default:'de' }}"] ||
       Object.values(v).find(Boolean) || "";
   }
-  const sections = ["waiting", "question", "done", "closed", "finished",
+  const sections = ["waiting", "question", "done", "closed", "paused", "finished",
                     "resultsview", "review", "quiz", "quiz-done", "recording", "mindmap",
                     "check", "check-done", "check-unavailable"].reduce(
     (acc, id) => (acc[id] = document.getElementById(id), acc), {});
@@ -2033,6 +2040,16 @@ survives the live updates.
       ? (state.run_id ?? "") + ":" + state.question.id : null;
     if (evalKey && evalKey !== evalActiveKey) stopEvalPoll();
     setQuestionPending(false);
+    // Presenter left without ending (✕/Esc): „paused" until a vote opens
+    // again (the presenter clears the flag with any control, see render()).
+    if (state.paused && phase !== "open") {
+      window.clearInterval(countdownTimer);
+      window.clearInterval(mmTimer);
+      // Like the finished screen: the review button only if I answered something.
+      document.getElementById("paused-review").hidden = history.order.length === 0;
+      show("paused");
+      return;
+    }
     // Mind map: the shared tree replaces the vote form and stays readable
     // after closing (closed/results) — no "answered" state, no results view.
     if (mmIsMindmap()) {
@@ -2410,6 +2427,7 @@ survives the live updates.
   }
   document.getElementById("review-open").addEventListener("click", openReview);
   document.getElementById("finished-review").addEventListener("click", openReview);
+  document.getElementById("paused-review").addEventListener("click", openReview);
   document.getElementById("review-close").addEventListener("click", () => {
     reviewing = false;
     render();
