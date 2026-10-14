@@ -8046,3 +8046,217 @@ class MatrixAnsweredTests(MatrixTestCase):
         mxs.add_card(self.run, self.xq, self.tok, "q1", "P")
         self.assertTrue(Run.objects.filter(answered_runs_q(), pk=self.run.pk).exists())
         self.assertTrue(run_has_answers(self.run))
+
+
+class MatrixApiTests(MatrixTestCase):
+    def base(self):
+        return f"/api/live/rooms/{self.room.code}/matrix"
+
+    def post(self, path, **body):
+        return self.client.post(
+            f"{self.base()}/{path}/", body, content_type="application/json"
+        )
+
+    def p_add(self, token=None, **kw):
+        payload = {"token": (token or self.tok).key, "question": self.xq.pk,
+                   "zone": "q1", "title": "Idea"}
+        payload.update(kw)
+        return self.post("add", **payload)
+
+    def run_post(self, action, **body):
+        return self.client.post(
+            f"/api/runs/{self.run.pk}/matrix/{self.xq.pk}/{action}",
+            body, content_type="application/json",
+        )
+
+    def test_participant_add_mine_remove(self):
+        response = self.p_add(title="Idea")
+        self.assertEqual(response.status_code, 201, response.content)
+        body = response.json()
+        self.assertEqual(body["mine"][0]["title"], "Idea")
+        card = MatrixCard.objects.get(pk=body["card_id"])
+        self.assertEqual(card.token, self.tok)
+        mine = self.post("mine", token=self.tok.key, question=self.xq.pk)
+        self.assertEqual(mine.status_code, 200)
+        self.assertEqual([c["id"] for c in mine.json()["mine"]], [card.pk])
+        removed = self.post(
+            "remove", token=self.tok.key, question=self.xq.pk, card=card.pk
+        )
+        self.assertEqual(removed.status_code, 200)
+        self.assertEqual(removed.json(), {"status": "ok", "mine": []})
+        self.assertFalse(MatrixCard.objects.exists())
+
+    def test_mine_works_after_close_and_is_token_scoped(self):
+        self.add(self.tok, title="Mine")
+        self.add(self.tok2, title="Other")
+        self.run.phase = Run.Phase.CLOSED
+        self.run.save()
+        mine = self.post("mine", token=self.tok.key, question=self.xq.pk).json()["mine"]
+        self.assertEqual([c["title"] for c in mine], ["Mine"])
+
+    def test_add_refusals(self):
+        self.assertEqual(self.p_add(question=self.question.pk).status_code, 409)
+        self.assertEqual(self.p_add(token=ParticipantToken(key="nope")).status_code, 403)
+        self.assertEqual(self.p_add(title="  ").status_code, 400)
+        self.run.phase = Run.Phase.CLOSED
+        self.run.save()
+        self.assertEqual(self.p_add().status_code, 409)
+
+    def test_kind_mismatch_is_400(self):
+        self.run.active_question = self.question
+        self.run.save()
+        self.assertEqual(self.p_add(question=self.question.pk).status_code, 400)
+
+    def test_remove_foreign_card_404(self):
+        card = self.add(self.tok2)
+        response = self.post(
+            "remove", token=self.tok.key, question=self.xq.pk, card=card.pk
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_presenter_endpoints_return_board(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        self.client.force_login(self.owner)
+        with patch("live.views.broadcast") as bc:
+            r = self.run_post("move", card=a.pk, x=0.5, y=0.5)
+            self.assertEqual(r.status_code, 200, r.content)
+            self.assertEqual(bc.call_count, 1)
+        by_id = {c["id"]: c for c in r.json()["matrix"]["cards"]}
+        self.assertTrue(by_id[a.pk]["placed"])
+        r = self.run_post("stack", card=a.pk, onto=b.pk)
+        self.assertEqual(r.status_code, 200)
+        by_id = {c["id"]: c for c in r.json()["matrix"]["cards"]}
+        self.assertEqual(by_id[a.pk]["stack"], b.pk)
+        r = self.run_post("unstack", card=a.pk)
+        self.assertIsNone({c["id"]: c for c in r.json()["matrix"]["cards"]}[a.pk]["stack"])
+        r = self.run_post("hide", card=b.pk, hidden=True)
+        self.assertTrue({c["id"]: c for c in r.json()["matrix"]["cards"]}[b.pk]["hidden"])
+        r = self.run_post("add", zone="q2", title="Teacher")
+        self.assertEqual(r.status_code, 201, r.content)
+        t = next(c for c in r.json()["matrix"]["cards"] if c["teacher"])
+        r = self.run_post("delete", card=t["id"])
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(any(c["teacher"] for c in r.json()["matrix"]["cards"]))
+
+    def test_presenter_invalid_input(self):
+        a = self.add()
+        self.client.force_login(self.owner)
+        self.assertEqual(self.run_post("move", card=a.pk, x="abc", y=0).status_code, 400)
+        self.assertEqual(self.run_post("move", card=a.pk, x=None, y=0).status_code, 400)
+        self.assertEqual(self.run_post("hide", card=a.pk, hidden="yes").status_code, 400)
+        self.assertEqual(self.run_post("hide", card=999999, hidden=True).status_code, 404)
+
+    def test_presenter_permissions(self):
+        a = self.add()
+        self.assertIn(self.run_post("hide", card=a.pk, hidden=True).status_code, (401, 403))
+        # a participant token is no authentication
+        self.assertIn(
+            self.run_post("hide", card=a.pk, hidden=True, token=self.tok.key).status_code,
+            (401, 403),
+        )
+        self.client.force_login(User.objects.create_user(username="eve"))
+        for action, body in (
+            ("move", {"card": a.pk, "x": 0, "y": 0}), ("hide", {"card": a.pk, "hidden": True}),
+            ("add", {"zone": "q1", "title": "x"}), ("delete", {"card": a.pk}),
+            ("stack", {"card": a.pk, "onto": a.pk}), ("unstack", {"card": a.pk}),
+        ):
+            self.assertEqual(self.run_post(action, **body).status_code, 404, action)
+        a.refresh_from_db()
+        self.assertFalse(a.hidden)
+
+    def test_wrong_kind_question_404(self):
+        self.client.force_login(self.owner)
+        r = self.client.post(
+            f"/api/runs/{self.run.pk}/matrix/{self.question.pk}/add",
+            {"zone": "q1", "title": "x"}, content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_finished_run_refuses_teacher_add(self):
+        self.run.phase = Run.Phase.FINISHED
+        self.run.save()
+        self.client.force_login(self.owner)
+        r = self.run_post("add", zone="q1", title="Late")
+        self.assertEqual(r.status_code, 409)
+        self.assertFalse(MatrixCard.objects.exists())
+
+    def test_reopen_keeps_cards_positions_stacks(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        self.client.force_login(self.owner)
+        self.run_post("move", card=a.pk, x=0.6, y=0.7)
+        self.run_post("stack", card=b.pk, onto=a.pk)
+        before = {c["id"]: c for c in board(self).values()}
+        self.run.phase = Run.Phase.CLOSED
+        self.run.save()
+        self.run.phase = Run.Phase.OPEN
+        self.run.save()
+        after = {c["id"]: c for c in board(self).values()}
+        self.assertEqual(before, after)
+        self.assertEqual(after[b.pk]["stack"], a.pk)
+
+
+def board(case):
+    return {c["id"]: c for c in build_payloads(case.room)["presenter"]["matrix"]["cards"]}
+
+
+class MatrixPayloadTests(MatrixTestCase):
+    def test_presenter_payload_has_cards_and_votes(self):
+        self.add(self.tok, title="Secret card")
+        self.add(self.tok2, title="Other card")
+        presenter = build_payloads(self.room)["presenter"]
+        self.assertEqual(len(presenter["matrix"]["cards"]), 2)
+        self.assertEqual(presenter["votes"], 2)
+
+    def test_participant_payload_has_settings_but_no_cards(self):
+        self.configure(
+            matrix_x_from_de="klein", matrix_x_from_en="small", matrix_edges=True,
+            matrix_category_mode="named",
+            matrix_categories=[{"key": "blue", "name": {"de": "Idee", "en": "Idea"}}],
+        )
+        self.add(self.tok2, title="Other participant card", category="blue")
+        participant = build_payloads(self.room)["participant"]
+        m = participant["matrix"]
+        self.assertIn("e_top", m["zones"])
+        self.assertTrue(m["edges"])
+        self.assertEqual(m["axes"]["x_from"]["en"], "small")
+        self.assertEqual(m["axes"]["x_from"]["de"], "klein")
+        self.assertEqual(m["categories"][0]["name"]["en"], "Idea")
+        for key in ("max_per_person", "category_mode", "descriptions"):
+            self.assertIn(key, m)
+        self.assertNotIn("cards", m)
+        self.assertNotIn("Other participant card", json.dumps(participant))
+
+    def test_participant_payload_stays_after_close(self):
+        self.run.phase = Run.Phase.CLOSED
+        self.run.save()
+        self.assertIn("matrix", build_payloads(self.room)["participant"])
+
+
+class MatrixResultsTests(MatrixTestCase):
+    def test_results_include_board_and_settings(self):
+        self.add(title="Visible")
+        hidden = self.add(title="Hidden one")
+        mxs.set_hidden(self.run, self.xq, hidden.pk, True)
+        self.client.force_login(self.owner)
+        data = self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/results/"
+        ).json()["results"]
+        item = next(q for r in data for q in r["questions"] if q["kind"] == "matrix")
+        titles = [c["title"] for c in item["matrix"]["cards"]]
+        self.assertEqual(titles, ["Visible"])
+        self.assertIn("x", item["matrix"]["cards"][0])
+        self.assertIn("axes", item["matrix_settings"])
+        self.assertEqual(item["votes"], 1)
+
+    def test_csv_contains_header_and_title(self):
+        self.add(title="Visible card")
+        self.client.force_login(self.owner)
+        body = self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/results.csv"
+        ).content.decode("utf-8-sig")
+        self.assertIn("title;description;category;zone;x;y;stack_top;hidden;teacher", body)
+        self.assertIn("Visible card", body)
+
+    def test_vote_endpoint_refuses_matrix(self):
+        r = self.vote(self.tok.key, question=self.xq.pk, text="x")
+        self.assertEqual(r.status_code, 400)

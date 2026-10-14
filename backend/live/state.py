@@ -15,7 +15,7 @@ from django.db.models import Count
 from common.i18n_fields import translated_map
 from rooms.models import Question
 
-from . import ai_wordcloud_live, mindmap, mindmap_rating
+from . import ai_wordcloud_live, matrix, mindmap, mindmap_rating
 from .hub import hub
 from .models import Run, WordCloudModeration
 from .results import (
@@ -155,11 +155,20 @@ def build_payloads(room):
         rating = mindmap_rating.payload(run, question, presenter=False)
         if rating is not None:
             participant["mindmap"]["rating"] = rating
+    is_matrix = question is not None and question.kind == Question.Kind.MATRIX
+    if is_matrix and run.phase in (
+        Run.Phase.OPEN, Run.Phase.CLOSED, Run.Phase.RESULTS
+    ):
+        # Settings only — never the board: participants see just their own
+        # cards (fetched via matrix/mine), the board lives on the beamer.
+        participant["question"] = question_payload(question, shuffle_seed=run.pk)
+        participant["matrix"] = matrix.settings_payload(question)
     # Results on participant devices (v2, per-set option): only while the
     # beamer shows results, correct flags only once revealed.
     if (
         question
         and not is_mindmap
+        and not is_matrix
         and run.phase == Run.Phase.RESULTS
         and question_set.show_results_to_participants
     ):
@@ -226,6 +235,10 @@ def build_payloads(room):
             presenter["votes"] = mindmap.contributor_count(run, question)
             # Presenter-only: the AI optimisation settings (beamer star panel).
             presenter["question"]["mindmap_ai"] = mindmap.ai_settings(question)
+        elif is_matrix:
+            presenter["matrix"] = matrix.board_payload(run, question, presenter=True)
+            presenter["matrix"].update(matrix.settings_payload(question))
+            presenter["votes"] = matrix.contributor_count(run, question)
         elif question.kind in Question.TEXT_KINDS:
             presenter["words"] = words_with_counts(run, question)
             mod = WordCloudModeration.objects.filter(run=run, question=question).first()

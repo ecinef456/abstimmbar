@@ -33,6 +33,7 @@ import math
 
 from django.db import transaction
 
+from common.i18n_fields import translated_map
 from rooms.matrix import (
     CATEGORY_NAMED,
     CATEGORY_OFF,
@@ -44,6 +45,9 @@ from rooms.matrix import (
 from rooms.mindmap import normalize_text, seed_langs
 
 from .models import MatrixCard, Run
+
+# Collapses bursts of participant writes into one SSE broadcast (as the mind map).
+BROADCAST_DEBOUNCE = 1.0
 
 EDGE_BAND = 0.12
 HYSTERESIS = 0.12
@@ -393,3 +397,25 @@ def csv_rows(run, question):
             "true" if c.hidden else "false", "true" if c.teacher else "false",
         ])
     return result
+
+
+def settings_payload(question):
+    """What a participant device needs to render the matrix (no cards):
+    zones, flags, categories and the four axis labels as ``{de, en}`` maps."""
+    return {
+        "zones": list(allowed_zones(question)),
+        "edges": question.matrix_edges,
+        "descriptions": question.matrix_descriptions,
+        "max_per_person": question.matrix_max_per_person,
+        "category_mode": question.matrix_category_mode,
+        "categories": [
+            {"key": c["key"], "name": c.get("name") or {}}
+            for c in question.matrix_categories or []
+        ],
+        "axes": {
+            "x_from": translated_map(question, "matrix_x_from"),
+            "x_to": translated_map(question, "matrix_x_to"),
+            "y_from": translated_map(question, "matrix_y_from"),
+            "y_to": translated_map(question, "matrix_y_to"),
+        },
+    }

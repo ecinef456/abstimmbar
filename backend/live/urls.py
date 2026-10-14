@@ -18,6 +18,10 @@ api_urlpatterns = [
     path("live/rooms/<str:code>/mindmap/add/", views.mindmap_add),
     path("live/rooms/<str:code>/mindmap/remove/", views.mindmap_remove),
     path("live/rooms/<str:code>/mindmap/mine/", views.mindmap_mine),
+    # Four-field matrix: participant cards, token-scoped.
+    path("live/rooms/<str:code>/matrix/add/", views.matrix_add),
+    path("live/rooms/<str:code>/matrix/remove/", views.matrix_remove),
+    path("live/rooms/<str:code>/matrix/mine/", views.matrix_mine),
     # Mind map rating phase: token-scoped.
     path("live/rooms/<str:code>/mindmap/rate/", views.mindmap_rate),
     path("live/rooms/<str:code>/mindmap/my-ratings/", views.mindmap_my_ratings),
@@ -40,6 +44,30 @@ api_urlpatterns = [
     path(
         "runs/<int:run_id>/wordcloud/<int:question_id>/moderation",
         views.wordcloud_moderation,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/move",
+        views.matrix_move,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/stack",
+        views.matrix_stack,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/unstack",
+        views.matrix_unstack,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/hide",
+        views.matrix_hide,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/add",
+        views.matrix_teacher_add,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/delete",
+        views.matrix_teacher_delete,
     ),
     path(
         "runs/<int:run_id>/mindmap/<int:question_id>/hide",
