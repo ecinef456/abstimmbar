@@ -1741,9 +1741,12 @@ export default function SetPage() {
       )}
 
       <div data-tour="set.questions">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-6 dark:border-slate-800">
+      {/* Heading on its own line above the action bar. */}
+      <h2 className="mb-3 border-t border-slate-100 pt-6 text-lg font-semibold dark:border-slate-800">
+        {t("Questions")}
+      </h2>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-lg font-semibold">{t("Questions")}</h2>
           {questions.length > 0 && (
             <>
               {/* #75: only the run action matching the set's type is offered. */}
