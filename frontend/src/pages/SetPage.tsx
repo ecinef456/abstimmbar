@@ -662,8 +662,8 @@ function SectionTitleField({
 }
 
 /** Optional rich-text description of a section (shown under its title on the
- * presenter's interstitial slide only). Collapsed behind a toggle so the
- * outline stays compact; committed when focus leaves the field, like the
+ * presenter's interstitial slide only). Always shown in the sections editor
+ * so it's easy to find; committed when focus leaves the field, like the
  * section name. */
 function SectionDescriptionField({
   section,
@@ -675,10 +675,6 @@ function SectionDescriptionField({
   const { t } = useTranslation();
   const saved = section.description ?? "";
   const [description, setDescription] = useState<LocalizedText>(saved);
-  const hasSaved = Object.values(localizedMap(saved)).some(
-    (html) => stripHtml(html ?? "").trim() !== "" || /<img/i.test(html ?? ""),
-  );
-  const [open, setOpen] = useState(hasSaved);
   // Re-seed only when another section takes this slot — not after our own
   // save comes back (that would reset the editor mid-typing).
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -696,17 +692,6 @@ function SectionDescriptionField({
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [description]);
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="ml-8 mt-1 text-xs text-slate-500 hover:text-brand-700 hover:underline dark:text-slate-400 dark:hover:text-brand-300"
-      >
-        + {t("Add description")}
-      </button>
-    );
-  }
   return (
     <div
       className="ml-8 mt-2 max-w-2xl"

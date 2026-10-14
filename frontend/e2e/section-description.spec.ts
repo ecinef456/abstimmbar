@@ -55,7 +55,6 @@ test('edit a section description; the presenter interstitial shows it', async ({
 
   await page.goto(`/sets/${seed.setId}`);
   await page.getByRole('button', { name: 'Sections', exact: true }).click();
-  await page.getByRole('button', { name: '+ Add description' }).click();
   const field = page.getByTestId(`section-description-${section.id}`);
   await expect(field.getByText('Optional – shown on the interstitial slide below the title.')).toBeVisible();
   const editor = field.locator('[contenteditable="true"]').first();
