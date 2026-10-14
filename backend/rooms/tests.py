@@ -4695,7 +4695,7 @@ class MatrixAuthoringTests(ApiTestCase):
     """Four-field matrix question kind: axis labels, categories, set-type
     gating and transfer."""
 
-    AXES = {
+    AXES: ClassVar = {
         "matrix_x_from": {"de": "altbacken", "en": "dated"},
         "matrix_x_to": {"de": "modern", "en": "modern"},
         "matrix_y_from": {"de": "unnuetz", "en": ""},
@@ -4793,7 +4793,7 @@ class MatrixAuthoringTests(ApiTestCase):
         self.assertEqual(response.json()["matrix_categories"], [])
 
     def test_invalid_categories_rejected(self):
-        named = lambda *keys: [{"key": k, "name": k} for k in keys]  # noqa: E731
+        named = lambda *keys: [{"key": k, "name": k} for k in keys]
         cases = {
             "unknown key": ("named", named("blue", "pink")),
             "duplicate key": ("named", named("blue", "blue")),
