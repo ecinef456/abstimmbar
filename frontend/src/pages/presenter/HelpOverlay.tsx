@@ -150,32 +150,66 @@ function layout(cards: CardSpec[], sizes: { w: number; h: number }[]): Placed[] 
   const width = (row: number[], gap: number) => row.reduce((s, i) => s + sizes[i].w + gap, -gap);
   const room = vw - 2 * MARGIN;
   const oneRowGap = [32, 24, 16, GAP].find((g) => width(byX, g) <= room);
+  const centre = (i: number) => (cards[i].anchor.left + cards[i].anchor.right) / 2;
+  // Two rows when one doesn't fit: only the OUTERMOST cards of each control
+  // group (left: position…, right: …end) move up, the rest stay together in
+  // the lower row (e.g. Start/Stop next to ‹ ›). The lower row keeps a slot
+  // free above each upper card's control, so its leader line runs straight
+  // up through the gap instead of behind a card.
+  const SLOT = 26;
+  const groups: number[][] = [];
+  byX.forEach((i, k) => {
+    if (k > 0 && centre(i) - centre(byX[k - 1]) > 160) groups.push([i]);
+    else if (groups.length) groups[groups.length - 1].push(i);
+    else groups.push([i]);
+  });
+  const lowerFits = (upper: Set<number>, gap: number) =>
+    width(byX.filter((i) => !upper.has(i)), gap) + upper.size * (SLOT + gap) <= room;
+  const upper = new Set<number>();
+  if (oneRowGap === undefined) {
+    // Candidates from the outside in: left group's first, right group's last, …
+    const order: number[] = [];
+    const ends = groups.map((g) => [...g]);
+    for (let round = 0; ends.some((g) => g.length > 1); round++) {
+      ends.forEach((g, gi) => {
+        if (g.length <= 1) return;
+        const leftmost = gi === 0 && groups.length > 1;
+        order.push((leftmost ? g.shift() : g.pop()) as number);
+      });
+    }
+    for (const i of order) {
+      if (lowerFits(upper, GAP)) break;
+      upper.add(i);
+    }
+  }
   const rows: number[][] =
-    oneRowGap !== undefined ? [byX] : [byX.filter((_, k) => k % 2 === 0), byX.filter((_, k) => k % 2 === 1)];
-  const rowGap =
-    oneRowGap ?? [24, 16, GAP].find((g) => rows.every((r) => width(r, g) <= room)) ?? GAP;
+    oneRowGap !== undefined ? [byX] : [byX.filter((i) => !upper.has(i)), byX.filter((i) => upper.has(i))];
+  const rowGap = oneRowGap ?? [24, 16, GAP].find((g) => lowerFits(upper, g)) ?? GAP;
   // Vertical room: lift the cards further off the footer (longer, clearer
   // leader lines) and space the rows more when the screen is tall enough.
   const roomy = vh >= 700;
   let bottom = footerTop - (roomy ? 44 : 18);
-  for (const row of rows) {
+  rows.forEach((row, rowIndex) => {
     const h = Math.max(0, ...row.map((i) => sizes[i].h));
     // Keep clear of right-edge handles that sit at this row's height.
     const blocking = edgeIdx
       .map((i) => cards[i].anchor)
       .filter((a) => a.bottom > bottom - h - GAP && a.top < bottom + GAP)
       .map((a) => a.left - 2 * GAP);
-    const xs = pack(
-      row.map((i) => ({ want: (cards[i].anchor.left + cards[i].anchor.right) / 2 - sizes[i].w / 2, size: sizes[i].w })),
-      MARGIN,
-      Math.min(vw - MARGIN, ...blocking),
-      rowGap,
-    );
-    row.forEach((i, k) => {
-      placed[i] = { x: xs[k], y: bottom - sizes[i].h };
+    // Lower row of two: free slots above the upper cards' controls.
+    const slots = rowIndex === 0 && rows.length > 1 ? [...upper] : [];
+    // Ordered by the controls' positions (not by wish), so a slot stays on
+    // the correct side of its neighbours.
+    const items = [
+      ...row.map((i) => ({ key: i, at: centre(i), want: centre(i) - sizes[i].w / 2, size: sizes[i].w })),
+      ...slots.map((i) => ({ key: -1 - i, at: centre(i), want: centre(i) - SLOT / 2, size: SLOT })),
+    ].sort((a, b) => a.at - b.at);
+    const xs = pack(items, MARGIN, Math.min(vw - MARGIN, ...blocking), rowGap);
+    items.forEach((it, k) => {
+      if (it.key >= 0) placed[it.key] = { x: xs[k], y: bottom - sizes[it.key].h };
     });
     bottom -= h + (roomy ? 40 : 14);
-  }
+  });
 
   const byY = [...edgeIdx].sort((a, b) => cards[a].anchor.top - cards[b].anchor.top);
   const ys = pack(
