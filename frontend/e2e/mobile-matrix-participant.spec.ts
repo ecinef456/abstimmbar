@@ -10,13 +10,13 @@ import { expectNoHorizontalOverflow } from './helpers/layout';
 
 const ZONE = {
   q1: 'nützlich & modern',
-  q2: 'nützlich & altbacken',
-  q3: 'nutzlos & altbacken',
-  q4: 'nutzlos & modern',
-  e_top: 'zwischen nützlich & altbacken und nützlich & modern',
-  e_right: 'zwischen nützlich & modern und nutzlos & modern',
-  e_bottom: 'zwischen nutzlos & altbacken und nutzlos & modern',
-  e_left: 'zwischen nützlich & altbacken und nutzlos & altbacken',
+  q2: 'nicht nützlich & modern',
+  q3: 'nicht nützlich & altbacken',
+  q4: 'nützlich & altbacken',
+  e_top: 'zwischen nicht nützlich & modern und nützlich & modern',
+  e_right: 'zwischen nützlich & modern und nützlich & altbacken',
+  e_bottom: 'zwischen nicht nützlich & altbacken und nützlich & altbacken',
+  e_left: 'zwischen nicht nützlich & modern und nicht nützlich & altbacken',
 } as const;
 
 async function settle(page: Page) {
@@ -58,7 +58,7 @@ for (const scheme of ['light', 'dark'] as const) {
           await expect(view.getByRole('button', { name, exact: true })).toBeVisible();
         }
         // Axis ends sit outside the board.
-        for (const end of ['altbacken', 'modern', 'nutzlos', 'nützlich']) {
+        for (const end of ['nicht nützlich', 'nützlich', 'altbacken', 'modern']) {
           await expect(view.locator('.mx-axis', { hasText: end }).first()).toBeVisible();
         }
         // Touch targets.
@@ -168,6 +168,35 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(page.locator('#mx-mine li')).toHaveCount(1);
         await expect(page.locator('#mx-mine li button')).toHaveCount(0);
         await expectNoHorizontalOverflow(page, `matrix closed (${scheme})`);
+      } finally {
+        await page.close();
+        await deleteRooms(demoApi, created);
+        await demoApi.dispose();
+      }
+    });
+
+    test('own cards survive A -> B -> A', async ({ page, playwright }) => {
+      const demoApi = await playwright.request.newContext({ storageState: AUTH.demo });
+      const created: number[] = [];
+      try {
+        const room = await createRoomWithQuestions(demoApi, [], 'Matrix', (id) => created.push(id), 'E2E Matrix');
+        const api = apiClient(demoApi);
+        const a = await createMatrixQuestion(api, room.setId);
+        const b = await createMatrixQuestion(api, room.setId);
+        const runId = await startRun(api, room.setId);
+        await control(api, runId, 'open', a);
+        await page.goto(`${API_BASE_URL}/p/${room.code}/`);
+        const view = page.locator('#matrix');
+        await view.getByRole('button', { name: ZONE.q1, exact: true }).click();
+        await view.getByRole('radio', { name: /Idee/ }).click();
+        await view.getByRole('textbox', { name: 'Titel' }).fill('Karte in A');
+        await view.getByRole('button', { name: 'Karte hinzufügen' }).click();
+        await expect(view.locator('#mx-mine li')).toHaveCount(1);
+        await control(api, runId, 'open', b);
+        await expect(view.locator('#mx-mine li')).toHaveCount(0);
+        await control(api, runId, 'open', a);
+        await expect(view.locator('#mx-mine li')).toHaveCount(1);
+        await expect(view.locator('#mx-mine li')).toContainText('Karte in A');
       } finally {
         await page.close();
         await deleteRooms(demoApi, created);

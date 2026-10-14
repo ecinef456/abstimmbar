@@ -3356,8 +3356,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   const mxAxis = (name) => locText(mxSettings().axes[name]);
   function mxZoneName(zone) {
     const xt = mxAxis("x_to"), xf = mxAxis("x_from"), yt = mxAxis("y_to"), yf = mxAxis("y_from");
-    // Written y first ("nützlich & modern"): the vertical end is the headline.
-    const q = { q1: yt + " & " + xt, q2: yt + " & " + xf, q3: yf + " & " + xf, q4: yf + " & " + xt };
+    const q = { q1: xt + " & " + yt, q2: xf + " & " + yt, q3: xf + " & " + yf, q4: xt + " & " + yf };
     const between = (a, b) => I18N.mxBetween.replace("{a}", q[a]).replace("{b}", q[b]);
     switch (zone) {
       case "e_top": return between("q2", "q1");
@@ -3525,6 +3524,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     const key = (state.run_id ?? "") + ":" + q.id;
     if (mxKey !== key) {
       mxKey = key;
+      mxMineFetched.clear(); // returning to an earlier question must re-fetch its cards
       mxSig = "";
       mxMine = [];
       mxZone = null; mxCategory = null;

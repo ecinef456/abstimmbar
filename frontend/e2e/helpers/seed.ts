@@ -154,7 +154,7 @@ export async function createRoomWithQuestions(
 }
 
 /** A matrix question in `setId` (fields as the editor sends them). Defaults:
- *  axes altbacken/modern × nutzlos/nützlich, edges and descriptions on,
+ *  x nicht nützlich→nützlich, y altbacken→modern, edges and descriptions on,
  *  max 2 cards per person, named categories Idee/Risiko. */
 export async function createMatrixQuestion(
   api: Api,
@@ -166,10 +166,10 @@ export async function createMatrixQuestion(
     kind: 'matrix',
     text: T('<p>Wohin gehört die Idee?</p>', '<p>Where does the idea belong?</p>'),
     options: [],
-    matrix_x_from: T('altbacken', 'old-fashioned'),
-    matrix_x_to: T('modern', 'modern'),
-    matrix_y_from: T('nutzlos', 'useless'),
-    matrix_y_to: T('nützlich', 'useful'),
+    matrix_x_from: T('nicht nützlich', 'not useful'),
+    matrix_x_to: T('nützlich', 'useful'),
+    matrix_y_from: T('altbacken', 'old-fashioned'),
+    matrix_y_to: T('modern', 'modern'),
     matrix_edges: true,
     matrix_descriptions: true,
     matrix_max_per_person: 2,
