@@ -2,13 +2,14 @@
 // Copyright 2026 Universität Osnabrück (virtUOS)
 
 /** Presentation mode (concept §6.1): a reduced fullscreen view for the
- * beamer. Keyboard-first — S start/stop, E/R results, ←/→ navigate,
- * A reveal correct answers (in "after_close" mode), Esc ends. */
+ * beamer. Keyboard-first — S start/stop, A cycles the footer's view
+ * switcher, E/R first result view, L solution ("after_close" mode), Q QR,
+ * ←/→ navigate, Esc ends. */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
-import { ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, Pencil, QrCode, Redo2, Sparkles, Timer, Undo2, Unlink, Users, Vote, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, Pencil, Redo2, Sparkles, ThumbsUp, Timer, Undo2, Unlink, Users, Vote, X } from "lucide-react";
 import {
   API_BASE_URL,
   api,
@@ -33,15 +34,17 @@ import MindMap, { AI_MARK, hiddenMindmapNodes, mindmapBranchHues } from "../resu
 import MindmapRanking, { rankMindmap } from "../results/MindmapRanking";
 import { requestDetail, useMindmapModeration } from "../results/mindmapModeration";
 import { MindmapAiDrawer, useMindmapAi } from "../results/mindmapAi";
+import { Footer, FooterIconButton, buildViewSegments, type ViewSegment } from "./presenter/footer";
 import { INK, evalColor, categoryColor, categoryDeep, categoryHue, termColor } from "../results/palette";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 /** Beamer view of a word cloud / free-text question (#Wortwolke-KI). Free text
  *  reads "consolidated" as key statements; "results" = its AI verdict bars. */
-/** Mindmaps reuse the view mechanism: "raw" = compact, "detailed" = with
- *  descriptions, "ranking" = the rated entries as bars (rating phase). */
-type WcView = "raw" | "results" | "consolidated" | "grouped" | "detailed" | "ranking";
+/** Mindmaps reuse the view mechanism: "raw" = the map (compact/detailed is a
+ *  display option in the zoom handle), "ranking" = the rated entries as bars
+ *  (rating phase). */
+type WcView = "raw" | "results" | "consolidated" | "grouped" | "ranking";
 
 /** View options of a free-text question (live presenter and the Quiz-Block
  *  walkthrough share them): Original, Evaluation (AI verdict bars, only when
@@ -338,33 +341,33 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // verbatim answers appear only once the presenter picks "Original".
   const hasEval = isOpenText && !!state?.evaluation;
   const defaultView: WcView = hasEval ? "results" : "raw";
-  // One option list for the footer dropdown, the `A` cycle and the AI panel.
-  const wcViewOptions: { value: WcView; label: string }[] = isOpenText
-    ? freeTextViewOptions(t, hasEval, aiCloud)
+  // The result views of the question, in switcher order (the footer's view
+  // switcher, `A`/`E` and the AI panel all use this one list). Free text puts
+  // its default first (`E` = the evaluation when there is one).
+  const wcViewOptions: { value: WcView }[] = isOpenText
+    ? [...freeTextViewOptions(t, hasEval, aiCloud)].sort(
+        (a, b) => Number(b.value === defaultView) - Number(a.value === defaultView),
+      )
     : activeKind === "mindmap"
       ? [
-          { value: "raw", label: t("Compact") },
-          ...(state?.mindmap?.descriptions
-            ? [{ value: "detailed" as const, label: t("Detailed") }]
-            : []),
+          { value: "raw" },
           // Only once the scores are on screen (live rating or revealed).
           ...(Object.keys(state?.mindmap?.rating?.scores ?? {}).length > 0
-            ? [{ value: "ranking" as const, label: t("Ranking") }]
+            ? [{ value: "ranking" as const }]
             : []),
         ]
       : [
-        { value: "raw", label: t("Original") },
-        ...(aiCloud
-          ? [
-              { value: "consolidated" as const, label: t("Cleaned up") },
-              { value: "grouped" as const, label: t("Grouped") },
-            ]
-          : []),
-      ];
+          { value: "raw" },
+          ...(aiCloud ? [{ value: "consolidated" as const }, { value: "grouped" as const }] : []),
+        ];
+  // Mind map: compact / detailed (descriptions) — a display option in the
+  // zoom handle, not a view of its own.
+  const [mmDetailedState, setMmDetailed] = useState(false);
   const wcView: WcView = wcViewOptions.some((o) => o.value === wcViewState)
     ? wcViewState
     : defaultView;
   const isAiView = wcView === "consolidated" || wcView === "grouped";
+  const mmDetailed = mmDetailedState && !!state?.mindmap?.descriptions;
 
   // Each new question starts on its default view (raw; "results" for
   // AI-evaluated free text); a question whose AI was just switched off falls
@@ -373,6 +376,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // flashes the verbatim chips of a leftover "Original" view for a frame.
   useLayoutEffect(() => {
     setWcView(defaultView);
+    setMmDetailed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
   useEffect(() => {
@@ -492,14 +496,6 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKind, runId, activeId, expert]);
 
-  const wcViewKey = wcViewOptions.map((o) => o.value).join(",");
-  const canCycleView = wcViewOptions.length > 1;
-  const cycleWcView = useCallback(() => {
-    const values = wcViewKey.split(",") as WcView[];
-    const i = values.indexOf(wcView);
-    setWcView(values[(i + 1) % values.length]);
-  }, [wcViewKey, wcView]);
-
   const phase = state?.phase ?? "lobby";
 
   // --- AI panel (#Wortwolke-KI): switch AI on (expert), pick view, regroup. ---
@@ -595,7 +591,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const mmHues = useMemo(
     () => (mindmap ? mindmapBranchHues(mindmap.nodes, `${runId}:${activeId}`) : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mindmap, runId, activeId, wcViewState],
+    [mindmap, runId, activeId, wcViewState, mmDetailed],
   );
   // Expert mode: × hides a term with its subtree; the pencil drawer lists the
   // hidden ones to restore.
@@ -798,9 +794,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       setAiError(e instanceof Error ? e.message : String(e));
     }
   };
-  // "Merge again": save the merge switches and force one recompute (the
-  // panel only offers it in the active "Cleaned up" view). Same busy logic
-  // as Regroup.
+  // "Merge again": save the merge switches and recompute once — forced when
+  // an AI view is already active, otherwise by activating "Cleaned up" (as
+  // in Regroup, at most one AI pass). Same busy logic as Regroup.
   const mergeAgain = async () => {
     if (runId == null || activeId == null) return;
     setAiBusy("merge");
@@ -811,7 +807,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         merge_variants: mergeDraft.variants,
         merge_synonyms: mergeDraft.synonyms,
         merge_concepts: mergeDraft.concepts,
-        regroup: true,
+        regroup: isAiView,
       });
       setMergeDraft({
         variants: res.merge_variants,
@@ -1061,6 +1057,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     if (phase === "open" || phase === "closed" || phase === "preview") {
       if (phase === "open") await live.control(runId, { phase: "closed" });
       await live.control(runId, { phase: "results" });
+      // "Results" means without the solution, also when it was revealed
+      // before the presenter went back to the question.
+      if (revealed) await live.control(runId, { reveal: false });
     }
   }, [runId, phase, revealed]);
 
@@ -1140,6 +1139,90 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     const i = values.indexOf(walkView);
     setWalkView(values[(i + 1) % values.length]);
   }, [walkViewKey, walkView]);
+
+  // --- View switcher (footer): Question · result view(s) · Solution --------
+  // One ordered list per question; A cycles it, E jumps to the first result
+  // view, L to the solution. The solution segment only appears when the
+  // question has a correct answer to reveal after closing.
+  const activeQuestion = activeId != null ? questions.find((q) => q.id === activeId) : undefined;
+  const hasSolution = canReveal && !!activeQuestion?.options.some((o) => o.is_correct);
+  const viewGroup =
+    activeKind === "word_cloud" ? "wc" : isOpenText ? "ft" : activeKind === "mindmap" ? "mm" : null;
+  const viewValuesKey = wcViewOptions.map((o) => o.value).join(",");
+  const viewSegments = useMemo(
+    () =>
+      buildViewSegments<WcView>({
+        group: viewGroup,
+        views: viewValuesKey ? (viewValuesKey.split(",") as WcView[]) : [],
+        solution: hasSolution,
+      }),
+    [viewGroup, viewValuesKey, hasSolution],
+  );
+  // A live word cloud / mind map is on screen before the results phase (the
+  // vote is open, or a closed rating): its result view is the current one,
+  // and "Question" can't hide it.
+  const liveShown =
+    phase !== "results" &&
+    ((activeKind === "word_cloud" && wcCloudShown) || (activeKind === "mindmap" && mmShown));
+  const resultSegment = (view: WcView) =>
+    viewSegments.find((sg) => sg.level === "results" && (sg.view === undefined || sg.view === view));
+  const activeSegment: ViewSegment<WcView> =
+    (phase === "results" && revealed && hasSolution
+      ? viewSegments.find((sg) => sg.level === "solution")
+      : phase === "results" || liveShown
+        ? resultSegment(wcView)
+        : undefined) ?? viewSegments[0];
+  const disabledViews = useMemo(
+    () => new Set(liveShown ? ["view.question"] : []),
+    [liveShown],
+  );
+  const selectView = useCallback(
+    (seg: ViewSegment<WcView>) => {
+      if (seg.level === "question") {
+        if (!liveShown) void showQuestion();
+        return;
+      }
+      if (seg.level === "solution") {
+        void showSolution();
+        return;
+      }
+      if (seg.view) setWcView(seg.view);
+      if (phase === "results") {
+        if (revealed) void showResults(); // back from the solution
+      } else if (!(liveShown && phase === "open")) {
+        // Closes an open vote and shows the results (a closed rating:
+        // reveals its scores) — same path as E.
+        void showResults();
+      }
+    },
+    [liveShown, phase, revealed, showQuestion, showResults, showSolution],
+  );
+  const cycleView = useCallback(() => {
+    const usable = viewSegments.filter((sg) => !disabledViews.has(sg.id));
+    if (usable.length < 2) return;
+    const i = usable.findIndex((sg) => sg.id === activeSegment.id);
+    selectView(usable[(i + 1) % usable.length]);
+  }, [viewSegments, disabledViews, activeSegment.id, selectView]);
+  // E: to the first result view; from there back to the question (toggle);
+  // an open vote closes onto it (word clouds / mind maps stay visible).
+  const firstResults = viewSegments.find((sg) => sg.level === "results");
+  const jumpToResults = useCallback(() => {
+    if (!firstResults) return;
+    if (phase !== "results") {
+      if (firstResults.view) setWcView(firstResults.view);
+      void showResults();
+    } else if (activeSegment.id === firstResults.id && !revealed) {
+      void showQuestion();
+    } else {
+      selectView(firstResults);
+    }
+  }, [firstResults, phase, activeSegment.id, revealed, showResults, showQuestion, selectView]);
+  // L: the solution, and back to the results.
+  const toggleSolution = useCallback(() => {
+    if (!hasSolution) return;
+    if (phase === "results" && revealed) void showResults();
+    else void showSolution();
+  }, [hasSolution, phase, revealed, showResults, showSolution]);
 
   // Memoized so the keydown effect (which lists it as a dependency) doesn't
   // re-register the window listener on every render — including the live
@@ -1225,24 +1308,19 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
           void live.control(runId, { phase: "open" });
         else if (phase === "lobby") startFromLobby();
       } else if (key === "e" || key === "r") {
-        // E/R steps toward the results view: from a revealed solution it
-        // returns to the results (un-reveal), not all the way to the question
-        // (#61); from plain results it toggles to the question; otherwise it
-        // reveals the results.
-        if (phase === "results" && revealed) showResults();
-        else if (phase === "results") showQuestion();
-        else showResults();
-      } else if (key === "a" && canCycleView) {
-        // Word clouds / free text have no correct answer — "a" cycles the views.
-        cycleWcView();
-      } else if (key === "a" && canReveal && phase === "results") {
-        if (revealed) showResults();
-        else showSolution();
+        // E/R: the first result view. From a revealed solution it returns to
+        // the results (#61), from there it toggles to the question.
+        jumpToResults();
+      } else if (key === "a") {
+        // A cycles the footer's view switcher (Question → results → …).
+        cycleView();
+      } else if (key === "l") {
+        toggleSolution();
       } else if (key === "escape") {
         void finish();
       }
     },
-    [runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, canCycleView, cycleWcView, startFromLobby, showQuestion, showResults, showSolution, canReveal, revealed, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mmStopCloses],
+    [runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mmStopCloses],
   );
 
   useEffect(() => {
@@ -1533,7 +1611,6 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         footer={
           <Footer
             phase={phase}
-            participants={state.participants ?? 0}
             index={target}
             count={questions.length}
             variant="section"
@@ -1601,41 +1678,33 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       footer={
         <Footer
           phase={phase}
-          participants={state.participants ?? 0}
           index={indexRef.current}
           extra={
             activeKind === "mindmap" && mmRating && phase !== "lobby" ? (
               mmRate ? (
-                <button
-                  type="button"
-                  className={FOOTER_BTN}
+                <FooterIconButton
+                  help="mm.collect"
+                  label={t("Back to collecting")}
+                  icon={Undo2}
+                  detail={t("Back to collecting: participants add terms again; the ratings are kept.")}
                   disabled={mmStageBusy}
-                  onClick={(e) => {
-                    e.currentTarget.blur();
-                    void setMindmapStage("collect");
-                  }}
-                  title={t("Back to collecting: participants add terms again; the ratings are kept.")}
-                >
-                  {t("Back to collecting")}
-                </button>
+                  onClick={() => void setMindmapStage("collect")}
+                />
               ) : phase === "results" || phase === "closed" ? (
-                <button
-                  type="button"
-                  data-testid="mm-start-rating"
-                  className={`${FOOTER_BTN} border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100`}
-                  disabled={mmStageBusy}
-                  onClick={(e) => {
-                    e.currentTarget.blur();
-                    void setMindmapStage("rate");
-                  }}
-                  title={
+                <FooterIconButton
+                  help="mm.rate"
+                  testId="mm-start-rating"
+                  label={t("Start rating")}
+                  icon={ThumbsUp}
+                  detail={
                     mmRating.mode === "points"
                       ? t("Participants distribute {{count}} points among the terms.", { count: mmRating.budget })
                       : t("Participants rate up to {{count}} terms with 👍 or 👎.", { count: mmRating.budget })
                   }
-                >
-                  {t("Start rating")}
-                </button>
+                  disabled={mmStageBusy}
+                  onClick={() => void setMindmapStage("rate")}
+                  className="border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100"
+                />
               ) : null
             ) : undefined
           }
@@ -1654,14 +1723,10 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 ? startFromLobby()
                 : void live.control(runId!, { phase: "open" })
           }
-          revealLevel={phase === "results" ? (revealed ? "solution" : "results") : "question"}
-          canReveal={canReveal}
-          onShowQuestion={showQuestion}
-          onShowResults={showResults}
-          onShowSolution={showSolution}
-          views={canCycleView ? wcViewOptions : undefined}
-          viewValue={wcView}
-          onSelectView={(v) => setWcView(v as WcView)}
+          views={viewSegments}
+          activeView={activeSegment.id}
+          disabledViews={disabledViews}
+          onSelectView={(seg) => selectView(seg as ViewSegment<WcView>)}
           joinShown={showJoin}
           onToggleJoin={() => setShowJoin((v) => !v)}
           onFinish={() => void finish()}
@@ -1871,7 +1936,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               <MindMap
                 rootLabel={localizedText(mmPreview.root.label)}
                 nodes={mmPreview.nodes}
-                detailed={wcView === "detailed"}
+                detailed={mmDetailed}
                 highlightDuplicates={mmPreview.highlight_duplicates}
                 maxDepth={mmPreview.depth}
                 withDescriptions={mmPreview.descriptions}
@@ -1889,7 +1954,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               <MindMap
                 rootLabel={localizedText(mindmap.root.label)}
                 nodes={mindmap.nodes}
-                detailed={wcView === "detailed"}
+                detailed={mmDetailed}
+                onDetailedChange={mindmap.descriptions ? setMmDetailed : undefined}
                 highlightDuplicates={mindmap.highlight_duplicates}
                 onHide={expert ? (n) => hideMindmapNode(n.id, true) : undefined}
                 onAdd={expert && !mmRate ? mmMod.add : undefined}
@@ -2170,6 +2236,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   }}
                   aria-label={t("Moderate")}
                   title={t("Moderate")}
+                  data-help="handle.moderate"
                   data-beamer-inset=""
                   style={{ top: handleColumnTop }}
                   className={`fixed right-0 z-30 rounded-l-xl border border-r-0 border-slate-200 bg-white/95 p-3 text-slate-500 shadow-md transition-opacity hover:text-slate-800 ${
@@ -2288,6 +2355,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 }}
                 aria-label={t("Moderate")}
                 title={t("Moderate")}
+                data-help="handle.moderate"
                 data-beamer-inset=""
                   style={{ top: handleColumnTop }}
                   className={`fixed right-0 z-30 rounded-l-xl border border-r-0 border-slate-200 bg-white/95 p-3 text-slate-500 shadow-md transition-opacity hover:text-slate-800 ${
@@ -2390,6 +2458,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 }}
                 aria-label={t("AI mind map")}
                 title={t("AI mind map")}
+                data-help="handle.mm-ai"
                 style={{ top: mmAiTop }}
                 data-beamer-inset=""
                 className={`fixed right-0 z-30 rounded-l-xl border border-r-0 border-slate-200 bg-white/95 p-3 text-slate-500 shadow-md transition-opacity hover:text-slate-800 ${
@@ -2430,6 +2499,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 }}
                 aria-label={aiPanelTitle}
                 title={aiPanelTitle}
+                data-help="handle.ai"
                 style={{ top: aiHandleTop }}
                 data-beamer-inset=""
                 className={`fixed right-0 z-30 rounded-l-xl border border-r-0 border-slate-200 bg-white/95 p-3 text-slate-500 shadow-md transition-opacity hover:text-slate-800 ${
@@ -2490,33 +2560,14 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                       <p className="mt-1 pl-[2.875rem] text-xs text-slate-400">{t("Saved on the question.")}</p>
                     </div>
                   )}
-                  {canCycleView && (
+                  {/* Settings only — which view is on the beamer is chosen in the
+                      footer's view switcher. Each block applies to its view
+                      (and shows it). */}
+                  {aiCloud && (
                     <>
-                      <div
-                        role="radiogroup"
-                        aria-label={aiPanelTitle}
-                        className="grid rounded-full border border-slate-200 p-0.5 text-xs"
-                        style={{ gridTemplateColumns: `repeat(${wcViewOptions.length}, minmax(0, 1fr))` }}
-                      >
-                        {wcViewOptions.map((o) => (
-                          <button
-                            key={o.value}
-                            type="button"
-                            role="radio"
-                            aria-checked={wcView === o.value}
-                            onClick={() => setWcView(o.value)}
-                            className={`rounded-full px-2 py-1 transition-colors ${
-                              wcView === o.value
-                                ? "bg-brand-100 text-brand-800"
-                                : "text-slate-500 hover:text-slate-800"
-                            }`}
-                          >
-                            {o.label}
-                          </button>
-                        ))}
-                      </div>
-                      {wcView === "consolidated" && isOpenText && (
+                      {isOpenText && (
                         <div>
+                          <p className="mb-1 text-sm font-medium text-slate-700">{t("Key statements")}</p>
                           <label className="flex items-start gap-2 text-sm text-slate-700">
                             <input
                               type="checkbox"
@@ -2541,7 +2592,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                           </button>
                         </div>
                       )}
-                      {wcView === "consolidated" && !isOpenText && (
+                      {!isOpenText && (
                         <fieldset>
                           <legend className="mb-1 block text-sm font-medium text-slate-700">
                             {t("“Cleaned up” merges:")}
@@ -2580,69 +2631,67 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                           </button>
                         </fieldset>
                       )}
-                      {wcView === "grouped" && (
-                        <div>
-                          <label htmlFor="wc-grouping" className="mb-1 block text-sm font-medium text-slate-700">
-                            {t("Grouping instruction")}
-                          </label>
-                          <textarea
-                            id="wc-grouping"
-                            rows={4}
-                            maxLength={1000}
-                            value={groupingDraft}
-                            onChange={(e) => setGroupingDraft(e.target.value)}
-                            placeholder={t(
-                              "Empty = AI finds themes itself. E.g. “positive / neutral / negative” or “by lecture topic”.",
-                            )}
-                            className="w-full rounded-lg border border-field bg-white p-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
-                          />
-                          {isOpenText && modelSolution && (
-                            <div className="mt-2">
-                              <label className="flex items-start gap-2 text-sm text-slate-700">
-                                <input
-                                  type="checkbox"
-                                  checked={useSolutionDraft}
-                                  disabled={aiBusy !== null}
-                                  onChange={(e) => setUseSolutionDraft(e.target.checked)}
-                                  className="mt-0.5 h-4 w-4 flex-none rounded border-slate-300 accent-brand-600"
-                                />
-                                {t("Consider the model solution when grouping")}
-                              </label>
-                              <button
-                                type="button"
-                                aria-expanded={solutionOpen}
-                                aria-controls="wc-model-solution"
-                                onClick={() => setSolutionOpen((o) => !o)}
-                                className="mt-1.5 inline-flex items-center gap-1 rounded text-xs font-medium text-slate-500 hover:text-slate-800"
-                              >
-                                {solutionOpen ? (
-                                  <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-                                ) : (
-                                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-                                )}
-                                {t("Show model solution")}
-                              </button>
-                              {solutionOpen && (
-                                <p
-                                  id="wc-model-solution"
-                                  className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-sm text-slate-700"
-                                >
-                                  {modelSolution}
-                                </p>
-                              )}
-                            </div>
+                      <div>
+                        <label htmlFor="wc-grouping" className="mb-1 block text-sm font-medium text-slate-700">
+                          {t("Grouping instruction")}
+                        </label>
+                        <textarea
+                          id="wc-grouping"
+                          rows={4}
+                          maxLength={1000}
+                          value={groupingDraft}
+                          onChange={(e) => setGroupingDraft(e.target.value)}
+                          placeholder={t(
+                            "Empty = AI finds themes itself. E.g. “positive / neutral / negative” or “by lecture topic”.",
                           )}
-                          <button
-                            type="button"
-                            onClick={() => void regroup()}
-                            disabled={aiBusy !== null}
-                            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-                          >
-                            {aiBusy === "regroup" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                            {t("Regroup")}
-                          </button>
-                        </div>
-                      )}
+                          className="w-full rounded-lg border border-field bg-white p-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                        />
+                        {isOpenText && modelSolution && (
+                          <div className="mt-2">
+                            <label className="flex items-start gap-2 text-sm text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={useSolutionDraft}
+                                disabled={aiBusy !== null}
+                                onChange={(e) => setUseSolutionDraft(e.target.checked)}
+                                className="mt-0.5 h-4 w-4 flex-none rounded border-slate-300 accent-brand-600"
+                              />
+                              {t("Consider the model solution when grouping")}
+                            </label>
+                            <button
+                              type="button"
+                              aria-expanded={solutionOpen}
+                              aria-controls="wc-model-solution"
+                              onClick={() => setSolutionOpen((o) => !o)}
+                              className="mt-1.5 inline-flex items-center gap-1 rounded text-xs font-medium text-slate-500 hover:text-slate-800"
+                            >
+                              {solutionOpen ? (
+                                <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                              )}
+                              {t("Show model solution")}
+                            </button>
+                            {solutionOpen && (
+                              <p
+                                id="wc-model-solution"
+                                className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-sm text-slate-700"
+                              >
+                                {modelSolution}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void regroup()}
+                          disabled={aiBusy !== null}
+                          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                        >
+                          {aiBusy === "regroup" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                          {t("Regroup")}
+                        </button>
+                      </div>
                     </>
                   )}
                   {aiError && <p className="text-sm text-red-600">{aiError}</p>}
@@ -3935,154 +3984,3 @@ function GroupedWordClouds({
   );
 }
 
-const FOOTER_BTN =
-  "inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50";
-
-function Footer(props: {
-  phase: string;
-  participants: number;
-  index: number;
-  count: number;
-  variant?: "question" | "section";
-  onPrev: () => void;
-  onNext: () => void;
-  onToggle?: () => void;
-  revealLevel?: "question" | "results" | "solution";
-  canReveal?: boolean;
-  onShowQuestion?: () => void;
-  onShowResults?: () => void;
-  onShowSolution?: () => void;
-  views?: { value: string; label: string }[];
-  viewValue?: string;
-  onSelectView?: (value: string) => void;
-  onFinish: () => void;
-  onCloseWindow?: () => void;
-  joinShown?: boolean;
-  onToggleJoin?: () => void;
-  /** Question-specific actions left of Start/Stop (mind-map rating). */
-  extra?: React.ReactNode;
-}) {
-  const { t } = useTranslation();
-  const btn = FOOTER_BTN;
-  const isSection = props.variant === "section";
-  return (
-    <footer
-      className="flex items-center justify-between border-t border-slate-200 px-6 py-3 text-sm text-slate-500"
-    >
-      {/* Left cluster: the question indicator, and — next to it — the
-       * Frage/Ergebnis/Lösung reveal pill (it belongs to the current
-       * question, so it reads better beside "Frage x/Y" than over on the
-       * right with Beenden/navigation). */}
-      <div className="flex items-center gap-3">
-        <span>
-          {isSection
-            ? t("Section")
-            : props.index >= 0
-              ? t("Question {{current}}/{{total}}", {
-                  current: props.index + 1,
-                  total: props.count,
-                })
-              : t("Start")}
-        </span>
-        {/* Toggle a scannable QR/join panel on demand (#), without touching
-         *  the vote state. "Q" does the same. */}
-        {!isSection && props.onToggleJoin && (
-          <button
-            type="button"
-            aria-label={t("Show QR code and join link")}
-            aria-pressed={props.joinShown}
-            title={t("Show QR code and join link (Q)")}
-            onClick={props.onToggleJoin}
-            className={`rounded-lg p-1.5 transition-colors ${props.joinShown ? "bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-200" : "text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400"}`}
-          >
-            <QrCode aria-hidden className="h-5 w-5" />
-          </button>
-        )}
-        {!isSection && props.onShowResults && props.phase !== "lobby" && (
-          <div
-            data-tour="present.reveal"
-            className="grid grid-flow-col auto-cols-fr items-center rounded-full border border-slate-200 p-0.5 text-xs dark:border-slate-700"
-            role="group"
-            aria-label={t("View")}
-          >
-            <button
-              type="button"
-              aria-pressed={props.revealLevel === "question"}
-              onClick={props.onShowQuestion}
-              className={`rounded-full px-2.5 py-1 text-center ${props.revealLevel === "question" ? "bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-200" : "text-slate-500 dark:text-slate-400"}`}
-            >
-              {t("Question")}
-            </button>
-            <button
-              type="button"
-              aria-pressed={props.revealLevel === "results"}
-              onClick={props.onShowResults}
-              className={`rounded-full px-2.5 py-1 text-center ${props.revealLevel === "results" ? "bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-200" : "text-slate-500 dark:text-slate-400"}`}
-            >
-              {t("Results")} <Kbd>E</Kbd>
-            </button>
-            {props.canReveal && (
-              <button
-                type="button"
-                aria-pressed={props.revealLevel === "solution"}
-                onClick={props.onShowSolution}
-                className={`rounded-full px-2.5 py-1 text-center ${props.revealLevel === "solution" ? "bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-200" : "text-slate-500 dark:text-slate-400"}`}
-              >
-                {t("Solution")} <Kbd>A</Kbd>
-              </button>
-            )}
-          </div>
-        )}
-        {/* Word-cloud view (#75): sits right beside the Frage/Ergebnis pill —
-            both steer what's on the beamer. A dropdown lists the available
-            views (raw / AI cleaned / AI grouped); the "a" key still cycles
-            them. */}
-        {!isSection && props.views && props.onSelectView && (
-          <label className={`${btn} gap-2`}>
-            {t("View")}
-            <select
-              value={props.viewValue}
-              onChange={(event) => props.onSelectView!(event.target.value)}
-              className="bg-transparent font-medium text-slate-700 focus:outline-none dark:text-slate-200"
-            >
-              {props.views.map((view) => (
-                <option key={view.value} value={view.value}>
-                  {view.label}
-                </option>
-              ))}
-            </select>
-            <Kbd>A</Kbd>
-          </label>
-        )}
-      </div>
-      {/* Always-present Beenden + navigation stay flush right; Starten sits
-       * on the left of this group so they never shift as it appears. */}
-      <div className="flex gap-2">
-        {/* Starting/results only make sense on a question, not a section. */}
-        {!isSection && props.extra}
-        {!isSection && props.onToggle && (
-          <button data-tour="present.toggle" className={btn} onClick={props.onToggle}>
-            {props.phase === "open" ? t("Stop") : t("Start", { context: "action" })}{" "}
-            <Kbd>S</Kbd>
-          </button>
-        )}
-        <div data-tour="present.nav" className="flex gap-2">
-          <button className={`${btn} text-red-700`} onClick={props.onFinish}>
-            {t("End")} <Kbd>Esc</Kbd>
-          </button>
-          {props.onCloseWindow && (
-            <button className={btn} onClick={props.onCloseWindow}>
-              {t("Close window")}
-            </button>
-          )}
-          <button className={btn} onClick={props.onPrev} aria-label={t("Back (←)")}>
-            <ChevronLeft aria-hidden className="h-5 w-5" />
-          </button>
-          <button className={btn} onClick={props.onNext} aria-label={t("Next (→)")}>
-            <ChevronRight aria-hidden className="h-5 w-5" />
-          </button>
-        </div>
-      </div>
-    </footer>
-  );
-}

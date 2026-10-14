@@ -165,7 +165,8 @@ test('tour: sections, progress, Back across pages, skip section, arrow keys, min
   await popover(page).getByRole('button', { name: 'Back' }).click();
   await expect(title(page)).toHaveText('Next question and end', { timeout: 15_000 });
   await expect(page).toHaveURL(/\/sets\/\d+\/present/);
-  await expect(page.getByText(/^Question 1\/\d+$/)).toBeVisible({ timeout: 10_000 });
+  // Footer position "1/N" (its tooltip/name: "Question 1/N").
+  await expect(page.locator('footer [data-help="position"]')).toHaveText(/^1\/\d+$/, { timeout: 10_000 });
   await expect(page.locator('[data-tour="present.reveal"]')).toBeVisible();
 
   // End the tour (✕).
