@@ -16,6 +16,9 @@ from common.models import SiteConfig
 from rooms.models import AnswerOption, Question, QuestionSet, Room
 
 from . import ai_evaluation, ai_freetext_summary, ai_wordcloud, ai_wordcloud_live
+from . import matrix as mxs
+from .matrix import MatrixError, zone_at
+from .mindmap import answered_runs_q
 from .models import (
     MatrixCard,
     MindmapContribution,
@@ -25,9 +28,6 @@ from .models import (
     SelfCheckAttempt,
     Vote,
 )
-from . import matrix as mxs
-from .matrix import MatrixError, zone_at
-from .mindmap import answered_runs_q
 from .results import freetext_evaluation
 from .state import active_run, build_payloads
 
