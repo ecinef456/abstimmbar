@@ -113,17 +113,35 @@ export default function MatrixPanel({
       return next;
     });
 
+  // Every call gets a sequence number: a response older than one already
+  // shown is dropped (responses can overtake each other). A card's
+  // optimistic placement stays until its LAST in-flight request settles.
+  const sentSeq = useRef(0);
+  const shownSeq = useRef(0);
+  const pending = useRef(new Map<number, number>());
   const call = useCallback(
     async (request: () => Promise<{ matrix: MatrixBoard }>, optimisticId?: number) => {
+      const seq = ++sentSeq.current;
+      if (optimisticId != null) pending.current.set(optimisticId, (pending.current.get(optimisticId) ?? 0) + 1);
       try {
         const { matrix } = await request();
-        setLocal(matrix);
+        if (seq > shownSeq.current) {
+          shownSeq.current = seq;
+          setLocal(matrix);
+        }
         return matrix;
       } catch (err) {
         setToast((p) => ({ text: t(requestDetail(err)), n: (p?.n ?? 0) + 1 }));
         return null;
       } finally {
-        if (optimisticId != null) setOverride(optimisticId, null);
+        if (optimisticId != null) {
+          const left = (pending.current.get(optimisticId) ?? 1) - 1;
+          if (left > 0) pending.current.set(optimisticId, left);
+          else {
+            pending.current.delete(optimisticId);
+            setOverride(optimisticId, null);
+          }
+        }
       }
     },
     [t],
@@ -135,7 +153,7 @@ export default function MatrixPanel({
     const zone = resolveZone(card.zone, x, y, settings.edges);
     const [cx, cy] = clampToZone(zone, x, y, settings.edges);
     setOverride(id, { zone, x: cx, y: cy });
-    void call(() => live.matrixMove(runId, questionId, id, x, y), id).then((result) => {
+    return call(() => live.matrixMove(runId, questionId, id, x, y), id).then((result) => {
       const moved = result?.cards.find((c) => c.id === id);
       if (via === "keyboard" && moved) {
         setAnnounce(t("now in: {{zone}}", { zone: matrixZoneName(moved.zone, settings.axes, t) }));
@@ -150,15 +168,49 @@ export default function MatrixPanel({
 
   // --- Card dialog --------------------------------------------------------
   const [openId, setOpenId] = useState<number | null>(null);
-  const closeDialog = useCallback(() => {
-    const id = openId;
+  /** Close the dialog. Keyboard: focus back on the card. Mouse: no card is
+   *  left focused (a clicker's arrows must navigate, not move it). */
+  const closeDialog = useCallback(
+    (byKeyboard: boolean) => {
+      const id = openId;
+      setOpenId(null);
+      if (id == null) return;
+      window.requestAnimationFrame(() => {
+        if (!byKeyboard) {
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          return;
+        }
+        const el = document.querySelector<HTMLElement>(`[data-matrix-board] [data-card-id="${id}"]`);
+        el?.focus({ preventScroll: true });
+      });
+    },
+    [openId],
+  );
+  /** After hiding/deleting the opened card: focus the nearest remaining card,
+   *  else the board — never body. */
+  const focusNear = (id: number) => {
+    const sel = (cid: number) => `[data-matrix-board] [data-card-id="${cid}"]`;
+    const gone = document.querySelector<HTMLElement>(sel(id))?.getBoundingClientRect();
     setOpenId(null);
-    if (id == null) return;
-    window.requestAnimationFrame(() => {
-      const el = document.querySelector<HTMLElement>(`[data-matrix-board] [data-card-id="${id}"]`);
-      el?.focus({ preventScroll: true });
-    });
-  }, [openId]);
+    // Two frames: the dialog unmounts, then the board without the card.
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => {
+        const plot = document.querySelector<HTMLElement>("[data-matrix-board]");
+        const others = Array.from(plot?.querySelectorAll<HTMLElement>("[data-card-id]") ?? []).filter(
+          (el) => Number(el.dataset.cardId) !== id,
+        );
+        const centre = (r: DOMRect) => [r.left + r.width / 2, r.top + r.height / 2];
+        const [gx, gy] = gone ? centre(gone) : [0, 0];
+        const nearest = others
+          .map((el) => {
+            const [x, y] = centre(el.getBoundingClientRect());
+            return { el, d: Math.hypot(x - gx, y - gy) };
+          })
+          .sort((a, b) => a.d - b.d)[0]?.el;
+        (nearest ?? plot)?.focus({ preventScroll: true });
+      }),
+    );
+  };
 
   // --- Handles ------------------------------------------------------------
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -175,6 +227,34 @@ export default function MatrixPanel({
       return next;
     });
 
+  // Opened from the keyboard, a drawer takes the focus; closing it returns
+  // the focus to its handle when it was inside.
+  const pencilRef = useRef<HTMLButtonElement>(null);
+  const zoomToggleRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const zoomPanelRef = useRef<HTMLDivElement>(null);
+  const focusFirstIn = (ref: RefObject<HTMLElement>) =>
+    // Two frames: the drawer has rendered and lost `inert`.
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() =>
+        // The first form field, else the first button.
+        (
+          ref.current?.querySelector<HTMLElement>("select, input, textarea") ??
+          ref.current?.querySelector<HTMLElement>("button")
+        )?.focus({ preventScroll: true }),
+      ),
+    );
+  const closeHandles = () => {
+    const active = document.activeElement;
+    if (drawerOpen && drawerRef.current?.contains(active)) {
+      window.requestAnimationFrame(() => pencilRef.current?.focus({ preventScroll: true }));
+    } else if (zoomOpen && zoomPanelRef.current?.contains(active)) {
+      zoomToggleRef.current?.focus({ preventScroll: true });
+    }
+    setDrawerOpen(false);
+    setZoomOpen(false);
+  };
+
   // Esc closes the dialog / drawer / display controls before the presenter
   // sees it (it would leave the presentation); inside the dialog no
   // presenter shortcut fires at all, and Tab stays in it.
@@ -187,7 +267,7 @@ export default function MatrixPanel({
         if (e.key === "Escape") {
           e.preventDefault();
           e.stopPropagation();
-          closeDialog();
+          closeDialog(true);
           return;
         }
         if (e.key === "Tab" && dialog) {
@@ -214,12 +294,12 @@ export default function MatrixPanel({
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        setDrawerOpen(false);
-        setZoomOpen(false);
+        closeHandles();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, drawerOpen, zoomOpen, closeDialog]);
 
   const [fitRef, fitWidth] = useFitWidth();
@@ -273,11 +353,11 @@ export default function MatrixPanel({
           onHide={(id, hidden) => {
             void call(() => live.matrixHide(runId, questionId, id, hidden));
             // Hiding the opened card takes it off the board: close.
-            if (hidden && id === open.id && !showHidden) setOpenId(null);
+            if (hidden && id === open.id && !showHidden) focusNear(id);
           }}
           onDelete={(id) => {
             void call(() => live.matrixDelete(runId, questionId, id));
-            if (id === open.id) setOpenId(null);
+            if (id === open.id) focusNear(id);
           }}
         />
       )}
@@ -305,10 +385,13 @@ export default function MatrixPanel({
       <button
         type="button"
         {...{ [drawerAttr]: "" }}
+        ref={pencilRef}
         onClick={(e) => {
+          const byKeyboard = e.detail === 0;
           e.currentTarget.blur();
           setZoomOpen(false);
           setDrawerOpen((o) => !o);
+          if (byKeyboard && !drawerOpen) focusFirstIn(drawerRef);
         }}
         aria-label={t("Add card")}
         title={t("Add card")}
@@ -320,6 +403,7 @@ export default function MatrixPanel({
         <Pencil className="h-5 w-5" />
       </button>
       <AddDrawer
+        drawerRef={drawerRef}
         open={drawerOpen}
         drawerAttr={drawerAttr}
         settings={settings}
@@ -328,7 +412,7 @@ export default function MatrixPanel({
         showHidden={showHidden}
         onShowHidden={setShowHidden}
         hiddenCount={board.cards.filter((c) => c.hidden).length}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeHandles}
         onAdd={(body) => call(() => live.matrixAdd(runId, questionId, body))}
       />
 
@@ -340,7 +424,7 @@ export default function MatrixPanel({
         style={{ top: handleTop + handleStep }}
       >
         {zoomOpen && (
-          <div className="flex items-center pl-1">
+          <div ref={zoomPanelRef} className="flex items-center pl-1">
             {settings.descriptions && (
               <div
                 role="radiogroup"
@@ -390,11 +474,14 @@ export default function MatrixPanel({
         )}
         <button
           type="button"
+          ref={zoomToggleRef}
           className="p-3 hover:text-slate-800"
           onClick={(e) => {
-            e.currentTarget.blur();
+            const byKeyboard = e.detail === 0;
+            if (!byKeyboard) e.currentTarget.blur();
             setDrawerOpen(false);
             setZoomOpen((o) => !o);
+            if (byKeyboard && !zoomOpen) focusFirstIn(zoomPanelRef);
           }}
           aria-expanded={zoomOpen}
           data-help="handle.mx-zoom"
@@ -426,7 +513,7 @@ function CardDialog({
   board: MatrixBoard;
   zoneName: (zone: string) => string;
   catText: (key: string) => string;
-  onClose: () => void;
+  onClose: (byKeyboard: boolean) => void;
   onUnstack: (id: number) => void;
   onHide: (id: number, hidden: boolean) => void;
   onDelete: (id: number) => void;
@@ -467,7 +554,7 @@ function CardDialog({
     </div>
   );
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6" onClick={() => onClose(false)}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -489,7 +576,7 @@ function CardDialog({
           <button
             ref={closeRef}
             type="button"
-            onClick={onClose}
+            onClick={(e) => onClose(e.detail === 0)}
             aria-label={t("Close")}
             className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
           >
@@ -535,6 +622,7 @@ function CardDialog({
 /** Pencil drawer: a teacher card (zone, category, title, description) and
  *  the "show hidden cards" switch. */
 function AddDrawer({
+  drawerRef,
   open,
   drawerAttr,
   settings,
@@ -546,6 +634,7 @@ function AddDrawer({
   onClose,
   onAdd,
 }: {
+  drawerRef: RefObject<HTMLDivElement>;
   open: boolean;
   drawerAttr: string;
   settings: MatrixSettingsPayload;
@@ -565,7 +654,6 @@ function AddDrawer({
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   // Closed (off-screen): out of the tab order and the accessibility tree.
-  const drawerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (drawerRef.current) drawerRef.current.inert = !open;
   }, [open]);

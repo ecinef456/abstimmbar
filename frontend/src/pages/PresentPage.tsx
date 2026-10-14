@@ -872,8 +872,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       autoClosedRef.current !== deadline
     ) {
       autoClosedRef.current = deadline;
-      if (activeKind === "word_cloud") {
-        // Keep the cloud on the beamer after the timer expires (and surface
+      if (activeKind === "word_cloud" || activeKind === "matrix") {
+        // Keep the cloud / matrix board on the beamer after the timer expires (and surface
         // #30's deferred cloud) — the same "results" landing as the Stop
         // button, instead of a bare closed slide that would hide it.
         void (async () => {

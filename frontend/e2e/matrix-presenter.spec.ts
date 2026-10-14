@@ -172,6 +172,10 @@ test('live cards, dragging with hysteresis, stacking, dialog, hiding, teacher ca
   await card(page, ids.podcast).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Ausblenden' }).click();
   await expect(card(page, ids.podcast)).toHaveCount(0);
+  // Focus lands on the board (nearest card or the board), never on body.
+  await expect
+    .poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-matrix-board]')))
+    .toBe(true);
   expect((await s.serverCard(ids.podcast)).hidden).toBe(true);
   // … visible again (dimmed) with "Ausgeblendete anzeigen", and re-shown.
   await page.locator('[data-help="handle.mx-edit"]').click();
@@ -238,6 +242,15 @@ test('keyboard moves, footer views, help labels, zoom handle, axe, no overlap', 
   await expect(card(page, ids.podcast)).toBeFocused();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
+  // Pencil opened from the keyboard: focus moves in; Esc returns it.
+  await page.locator('[data-help="handle.mx-edit"]').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('matrix-drawer').getByLabel('Feld')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-help="handle.mx-edit"]')).toBeFocused();
+  await expect(page).toHaveURL(/\/present/);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+
   // Zoom handle: compact / detailed.
   await page.locator('[data-help="handle.mx-zoom"]').click();
   await expect(page.getByTestId('mx-compact')).toHaveAttribute('aria-checked', 'true');
@@ -284,4 +297,28 @@ test('keyboard moves, footer views, help labels, zoom handle, axe, no overlap', 
   await page.keyboard.press('e');
   await expect(seg(page, 'view.mx.raw')).toHaveAttribute('aria-checked', 'true');
   await expect(board(page)).toBeVisible();
+});
+
+test('after a keyboard move, a click ends the keyboard session: → navigates again', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  const s = await seed(page, trackRoom);
+  await openPresenter(page, s.room.setId);
+  await card(page, s.ids.podcast).focus();
+  const moved = page.waitForResponse(isMove('move'));
+  await page.keyboard.press('ArrowRight');
+  await moved;
+  // Click outside the cards (the question text), then an SSE frame arrives.
+  await page.locator('main').getByText('Wohin gehört die Idee?').click();
+  const fresh = await s.add(s.tokens[2], 'q4', 'Nach dem Klick', 'blue');
+  await expect(card(page, fresh)).toBeVisible();
+  await page.waitForTimeout(300);
+  const moves: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && /\/matrix\/\d+\/move$/.test(r.url())) moves.push(r.url());
+  });
+  await page.keyboard.press('ArrowRight');
+  // The presentation moves on (last question → closing slide): board gone.
+  // Moving on from an open vote asks first — the presenter navigated.
+  await expect(page.getByRole('heading', { name: 'Abstimmung läuft noch' })).toBeVisible();
+  expect(moves).toEqual([]);
 });

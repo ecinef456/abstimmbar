@@ -50,7 +50,7 @@ import { useReducedMotion } from "./motion";
 export interface MatrixInteraction {
   /** Drop / arrow key at board point (x, y) — unclamped; the server resolves
    *  zone (hysteresis) and position. */
-  onMove(cardId: number, x: number, y: number, via: "pointer" | "keyboard"): void;
+  onMove(cardId: number, x: number, y: number, via: "pointer" | "keyboard"): Promise<unknown> | void;
   onStack(cardId: number, ontoId: number): void;
   onOpen(cardId: number): void;
 }
@@ -309,6 +309,7 @@ export default function Matrix({
     if (!interactive || e.button !== 0) return;
     press.current = { id: card.id, zone: card.zone, px: e.clientX, py: e.clientY, moved: false };
     suppressClick.current = false;
+    endKeyboardSession();
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
@@ -350,8 +351,22 @@ export default function Matrix({
   // the card keeps focus, so repeated presses can overcome the hysteresis
   // even though the server clamps the stored position back into the zone.
   const keyPoint = useRef<{ id: number; x: number; y: number } | null>(null);
-  const refocus = useRef<number | null>(null);
+  /** The card to give its focus back once its keyboard move has settled
+   *  (one shot; the reading order may have moved it in the DOM). */
+  const refocus = useRef<{ id: number; settled: boolean } | null>(null);
+  const [, setSettledTick] = useState(0);
   const cardRefs = useRef(new Map<number, HTMLElement>());
+  // Any pointer interaction ends the keyboard session: no stale push point,
+  // no focus pulled back onto a card (a clicker's → must navigate again).
+  const endKeyboardSession = () => {
+    keyPoint.current = null;
+    refocus.current = null;
+  };
+  useEffect(() => {
+    if (!interactive) return;
+    document.addEventListener("pointerdown", endKeyboardSession, true);
+    return () => document.removeEventListener("pointerdown", endKeyboardSession, true);
+  }, [interactive]);
   const onKeyDown = (e: ReactKeyboardEvent<HTMLElement>, card: MatrixCard) => {
     if (!interactive) return;
     const step = e.shiftKey ? KEY_STEP_LARGE : KEY_STEP;
@@ -369,21 +384,30 @@ export default function Matrix({
     }
     const d = delta[e.key];
     if (!d || e.altKey || e.ctrlKey || e.metaKey) return;
+    // Only a keyboard-focused card takes the arrows; a card that merely got
+    // focus from a click lets them navigate the presentation.
+    if (!e.currentTarget.matches(":focus-visible")) return;
     e.preventDefault();
     e.stopPropagation(); // arrows move the card, they don't navigate questions
     const base = keyPoint.current?.id === card.id ? keyPoint.current : { id: card.id, x: card.x, y: card.y };
     const clip = (v: number) => Math.max(-1, Math.min(1, v));
     const next = { id: card.id, x: clip(base.x + d[0]), y: clip(base.y + d[1]) };
     keyPoint.current = next;
-    refocus.current = card.id;
-    interactive.onMove(card.id, next.x, next.y, "keyboard");
+    const token = { id: card.id, settled: false };
+    refocus.current = token;
+    void Promise.resolve(interactive.onMove(card.id, next.x, next.y, "keyboard")).finally(() => {
+      if (refocus.current !== token) return;
+      token.settled = true;
+      setSettledTick((n) => n + 1);
+    });
   };
   // The reading order can move the focused card in the DOM (which drops its
-  // focus): put the focus back on it.
+  // focus): once the move has settled, put the focus back — once.
   useLayoutEffect(() => {
-    const id = refocus.current;
-    if (id == null) return;
-    const el = cardRefs.current.get(id);
+    const r = refocus.current;
+    if (!r?.settled) return;
+    refocus.current = null;
+    const el = cardRefs.current.get(r.id);
     if (el && document.activeElement !== el && (document.activeElement == null || document.activeElement === document.body)) {
       el.focus({ preventScroll: true });
     }
@@ -428,7 +452,9 @@ export default function Matrix({
       <div
         ref={plotRef}
         data-matrix-board
-        className={`relative col-start-2 row-start-2 w-full select-none rounded-lg border border-slate-300 ${dk("dark:border-slate-600")} ${
+        // Focus target when the last card under the focus went away.
+        tabIndex={interactive ? -1 : undefined}
+        className={`relative col-start-2 row-start-2 w-full select-none rounded-lg border border-slate-300 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${dk("dark:border-slate-600")} ${
           results ? "" : "h-full min-h-0"
         }`}
         style={results ? { aspectRatio: RESULTS_ASPECT } : undefined}
@@ -501,10 +527,7 @@ export default function Matrix({
                       onKeyDown: (e: ReactKeyboardEvent<HTMLElement>) => onKeyDown(e, card),
                       onBlur: (e: { relatedTarget: EventTarget | null }) => {
                         // Focus moved elsewhere on purpose: stop pushing.
-                        if (e.relatedTarget) {
-                          keyPoint.current = null;
-                          refocus.current = null;
-                        }
+                        if (e.relatedTarget) endKeyboardSession();
                       },
                     }
                   : {})}
