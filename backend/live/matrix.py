@@ -14,7 +14,7 @@ Zones
     ``e_top``, ``e_right``, ``e_bottom`` and ``e_left``. A band of width
     ``EDGE_BAND`` around both axes is then reserved for the edges, so quadrant
     rectangles start at ``±EDGE_BAND``. Without edges the quadrants cover the
-    whole board. Only zones returned by ``allowed_zones`` may hold a card.
+    whole board. Only zones returned by ``rooms.matrix.allowed_zones`` may hold a card.
 
 Hysteresis
     A card that is dragged only slightly across a zone border keeps its zone.
@@ -26,9 +26,24 @@ Clamping and auto-placement
     their axis. ``auto_place`` picks a deterministic free slot for a new card
     so that cards do not pile up.
 
-This module holds the pure geometry only. Services that read and write
-the database follow in the same module.
+The first half of this module is pure geometry; the services that read and
+write ``MatrixCard`` rows follow below.
 """
+import math
+
+from django.db import transaction
+
+from rooms.matrix import (
+    CATEGORY_NAMED,
+    CATEGORY_OFF,
+    MATRIX_DESCRIPTION_MAX,
+    MATRIX_TITLE_MAX,
+    allowed_zones,
+    category_keys,
+)
+from rooms.mindmap import normalize_text, seed_langs
+
+from .models import MatrixCard, Run
 
 EDGE_BAND = 0.12
 HYSTERESIS = 0.12
@@ -128,3 +143,253 @@ def auto_place(zone, occupied, edges):
         if gap(p) > _MIN_GAP:
             return p
     return max(slots, key=gap)
+
+
+# --- Services: cards, stacks, moderation, payloads ---------------------------
+
+
+class MatrixError(Exception):
+    """A refused action: ``detail`` + HTTP ``status``."""
+
+    def __init__(self, detail, status=400, **extra):
+        super().__init__(detail)
+        self.detail = detail
+        self.status = status
+        self.extra = extra
+
+    def body(self):
+        return {"detail": self.detail, **self.extra}
+
+
+def _lock_run(run):
+    # Serialises matrix writes per run (limit checks, stack surgery).
+    Run.objects.select_for_update(no_key=True).filter(pk=run.pk).first()
+
+
+def _cards(run, question):
+    return MatrixCard.objects.filter(run=run, question=question)
+
+
+def _get(run, question, card_id):
+    card = _cards(run, question).filter(pk=card_id).first() if isinstance(card_id, int) else None
+    if card is None:
+        raise MatrixError("Card not found.", 404)
+    return card
+
+
+def _top(card):
+    return card.stack if card.stack_id else card
+
+
+def _free_slot(run, question, zone, exclude_pk=None):
+    occupied = [
+        (x, y)
+        for x, y in _cards(run, question)
+        .filter(zone=zone, stack__isnull=True)
+        .exclude(pk=exclude_pk)
+        .values_list("x", "y")
+    ]
+    return auto_place(zone, occupied, question.matrix_edges)
+
+
+def _validated(question, zone, title, category, description):
+    if zone not in allowed_zones(question):
+        raise MatrixError("Zone not allowed.")
+    title = normalize_text(title)
+    if not title:
+        raise MatrixError("Empty title.")
+    if len(title) > MATRIX_TITLE_MAX:
+        raise MatrixError("Title too long.")
+    description = normalize_text(description) if question.matrix_descriptions else ""
+    if len(description) > MATRIX_DESCRIPTION_MAX:
+        raise MatrixError("Description too long.")
+    if question.matrix_category_mode == CATEGORY_OFF:
+        category = ""
+    elif category not in category_keys(question):
+        raise MatrixError("A valid category is required.")
+    return title, category, description
+
+
+def _create(run, question, token, zone, title, category, description, teacher):
+    x, y = _free_slot(run, question, zone)
+    return MatrixCard.objects.create(
+        run=run, question=question, token=token, title=title, description=description,
+        category=category, zone=zone, x=x, y=y, teacher=teacher,
+    )
+
+
+def add_card(run, question, token, zone, title, category="", description=""):
+    title, category, description = _validated(question, zone, title, category, description)
+    with transaction.atomic():
+        _lock_run(run)
+        if _cards(run, question).filter(token=token).count() >= question.matrix_max_per_person:
+            raise MatrixError("Card limit reached.", 409)
+        return _create(run, question, token, zone, title, category, description, False)
+
+
+def add_teacher_card(run, question, zone, title, category="", description=""):
+    title, category, description = _validated(question, zone, title, category, description)
+    with transaction.atomic():
+        _lock_run(run)
+        if run.phase == Run.Phase.FINISHED:
+            raise MatrixError("The run is finished.", 409)
+        return _create(run, question, None, zone, title, category, description, True)
+
+
+def _detach(card):
+    """Take ``card`` out of its stack. A member just leaves; a top with
+    members hands its position and its members to the oldest member."""
+    with transaction.atomic():
+        if card.stack_id:
+            card.stack = None
+            card.save(update_fields=["stack"])
+            return
+        members = list(card.members.order_by("created_at", "pk"))
+        if not members:
+            return
+        new_top, rest = members[0], members[1:]
+        new_top.stack = None
+        new_top.x, new_top.y, new_top.zone, new_top.placed = card.x, card.y, card.zone, card.placed
+        new_top.save(update_fields=["stack", "x", "y", "zone", "placed"])
+        MatrixCard.objects.filter(pk__in=[m.pk for m in rest]).update(stack=new_top)
+
+
+def remove_card(run, question, token, card_id):
+    with transaction.atomic():
+        _lock_run(run)
+        card = _get(run, question, card_id)
+        if card.token_id is None or card.token_id != token.pk:
+            raise MatrixError("Card not found.", 404)
+        _detach(card)
+        card.delete()
+
+
+def delete_teacher_card(run, question, card_id):
+    with transaction.atomic():
+        _lock_run(run)
+        card = _get(run, question, card_id)
+        if not card.teacher:
+            raise MatrixError("Card not found.", 404)
+        _detach(card)
+        card.delete()
+
+
+def move_card(run, question, card_id, x, y):
+    try:
+        x, y = float(x), float(y)
+    except (TypeError, ValueError) as error:
+        raise MatrixError("Invalid position.") from error
+    if not (math.isfinite(x) and math.isfinite(y)):
+        raise MatrixError("Invalid position.")
+    with transaction.atomic():
+        _lock_run(run)
+        top = _top(_get(run, question, card_id))
+        edges = question.matrix_edges
+        top.zone = resolve_zone(top.zone, x, y, edges)
+        top.x, top.y = clamp_to_zone(top.zone, x, y, edges)
+        top.placed = True
+        top.save(update_fields=["zone", "x", "y", "placed"])
+        return top
+
+
+def stack_card(run, question, card_id, onto_id):
+    with transaction.atomic():
+        _lock_run(run)
+        moving = _top(_get(run, question, card_id))
+        target = _top(_get(run, question, onto_id))
+        if moving.pk == target.pk:
+            raise MatrixError("Cannot stack a card onto itself.")
+        moving.members.update(stack=target)
+        moving.stack = target
+        moving.save(update_fields=["stack"])
+        return target
+
+
+def unstack_card(run, question, card_id):
+    with transaction.atomic():
+        _lock_run(run)
+        card = _get(run, question, card_id)
+        if card.stack_id:
+            card.zone = card.stack.zone
+        elif not card.members.exists():
+            raise MatrixError("Card is not stacked.")
+        _detach(card)
+        card.x, card.y = _free_slot(run, question, card.zone, exclude_pk=card.pk)
+        card.placed = False
+        card.save(update_fields=["x", "y", "zone", "placed"])
+        return card
+
+
+def set_hidden(run, question, card_id, hidden):
+    with transaction.atomic():
+        _lock_run(run)
+        card = _get(run, question, card_id)
+        card.hidden = bool(hidden)
+        card.save(update_fields=["hidden"])
+        return card
+
+
+def own_card_ids(run, question, token):
+    return list(_cards(run, question).filter(token=token).values_list("pk", flat=True))
+
+
+def mine_payload(run, question, token):
+    return [
+        {"id": c.pk, "title": c.title, "description": c.description,
+         "category": c.category, "zone": c.zone}
+        for c in _cards(run, question).filter(token=token)
+    ]
+
+
+def card_count(run, question):
+    return _cards(run, question).count()
+
+
+def contributor_count(run, question):
+    return (
+        _cards(run, question).filter(token__isnull=False).values("token").distinct().count()
+    )
+
+
+def board_payload(run, question, presenter):
+    """The whole board. ``presenter=False`` drops hidden cards, the members
+    of a hidden top, and the membership of hidden members."""
+    rows = list(_cards(run, question))
+    hidden_ids = {c.pk for c in rows if c.hidden}
+    cards = []
+    for c in rows:
+        if not presenter and (c.hidden or (c.stack_id and c.stack_id in hidden_ids)):
+            continue
+        cards.append({
+            "id": c.pk, "title": c.title, "description": c.description,
+            "category": c.category, "zone": c.zone, "x": c.x, "y": c.y,
+            "stack": c.stack_id, "hidden": c.hidden, "teacher": c.teacher,
+            "placed": c.placed,
+        })
+    return {
+        "cards": cards,
+        "count": sum(1 for c in cards if not c["hidden"]),
+        "contributors": contributor_count(run, question),
+    }
+
+
+CSV_HEADER = ["title", "description", "category", "zone", "x", "y", "stack_top", "hidden", "teacher"]
+
+
+def csv_rows(run, question):
+    canonical = seed_langs()[0]
+    names = {
+        c["key"]: (c.get("name") or {}).get(canonical, "") or c["key"]
+        for c in question.matrix_categories or []
+    }
+    rows = list(_cards(run, question))
+    titles = {c.pk: c.title for c in rows}
+    result = [list(CSV_HEADER)]
+    for c in rows:
+        category = names.get(c.category, c.category) if question.matrix_category_mode == CATEGORY_NAMED else c.category
+        result.append([
+            c.title, c.description, category, c.zone, f"{round(c.x, 2):g}", f"{round(c.y, 2):g}",
+            titles.get(c.stack_id, "") if c.stack_id else "",
+            "true" if c.hidden else "false", "true" if c.teacher else "false",
+        ])
+    return result

@@ -38,7 +38,7 @@ CATEGORY_MODE_CHOICES = (
 )
 
 CORNER_ZONES = ("q1", "q2", "q3", "q4")
-EDGE_ZONES = ("top", "right", "bottom", "left")
+EDGE_ZONES = ("e_top", "e_right", "e_bottom", "e_left")
 AXIS_LABEL_FIELDS = ("matrix_x_from", "matrix_x_to", "matrix_y_from", "matrix_y_to")
 
 
