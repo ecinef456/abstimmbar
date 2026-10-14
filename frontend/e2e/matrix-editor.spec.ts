@@ -94,6 +94,61 @@ test('create a matrix question with axes, edges and named categories; it persist
   await expect(page.getByRole('textbox', { name: 'Name der Kategorie 3' })).toHaveValue('Chance');
 });
 
+test('"Alle Felder übersetzen" fills every matrix field (axes and category names)', async ({
+  page,
+  trackRoom,
+}) => {
+  await page.route(/\/api\/translate\/$/, async (route) => {
+    const body = route.request().postDataJSON();
+    await route.fulfill({ json: { translated: `EN ${body.text}` } });
+  });
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  const fields = [
+    ['x-Achse von', 'links'],
+    ['x-Achse bis', 'rechts'],
+    ['y-Achse von', 'unten'],
+    ['y-Achse bis', 'oben'],
+    ['Name der Kategorie 1', 'Idee'],
+    ['Name der Kategorie 2', 'Risiko'],
+  ] as const;
+  await page.getByRole('radio', { name: 'mit Namen' }).click();
+  for (const [name, de] of fields) {
+    await page.getByRole('textbox', { name, exact: true }).first().fill(de);
+  }
+  await page.getByRole('button', { name: 'Alle Felder übersetzen' }).click();
+  // After translating, each field shows its (now filled) English tab.
+  for (const [name, de] of fields) {
+    await page.getByRole('tablist', { name, exact: true }).getByRole('tab', { name: /^en/ }).click();
+    await expect(page.getByRole('textbox', { name, exact: true })).toHaveValue(`EN ${de}`);
+  }
+});
+
+test('the Bearbeiten/Vorschau switcher keeps icon and label on one line', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  for (const width of [1280, 1024, 768, 324]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const name of ['Bearbeiten', 'Vorschau']) {
+      const radio = page.getByRole('radio', { name, exact: true });
+      const icon = (await radio.locator('svg').boundingBox())!;
+      const text = (await radio.locator('span').first().boundingBox())!;
+      // Icon and label share a line: the icon's vertical centre lies within the
+      // label's box (stacked, it would sit above it).
+      expect(icon.y + icon.height / 2, `${name} icon centre at ${width}`).toBeGreaterThan(text.y);
+      expect(icon.y + icon.height / 2, `${name} icon centre at ${width}`).toBeLessThan(
+        text.y + text.height,
+      );
+      expect((await radio.boundingBox())!.height, `${name} height at ${width}`).toBeLessThan(34);
+    }
+    const group = (await page.getByRole('group', { name: 'Ansicht' }).boundingBox())!;
+    expect(group.x + group.width).toBeLessThanOrEqual(width);
+  }
+});
+
 test('saving with an empty axis label is blocked', async ({ page, trackRoom }) => {
   const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
   await openMatrixEditor(page, seed.setId);

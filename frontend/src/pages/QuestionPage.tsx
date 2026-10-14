@@ -37,7 +37,7 @@ import MindmapSeedEditor, {
   type EditableSeedNode,
 } from "../components/MindmapSeedEditor";
 import HomeCrumb from "../components/HomeCrumb";
-import MatrixSettings, { matrixProblem } from "../components/MatrixSettings";
+import MatrixSettings, { matrixProblem, type MatrixSettingsValue, type MatrixUpdate } from "../components/MatrixSettings";
 import SortableList from "../components/SortableList";
 import TranslatableField from "../components/TranslatableField";
 import { Button, Field, InfoHint, MenuItem, MoreMenu, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
@@ -273,6 +273,7 @@ export default function QuestionPage() {
   const [matrixMaxPerPerson, setMatrixMaxPerPerson] = useState(10);
   const [matrixCategoryMode, setMatrixCategoryMode] = useState<MatrixCategoryMode>("off");
   const [matrixCategories, setMatrixCategories] = useState<MatrixCategory[]>([]);
+  const matrixRef = useRef<MatrixSettingsValue | null>(null);
   // Server refusal for the rating mode (locked while a running session has
   // ratings), shown at the field.
   const [ratingModeError, setRatingModeError] = useState("");
@@ -853,6 +854,23 @@ export default function QuestionPage() {
     edges: matrixEdges, descriptions: matrixDescriptions, maxPerPerson: matrixMaxPerPerson,
     categoryMode: matrixCategoryMode, categories: matrixCategories,
   };
+  // Updates compose: "translate all fields" fires several onChange calls in one
+  // tick, each of which must build on the previous result rather than on the
+  // render-time value. The ref always holds the latest (even unrendered) state.
+  matrixRef.current = matrixValue;
+  function updateMatrix(update: MatrixUpdate) {
+    const v = update(matrixRef.current!);
+    matrixRef.current = v;
+    setMatrixXFrom(v.xFrom);
+    setMatrixXTo(v.xTo);
+    setMatrixYFrom(v.yFrom);
+    setMatrixYTo(v.yTo);
+    setMatrixEdges(v.edges);
+    setMatrixDescriptions(v.descriptions);
+    setMatrixMaxPerPerson(v.maxPerPerson);
+    setMatrixCategoryMode(v.categoryMode);
+    setMatrixCategories(v.categories);
+  }
   const matrixIssue = isMatrix ? matrixProblem(matrixValue) : null;
   const invalid = textMissing || optionsMissing || !!mindmapProblem || !!matrixIssue;
 
@@ -1503,17 +1521,7 @@ export default function QuestionPage() {
         {isMatrix && (
           <MatrixSettings
             value={matrixValue}
-            onChange={(v) => {
-              setMatrixXFrom(v.xFrom);
-              setMatrixXTo(v.xTo);
-              setMatrixYFrom(v.yFrom);
-              setMatrixYTo(v.yTo);
-              setMatrixEdges(v.edges);
-              setMatrixDescriptions(v.descriptions);
-              setMatrixMaxPerPerson(v.maxPerPerson);
-              setMatrixCategoryMode(v.categoryMode);
-              setMatrixCategories(v.categories);
-            }}
+            onChange={updateMatrix}
           />
         )}
 

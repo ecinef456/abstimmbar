@@ -446,7 +446,16 @@ export function SegmentedControl<T extends string>({
           title={typeof o.label === "string" ? o.label : undefined}
           className={`relative z-10 inline-flex min-w-0 items-center justify-center gap-1.5 rounded-full px-1.5 py-1 text-center transition-colors sm:px-2.5 ${o.value === value ? "text-brand-800 dark:text-brand-200" : "text-slate-500 dark:text-slate-400"}`}
         >
-          <span className="min-w-0 truncate">{o.label}</span>
+          {/* Tailwind's preflight makes <svg> display:block, so an icon inside a
+              plain block span stacked above its text. A string label keeps the
+              ellipsis; a node label (icon + text) is laid out as a flex row. */}
+          {typeof o.label === "string" ? (
+            <span className="min-w-0 truncate">{o.label}</span>
+          ) : (
+            <span className="inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap">
+              {o.label}
+            </span>
+          )}
         </button>
       ))}
     </div>

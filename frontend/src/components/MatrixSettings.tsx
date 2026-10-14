@@ -24,6 +24,9 @@ export interface MatrixSettingsValue {
   categories: MatrixCategory[];
 }
 
+export type MatrixUpdateFn = (prev: MatrixSettingsValue) => Partial<MatrixSettingsValue>;
+export type MatrixUpdate = (prev: MatrixSettingsValue) => MatrixSettingsValue;
+
 export const MATRIX_MAX_CATEGORIES = MATRIX_PALETTE.length;
 const MATRIX_MIN_CATEGORIES = 2;
 const AXIS_LABEL_MAX = 40;
@@ -137,11 +140,18 @@ export default function MatrixSettings({
   disabled = false,
 }: {
   value: MatrixSettingsValue;
-  onChange: (value: MatrixSettingsValue) => void;
+  /** Receives an updater, not a value: several fields can change in the same
+   *  tick ("translate all fields"), and each update must see the result of the
+   *  previous one instead of the render-time `value`. */
+  onChange: (update: MatrixUpdate) => void;
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
-  const patch = (changes: Partial<MatrixSettingsValue>) => onChange({ ...value, ...changes });
+  const patch = (changes: Partial<MatrixSettingsValue> | MatrixUpdateFn) =>
+    onChange((prev) => ({
+      ...prev,
+      ...(typeof changes === "function" ? changes(prev) : changes),
+    }));
 
   function setMode(mode: MatrixCategoryMode) {
     if (mode !== "off" && value.categories.length === 0) {
@@ -250,11 +260,11 @@ export default function MatrixSettings({
                       label={t("Name of category {{n}}", { n: index + 1 })}
                       value={category.name}
                       onChange={(name) =>
-                        patch({
-                          categories: value.categories.map((c, i) =>
-                            i === index ? { ...c, name: clamp(name, NAME_MAX) } : c,
+                        patch((prev) => ({
+                          categories: prev.categories.map((c) =>
+                            c.key === category.key ? { ...c, name: clamp(name, NAME_MAX) } : c,
                           ),
-                        })
+                        }))
                       }
                       className="min-w-0 flex-1"
                       inputClassName="max-w-xs"
