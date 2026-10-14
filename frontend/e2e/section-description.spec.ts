@@ -61,12 +61,12 @@ test('edit a section description; the presenter interstitial shows it', async ({
   await editor.click();
   await page.keyboard.type('Heute geht es um die Grundbegriffe.');
 
-  const saved = page.waitForResponse(
-    (r) => r.url().includes(`/api/sections/${section.id}/`) && r.request().method() === 'PATCH',
-  );
-  // Leaving the field saves it.
+  // Leaving the field saves it (it may also have saved already, shortly
+  // after typing stopped — so check the stored value, not one response).
   await page.getByRole('heading', { level: 1 }).first().click();
-  expect((await saved).ok()).toBeTruthy();
+  await expect
+    .poll(async () => (await api.get(`/api/sections/${section.id}/`)).description.en, { timeout: 10000 })
+    .toContain('Heute geht es um die Grundbegriffe.');
   await shot(page, 'editor-field');
 
   const stored = await api.get(`/api/sections/${section.id}/`);
