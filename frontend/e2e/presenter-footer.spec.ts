@@ -133,6 +133,8 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
 
   await page.keyboard.press('e'); // closes the vote onto the results
   await expectActive(page, 'view.results');
+  // The beamer hint names L (the solution key), not A.
+  await expect(page.getByText('Reveal correct answer with')).toContainText('L');
   await expect(seg(page, 'toggle')).toContainText('Start');
   await page.keyboard.press('l');
   await expectActive(page, 'view.solution');
@@ -248,7 +250,13 @@ test('mind map: Mind map · Ranking after a rating, rating action as icon', asyn
   await page.waitForTimeout(1500); // give a (wrong) reveal time to arrive
   await expect(seg(page, 'view.mm.ranking')).toHaveCount(0);
   await expect(seg(page, 'view.question')).toHaveAttribute('aria-disabled', 'true');
-  await expect(seg(page, 'view.question')).toHaveAttribute('title', /—/);
+  // Closed rating: no vote is open — the reason says so.
+  await expect(seg(page, 'view.question')).toHaveAttribute('title', /stays on screen until the results/);
+  // A is a look key: it never reveals the hidden scores.
+  await page.keyboard.press('a');
+  await page.waitForTimeout(1000);
+  await expect(seg(page, 'view.mm.ranking')).toHaveCount(0);
+  await expectActive(page, 'view.mm.raw');
   await page.keyboard.press('e'); // reveal
   await expect(seg(page, 'view.mm.ranking')).toBeVisible();
   expect(await footerControls(page)).toEqual([

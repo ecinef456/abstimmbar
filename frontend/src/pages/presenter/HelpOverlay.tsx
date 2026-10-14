@@ -191,10 +191,16 @@ function Kbd({ children }: { children: string }) {
 export default function HelpOverlay({
   onClose,
   views = [],
+  canCycle = false,
+  disabledReason,
 }: {
   onClose: () => void;
   /** The footer's view list (icons and keys of the switcher card). */
   views?: ViewSegment[];
+  /** Whether A would switch anything right now (the presenter's rule). */
+  canCycle?: boolean;
+  /** Why a disabled segment can't be chosen (state-specific). */
+  disabledReason?: string;
 }) {
   const { t } = useTranslation();
   const [targets, setTargets] = useState<Target[]>(() => collectTargets());
@@ -240,8 +246,13 @@ export default function HelpOverlay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signature]);
 
+  // Focus moves into the help and comes back to where it was on close.
   useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
     closeRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (before && before !== document.body && before.isConnected) before.focus({ preventScroll: true });
+    };
   }, []);
 
   // Capture phase on window: runs before every other keydown listener (the
@@ -249,9 +260,20 @@ export default function HelpOverlay({
   // shortcut while the help is open, and Esc only closes the help.
   const onKeyCapture = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Tab") return; // focus moves normally
       e.stopImmediatePropagation();
       e.stopPropagation();
+      // Focus trap: the close button is the only focusable element; nothing
+      // behind the dim layer can be reached or activated.
+      if (e.key === "Tab") {
+        e.preventDefault();
+        closeRef.current?.focus({ preventScroll: true });
+        return;
+      }
+      const inside = (document.activeElement as HTMLElement | null)?.closest("[data-help-overlay]") != null;
+      if ((e.key === "Enter" || e.key === " ") && !inside) {
+        e.preventDefault();
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "escape" || key === "?" || key === "h") {
@@ -272,7 +294,7 @@ export default function HelpOverlay({
   const segById = new Map(views.map((s) => [s.id, s]));
   const visibleSegs = views.filter((s) => ids.has(s.id));
   const keyRows: [string, string][] = [];
-  if (visibleSegs.length > 1) keyRows.push(["A", t("Cycle through the views")]);
+  if (canCycle && visibleSegs.length > 1) keyRows.push(["A", t("Cycle through the views")]);
   if (visibleSegs.some((s) => s.level === "results")) keyRows.push(["E", t("Results")]);
   if (visibleSegs.some((s) => s.level === "solution")) keyRows.push(["L", t("Solution")]);
   if (ids.has("qr")) keyRows.push(["Q", t("QR code")]);
@@ -280,7 +302,7 @@ export default function HelpOverlay({
   if (ids.has("prev") || ids.has("next")) keyRows.push(["← →", t("Previous / next question")]);
   if (ids.has("handle.zoom")) keyRows.push(["+ − 0", t("Zoom")]);
   if (ids.has("end")) keyRows.push(["Esc", t("End")]);
-  keyRows.push(["? · H", t("Help")]);
+  keyRows.push(["? / H", t("Help")]);
 
   const ready = placed !== null && placed.length === cards.length ? placed : null;
   const footerCardTops = ready ? cards.map((c, i) => (c.inFooter ? ready[i].y : Infinity)) : [];
@@ -306,9 +328,13 @@ export default function HelpOverlay({
                   {Icon && <Icon aria-hidden className="h-4 w-4 shrink-0" />}
                   <span>
                     <b className="font-semibold">{t(PRESENTER_HELP[id].name)}</b>{" "}
-                    {off ? t("The results are shown live while the vote is open.") : t(PRESENTER_HELP[id].text)}
+                    {off && disabledReason ? disabledReason : t(PRESENTER_HELP[id].text)}
                   </span>
-                  {seg && <span className="ml-auto pl-2"><Kbd>{segmentKey(views, seg)}</Kbd></span>}
+                  {seg && segmentKey(views, seg) && (
+                    <span className="ml-auto pl-2">
+                      <Kbd>{segmentKey(views, seg)}</Kbd>
+                    </span>
+                  )}
                 </li>
               );
             })}

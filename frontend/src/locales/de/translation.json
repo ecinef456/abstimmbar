@@ -599,7 +599,7 @@
   "Back (←)": "Zurück (←)",
   "Next (→)": "Weiter (→)",
   "present_lobby_hint": "verbunden · Erste Frage mit <1>S</1> oder <3>→</3>",
-  "present_reveal_hint": "Richtige Antwort mit <1>A</1> einblenden",
+  "present_reveal_hint_l": "Richtige Antwort mit <1>L</1> einblenden",
   "Connected participants": "Verbundene Teilnehmende",
   "Votes for the current question": "Stimmen für die aktuelle Frage",
 
@@ -1081,7 +1081,7 @@
   "Display": "Darstellung",
   "The results are shown live while the vote is open.": "Die Ergebnisse sind während der Abstimmung live sichtbar.",
   "Choose what the projector shows": "Beamer-Ansicht wählen",
-  "This switcher sets what the projector shows: the question, the results (E) and — if there is one — the solution (L). Word clouds, free text and mind maps add their own views here. A steps through them without ever closing a vote.": "Mit diesem Umschalter legen Sie fest, was der Beamer zeigt: die Frage, die Ergebnisse (E) und — falls es eine gibt — die Lösung (L). Wortwolken, Freitext und Mindmaps bringen hier eigene Ansichten mit. A schaltet sie der Reihe nach durch, ohne je eine Abstimmung zu schließen.",
+  "This switcher sets what the projector shows: the question, the results (E) and — if there is one — the solution (L). Word clouds, free text and mind maps add their own views here. A steps through them without ever closing a vote.": "Mit dem Ansichts-Schalter legen Sie fest, was der Beamer zeigt: die Frage, die Ergebnisse (E) und — falls es eine gibt — die Lösung (L). Wortwolken, Freitext und Mindmaps bringen hier eigene Ansichten mit. A schaltet sie der Reihe nach durch, ohne je eine Abstimmung zu schließen.",
   "‹ › or the arrow keys move between the questions. The red ✕ (Esc) ends the presentation and stores the results.": "‹ › oder die Pfeiltasten wechseln zwischen den Fragen. Das rote ✕ (Esc) beendet die Präsentation und speichert die Ergebnisse.",
   "Help on the projector": "Hilfe auf dem Beamer",
   "Forgotten what an icon does? ‘?’ (or the H key) labels every control on screen with its name and key. A click or Esc closes the help.": "Sie wissen nicht mehr, was ein Symbol bedeutet? „?“ (oder die Taste H) beschriftet jedes sichtbare Bedienelement mit Name und Taste. Ein Klick oder Esc schließt die Hilfe wieder.",
@@ -1092,5 +1092,6 @@
   "cycles": "schaltet durch",
   "Keyboard shortcuts": "Tastenkürzel",
   "Close help": "Hilfe schließen",
-  "Click anywhere or press Esc to close.": "Zum Schließen irgendwo klicken oder Esc drücken."
+  "Click anywhere or press Esc to close.": "Zum Schließen irgendwo klicken oder Esc drücken.",
+  "The live view stays on screen until the results are shown.": "Die Live-Ansicht bleibt bis zu den Ergebnissen sichtbar."
 }

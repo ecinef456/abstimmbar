@@ -129,6 +129,8 @@ test('single choice: open/close by button, ?, H, click and Esc; no shortcuts whi
     .analyze();
   expect(axe.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
   await shot(page, 'single-choice');
+  // Open vote, nothing live: A does nothing, so the key list doesn't offer it.
+  await expect(page.getByTestId('help-keys')).not.toContainText('Cycle through the views');
 
   // Presenter keys are suspended while the help is open.
   await page.keyboard.press('s');
@@ -147,6 +149,26 @@ test('single choice: open/close by button, ?, H, click and Esc; no shortcuts whi
   await expect(page).toHaveURL(/\/sets\/\d+\/present/);
   await expect(ctl(page, 'toggle')).toContainText('Stop');
   await expect(ctl(page, 'position')).toHaveText('1/2');
+
+  // Focus is trapped in the help: Shift+Tab never reaches the footer behind
+  // the dim layer, Enter activates nothing there (only the help's close).
+  await page.keyboard.press('?');
+  await expect(help(page)).toBeVisible();
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+Tab');
+  expect(await page.evaluate(() => document.activeElement?.closest('[data-help-overlay]') != null)).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(help(page)).toBeHidden();
+  await page.waitForTimeout(800);
+  await expect(ctl(page, 'position')).toHaveText('1/2');
+  await expect(ctl(page, 'toggle')).toContainText('Stop');
+  // Focus returns to where it was when the help opened.
+  await ctl(page, 'next').focus();
+  await page.keyboard.press('?');
+  await expect(help(page)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(help(page)).toBeHidden();
+  await expect(ctl(page, 'next')).toBeFocused();
+  await page.locator('body').click({ position: { x: 640, y: 120 } }); // drop focus again
 
   // "?" toggles; a click anywhere closes.
   await page.keyboard.press('?');
@@ -172,6 +194,10 @@ test('single choice: open/close by button, ?, H, click and Esc; no shortcuts whi
     page.locator('[data-testid="help-card"][data-help-for="view.question view.results"]'),
   ).toBeVisible();
   await expect(page.getByTestId('help-keys')).not.toContainText('Solution');
+  // Segment rows only carry direct keys (E, L) — no per-row A.
+  await expect(
+    page.locator('[data-testid="help-card"][data-help-for^="view."] li').first().locator('kbd'),
+  ).toHaveCount(0);
 });
 
 test('word cloud with AI views: one card per visible control and handle', async ({ page, trackRoom }) => {

@@ -1213,14 +1213,35 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // A only looks — it never takes a question out of "open": during an open
   // vote it cycles the result views of a live cloud / map (nothing else is
   // on screen to switch); otherwise the whole list. Closing stays with S/E.
+  // A live cloud / map before the results phase (open vote, closed rating)
+  // only switches its views, never the phase; on a closed rating it skips
+  // the Ranking (the scores) — those are revealed by E or a click only.
+  const lookOnly = liveShown; // (liveShown implies phase !== "results")
+  const cycleSegments = useMemo(
+    () =>
+      viewSegments.filter((sg) =>
+        disabledViews.has(sg.id)
+          ? false
+          : lookOnly
+            ? sg.level === "results" && !(phase === "closed" && sg.id === "view.mm.ranking")
+            : phase !== "open",
+      ),
+    [viewSegments, disabledViews, lookOnly, phase],
+  );
+  const canCycle = cycleSegments.length >= 2;
+  // Why "Question" can't be chosen while a live view is on screen.
+  const disabledViewReason =
+    phase === "open"
+      ? t("The results are shown live while the vote is open.")
+      : t("The live view stays on screen until the results are shown.");
   const cycleView = useCallback(() => {
-    const usable = viewSegments.filter(
-      (sg) => !disabledViews.has(sg.id) && (phase !== "open" || (liveShown && sg.level === "results")),
-    );
-    if (usable.length < 2) return;
-    const i = usable.findIndex((sg) => sg.id === activeSegment.id);
-    selectView(usable[(i + 1) % usable.length]);
-  }, [viewSegments, disabledViews, phase, liveShown, activeSegment.id, selectView]);
+    if (cycleSegments.length < 2) return;
+    const i = cycleSegments.findIndex((sg) => sg.id === activeSegment.id);
+    const next = cycleSegments[(i + 1) % cycleSegments.length];
+    if (lookOnly) {
+      if (next.view) setWcView(next.view);
+    } else selectView(next);
+  }, [cycleSegments, lookOnly, activeSegment.id, selectView]);
   // E: to the first result view; from there back to the question (toggle);
   // an open vote closes onto it (word clouds / mind maps stay visible).
   const firstResults = viewSegments.find((sg) => sg.level === "results");
@@ -1755,7 +1776,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
           views={viewSegments}
           activeView={activeSegment.id}
           disabledViews={disabledViews}
-          disabledViewReason={t("The results are shown live while the vote is open.")}
+          disabledViewReason={disabledViewReason}
           onSelectView={(seg) => selectView(seg as ViewSegment<WcView>)}
           joinShown={showJoin}
           onToggleJoin={() => setShowJoin((v) => !v)}
@@ -1766,7 +1787,14 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         />
       }
     >
-      {showHelp && <HelpOverlay views={viewSegments} onClose={() => setShowHelp(false)} />}
+      {showHelp && (
+        <HelpOverlay
+          views={viewSegments}
+          canCycle={canCycle}
+          disabledReason={disabledViewReason}
+          onClose={() => setShowHelp(false)}
+        />
+      )}
       {leaveWarn && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/40 p-6">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-xl">
@@ -2134,10 +2162,10 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   />
                 );
               })}
-              {canReveal && !revealed && (
+              {hasSolution && !revealed && (
                 <p className="pt-2 text-sm text-slate-400">
-                  <Trans i18nKey="present_reveal_hint">
-                    Reveal correct answer with <Kbd>A</Kbd>
+                  <Trans i18nKey="present_reveal_hint_l">
+                    Reveal correct answer with <Kbd>L</Kbd>
                   </Trans>
                 </p>
               )}

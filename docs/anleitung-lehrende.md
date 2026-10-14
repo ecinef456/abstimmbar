@@ -242,7 +242,7 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   dunkelgrün darüber; haben alle geantwortet, leuchtet er kurz auf.
 - Mit dem **Ansichts-Schalter** neben dem QR-Symbol legen Sie fest, was der
   Beamer zeigt: die **Frage**, die **Ergebnisse** und – falls die Frage eine
-  richtige Antwort hat und die Lösung „erst auf Anweisung“ erscheinen soll –
+  richtige Antwort hat und die Lösung „nach dem Schließen“ erscheinen soll –
   die **Lösung**. Wortwolken, Freitext und Mindmaps bringen hier ihre eigenen
   Darstellungen mit (z. B. Original, Aufgeräumt und Gruppiert, Bewertung oder
   Rangliste). Die Ergebnisse aktualisieren sich **in Echtzeit**; die Balken
@@ -260,8 +260,8 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
 - Rechts außen öffnet **?** (oder die Taste H) die **Hilfe**: Der Bildschirm
   wird abgedunkelt, und an jedem gerade sichtbaren Knopf und an jeder Lasche am
   rechten Rand steht, was er tut und welche Taste dazugehört; unten in der
-  Mitte stehen alle Tasten auf einen Blick. Ein Klick, Esc oder ? schließt die
-  Hilfe wieder.
+  Mitte stehen alle Tasten auf einen Blick. Ein Klick, Esc, ? oder H schließt
+  die Hilfe wieder.
 - **Mindmap:** Die Mindmap wächst live mit den Beiträgen. Mit Mausrad und Ziehen
   zoomen und verschieben Sie sie; in der Zoom-Lasche am rechten Rand schalten
   Sie zwischen **kompakt** und **ausführlich** (mit Beschreibungen) um. Im

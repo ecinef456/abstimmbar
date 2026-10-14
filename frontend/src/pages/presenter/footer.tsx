@@ -42,26 +42,24 @@ export interface HelpEntry {
 export const PRESENTER_HELP: Record<string, HelpEntry> = {
   position: { name: "Position", text: "Which question of the set is on screen." },
   qr: { name: "QR code", text: "Shows the QR code and join link.", keys: "Q" },
-  "view.question": { name: "Question", text: "Shows the question without results.", keys: "A" },
+  "view.question": { name: "Question", text: "Shows the question without results." },
   "view.results": { name: "Results", text: "Shows the results.", keys: "E" },
   "view.solution": { name: "Solution", text: "Marks the correct answers.", keys: "L" },
-  "view.wc.raw": { name: "Original", text: "The word cloud as submitted.", keys: "A" },
+  "view.wc.raw": { name: "Original", text: "The word cloud as submitted." },
   "view.wc.consolidated": {
     name: "Cleaned up (AI)",
     text: "Variants and synonyms merged by AI.",
-    keys: "A",
   },
-  "view.wc.grouped": { name: "Grouped (AI)", text: "Terms sorted into themes by AI.", keys: "A" },
-  "view.ft.raw": { name: "Answers", text: "The submitted answers.", keys: "A" },
-  "view.ft.results": { name: "Evaluation", text: "How the AI rated the answers.", keys: "A" },
+  "view.wc.grouped": { name: "Grouped (AI)", text: "Terms sorted into themes by AI." },
+  "view.ft.raw": { name: "Answers", text: "The submitted answers." },
+  "view.ft.results": { name: "Evaluation", text: "How the AI rated the answers." },
   "view.ft.consolidated": {
     name: "Key statements",
     text: "The main points, summarised by AI.",
-    keys: "A",
   },
-  "view.ft.grouped": { name: "Grouped", text: "Answers sorted into themes by AI.", keys: "A" },
-  "view.mm.raw": { name: "Mind map", text: "The collected terms as a map.", keys: "A" },
-  "view.mm.ranking": { name: "Ranking", text: "The rated terms, best first.", keys: "A" },
+  "view.ft.grouped": { name: "Grouped", text: "Answers sorted into themes by AI." },
+  "view.mm.raw": { name: "Mind map", text: "The collected terms as a map." },
+  "view.mm.ranking": { name: "Ranking", text: "The rated terms, best first." },
   "mm.rate": { name: "Start rating", text: "Participants rate the collected terms." },
   "mm.collect": {
     name: "Back to collecting",
@@ -121,12 +119,12 @@ export function buildViewSegments<V extends string>(opts: {
   return segs;
 }
 
-/** The key shown for a segment: E on the first results view, L on the
- *  solution, A (cycle) on the rest. */
+/** The direct key of a segment: E on the first results view, L on the
+ *  solution; "" on the rest (A cycles the whole list, it jumps nowhere). */
 export function segmentKey(segs: ViewSegment[], seg: ViewSegment): string {
   if (seg.level === "solution") return "L";
   if (seg.level === "results" && segs.find((s) => s.level === "results") === seg) return "E";
-  return "A";
+  return "";
 }
 
 const FOCUS =
@@ -231,7 +229,7 @@ export function ViewSwitcher({
             aria-checked={on}
             aria-label={label}
             aria-disabled={off || undefined}
-            title={off && disabledReason ? `${label} — ${disabledReason}` : `${label} (${key})`}
+            title={off && disabledReason ? `${label} — ${disabledReason}` : key ? `${label} (${key})` : label}
             data-help={seg.id}
             data-testid={`view-${seg.id}`}
             onClick={(e) => {
