@@ -1270,6 +1270,22 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const leavePresentation = useCallback(() => {
     navigate(`/sets/${id}`);
   }, [navigate, id]);
+  // Closing slide reached in live mode, run not finished yet (see finish()).
+  const [pendingFinish, setPendingFinish] = useState(false);
+  const finishAndLeave = useCallback(async () => {
+    if (pendingFinish && runId) {
+      try {
+        await live.control(runId, { phase: "finished" });
+      } catch {
+        // leave anyway — the run stays open and the next start resumes it
+      }
+    }
+    leavePresentation();
+  }, [pendingFinish, runId, leavePresentation]);
+  const backFromClosing = useCallback(() => {
+    setPendingFinish(false);
+    setEnded(false);
+  }, []);
 
   const onKey = useCallback(
     (event: KeyboardEvent) => {
@@ -1304,9 +1320,11 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         else if (key === "a") cycleWalkView();
         return;
       }
-      // On the closing slide (#32) any advance/Esc leaves to management.
+      // On the closing slide (#32) any key ends and leaves — except "←",
+      // which goes back to the last question while the run isn't finished.
       if (ended) {
-        if (key === "escape" || advance) leavePresentation();
+        if (key === "arrowleft" && pendingFinish) backFromClosing();
+        else if (!["shift", "control", "alt", "meta", "tab", "capslock"].includes(key)) void finishAndLeave();
         return;
       }
       if (selfPaced) {
@@ -1367,7 +1385,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         void finish();
       }
     },
-    [runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mmStopCloses],
+    [runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mmStopCloses, pendingFinish, backFromClosing, finishAndLeave],
   );
 
   useEffect(() => {
@@ -1376,6 +1394,14 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   }, [onKey]);
 
   async function finish() {
+    // Live: the closing slide comes first and the run is only finished when
+    // the presenter leaves it — so "←" can still go back to the last question
+    // (a finished run can't be reopened).
+    if (!selfPaced) {
+      setPendingFinish(true);
+      setEnded(true);
+      return;
+    }
     if (runId) await live.control(runId, { phase: "finished" });
     // Quiz-Block post-run walkthrough (#75): when the set opts in, step
     // through the just-finished run's per-question results instead of
@@ -1540,12 +1566,28 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
           <div className="text-7xl" aria-hidden>✅</div>
           <h1 className="text-5xl font-bold">{t("The survey has ended")}</h1>
           <p className="text-2xl text-slate-500">{t("Thanks for taking part!")}</p>
-          <button
-            onClick={leavePresentation}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand-400 px-6 py-3 text-lg font-semibold text-slate-900 hover:bg-brand-500"
-          >
-            {t("Back to overview")} <Kbd>Esc</Kbd>
-          </button>
+          <div className="mt-4 flex items-center gap-3">
+            {pendingFinish && (
+              <button
+                onClick={backFromClosing}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-lg font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <ChevronLeft aria-hidden className="h-5 w-5" />
+                {t("Back")}
+              </button>
+            )}
+            <button
+              onClick={() => void finishAndLeave()}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-400 px-6 py-3 text-lg font-semibold text-slate-900 hover:bg-brand-500"
+            >
+              {t("Back to overview")}
+            </button>
+          </div>
+          <p className="text-sm text-slate-500">
+            {pendingFinish
+              ? t("Any key ends the survey · ← back to the last question")
+              : t("Any key returns to the overview")}
+          </p>
         </div>
       </Shell>
     );
@@ -1753,7 +1795,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   }
                   disabled={mmStageBusy}
                   onClick={() => void setMindmapStage("rate")}
-                  className="border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100"
+                  className="border-brand-400 bg-brand-400 text-slate-900 hover:bg-brand-500"
+                  nextStep
                 />
               ) : null
             ) : undefined

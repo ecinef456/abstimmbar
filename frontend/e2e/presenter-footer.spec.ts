@@ -116,11 +116,14 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
   await expect(seg(page, 'view.solution')).toBeVisible();
   expect(await footerControls(page)).toEqual([
     'position', 'qr', 'view.question', 'view.results', 'view.solution',
-    'toggle', 'end', 'prev', 'next', 'help',
+    'toggle', 'prev', 'next', 'help', 'end',
   ]);
   await expect(footer(page).locator('[data-help="position"]')).toHaveText('1/2');
   await expectActive(page, 'view.question');
   await expect(seg(page, 'toggle')).toContainText('Stop');
+  // Colour guidance: while voting, Stop is the (green) next step.
+  await expect(seg(page, 'toggle')).toHaveAttribute('data-next-step', 'true');
+  await expect(seg(page, 'next')).not.toHaveAttribute('data-next-step');
   // A only looks: during an open vote with nothing live on screen it does
   // nothing (never closes the vote); Ctrl+A is the browser's, not ours.
   await page.keyboard.press('a');
@@ -136,6 +139,9 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
   // The beamer hint names L (the solution key), not A.
   await expect(page.getByText('Reveal correct answer with')).toContainText('L');
   await expect(seg(page, 'toggle')).toContainText('Start');
+  // Once closed, "→" is the green next step, Start is not.
+  await expect(seg(page, 'next')).toHaveAttribute('data-next-step', 'true');
+  await expect(seg(page, 'toggle')).not.toHaveAttribute('data-next-step');
   await page.keyboard.press('l');
   await expectActive(page, 'view.solution');
   await shot(page, 'single-choice-solution');
@@ -158,7 +164,7 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
   await expect(footer(page).locator('[data-help="position"]')).toHaveText('2/2');
   await expect(seg(page, 'view.solution')).toHaveCount(0);
   expect(await footerControls(page)).toEqual([
-    'position', 'qr', 'view.question', 'view.results', 'toggle', 'end', 'prev', 'next', 'help',
+    'position', 'qr', 'view.question', 'view.results', 'toggle', 'prev', 'next', 'help', 'end',
   ]);
   await page.keyboard.press('e');
   await expectActive(page, 'view.results');
@@ -166,6 +172,17 @@ test('single choice: Question · Results · Solution, keys A/E/L', async ({ page
   await page.keyboard.press('l'); // no solution: nothing happens
   await expectActive(page, 'view.results');
   await expectFitsAndNamed(page);
+
+  // Closing slide: "←" goes back to the last question (the run is not
+  // finished yet); any other key ends the survey and leaves.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('heading', { name: /survey has ended|Befragung ist beendet/i })).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(footer(page).locator('[data-help="position"]')).toHaveText('2/2');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('heading', { name: /survey has ended|Befragung ist beendet/i })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
 });
 
 test('word cloud: Original only, AI views when the question has AI', async ({
@@ -182,7 +199,7 @@ test('word cloud: Original only, AI views when the question has AI', async ({
   await expectActive(page, 'view.wc.raw');
   await expect(seg(page, 'view.question')).toHaveAttribute('aria-disabled', 'true');
   expect(await footerControls(page)).toEqual([
-    'position', 'qr', 'view.question', 'view.wc.raw', 'toggle', 'end', 'prev', 'next', 'help',
+    'position', 'qr', 'view.question', 'view.wc.raw', 'toggle', 'prev', 'next', 'help', 'end',
   ]);
   await page.keyboard.press('a'); // one live view only: nothing to cycle, still open
   await expectActive(page, 'view.wc.raw');
@@ -199,7 +216,7 @@ test('word cloud: Original only, AI views when the question has AI', async ({
   await expect(seg(page, 'view.wc.grouped')).toBeVisible();
   expect(await footerControls(page)).toEqual([
     'position', 'qr', 'view.question', 'view.wc.raw', 'view.wc.consolidated',
-    'view.wc.grouped', 'toggle', 'end', 'prev', 'next', 'help',
+    'view.wc.grouped', 'toggle', 'prev', 'next', 'help', 'end',
   ]);
   await expectActive(page, 'view.wc.raw');
   await shot(page, 'word-cloud-ai');
@@ -261,7 +278,7 @@ test('mind map: Mind map · Ranking after a rating, rating action as icon', asyn
   await expect(seg(page, 'view.mm.ranking')).toBeVisible();
   expect(await footerControls(page)).toEqual([
     'position', 'qr', 'view.question', 'view.mm.raw', 'view.mm.ranking',
-    'mm.collect', 'toggle', 'end', 'prev', 'next', 'help',
+    'mm.collect', 'toggle', 'prev', 'next', 'help', 'end',
   ]);
   await expectActive(page, 'view.mm.raw');
   // Compact / detailed moved into the zoom handle.

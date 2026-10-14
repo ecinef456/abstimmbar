@@ -152,6 +152,7 @@ export function FooterIconButton({
   testId,
   tour,
   detail,
+  nextStep,
 }: {
   help: string;
   /** `data-tour` anchor of a tour step. */
@@ -166,6 +167,8 @@ export function FooterIconButton({
   testId?: string;
   /** Extra tooltip sentence after the name. */
   detail?: string;
+  /** The suggested next step (green); marked for tests/help. */
+  nextStep?: boolean;
 }) {
   const title = keys ? `${label} (${keys})` : label;
   return (
@@ -174,6 +177,7 @@ export function FooterIconButton({
       data-help={help}
       data-tour={tour}
       data-testid={testId}
+      data-next-step={nextStep || undefined}
       aria-label={label}
       aria-pressed={pressed}
       aria-keyshortcuts={keys && keys.length === 1 ? keys : undefined}
@@ -289,6 +293,11 @@ export function Footer(props: {
       ? t("Question {{current}}/{{total}}", { current: props.index + 1, total: props.count })
       : position;
   const startLabel = props.phase === "open" ? t("Stop") : t("Start", { context: "action" });
+  // Colour guidance: the one next step is green — Start before voting, Stop
+  // while it runs; once a question is closed/shown, "→" (next question).
+  const done = props.phase === "closed" || props.phase === "results";
+  const nextIsNext = isSection || done || !props.onToggle;
+  const GREEN = "border-brand-400 bg-brand-400 text-slate-900 hover:bg-brand-500";
   return (
     <footer className="flex items-center justify-between gap-3 border-t border-slate-200 px-6 py-3 text-sm text-slate-500">
       <div className="flex min-w-0 items-center gap-3">
@@ -323,13 +332,18 @@ export function Footer(props: {
             type="button"
             data-tour="present.toggle"
             data-help="toggle"
+            data-next-step={!nextIsNext || undefined}
             aria-keyshortcuts="S"
             title={`${startLabel} (S)`}
             onClick={(e) => {
               blurOnMouse(e);
               props.onToggle!();
             }}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-400 px-3 font-semibold text-slate-900 hover:bg-brand-500 ${FOCUS}`}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 font-semibold ${
+              nextIsNext
+                ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                : "border-brand-400 bg-brand-400 text-slate-900 hover:bg-brand-500"
+            } ${FOCUS}`}
           >
             {props.phase === "open" ? (
               <Square aria-hidden className="h-4 w-4" fill="currentColor" />
@@ -340,14 +354,6 @@ export function Footer(props: {
           </button>
         )}
         <div data-tour="present.nav" className="flex items-center gap-2">
-          <FooterIconButton
-            help="end"
-            label={name("end")}
-            keys="Esc"
-            icon={X}
-            onClick={props.onFinish}
-            className="border-slate-200 bg-white text-red-700 hover:bg-red-50 hover:text-red-800"
-          />
           {props.onCloseWindow && (
             <FooterIconButton
               help="close-window"
@@ -357,7 +363,15 @@ export function Footer(props: {
             />
           )}
           <FooterIconButton help="prev" label={name("prev")} keys="←" icon={ChevronLeft} onClick={props.onPrev} />
-          <FooterIconButton help="next" label={name("next")} keys="→" icon={ChevronRight} onClick={props.onNext} />
+          <FooterIconButton
+            help="next"
+            label={name("next")}
+            keys="→"
+            icon={ChevronRight}
+            onClick={props.onNext}
+            className={nextIsNext ? GREEN : undefined}
+            nextStep={nextIsNext}
+          />
         </div>
         {props.onHelp && (
           <FooterIconButton
@@ -370,6 +384,15 @@ export function Footer(props: {
             pressed={props.helpShown}
           />
         )}
+        {/* End sits last, set apart in red (it ends the session). */}
+        <FooterIconButton
+          help="end"
+          label={name("end")}
+          keys="Esc"
+          icon={X}
+          onClick={props.onFinish}
+          className="ml-2 border-red-600 bg-red-600 text-white hover:bg-red-700"
+        />
       </div>
     </footer>
   );

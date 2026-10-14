@@ -1093,5 +1093,7 @@
   "Keyboard shortcuts": "Tastenkürzel",
   "Close help": "Hilfe schließen",
   "Click anywhere or press Esc to close.": "Zum Schließen irgendwo klicken oder Esc drücken.",
-  "The live view stays on screen until the results are shown.": "Die Live-Ansicht bleibt bis zu den Ergebnissen sichtbar."
+  "The live view stays on screen until the results are shown.": "Die Live-Ansicht bleibt bis zu den Ergebnissen sichtbar.",
+  "Any key ends the survey · ← back to the last question": "Beliebige Taste beendet die Umfrage · ← zurück zur letzten Frage",
+  "Any key returns to the overview": "Beliebige Taste führt zurück zur Übersicht"
 }
