@@ -16,6 +16,7 @@ import {
   ClipboardCheck,
   Cloud,
   Gauge,
+  Grid2x2,
   LayoutGrid,
   List,
   ListOrdered,
@@ -59,6 +60,7 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   "view.ft.grouped": { name: "Grouped", text: "Answers sorted into themes by AI." },
   "view.mm.raw": { name: "Mind map", text: "The collected terms as a map." },
   "view.mm.ranking": { name: "Ranking", text: "The rated terms, best first." },
+  "view.mx.raw": { name: "Matrix", text: "The cards on the four-field board." },
   "mm.rate": { name: "Start rating", text: "Participants rate the collected terms." },
   "mm.collect": {
     name: "Back to collecting",
@@ -77,6 +79,12 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   "handle.ai": { name: "AI settings", text: "AI on/off and how it merges or groups." },
   "handle.mm-ai": { name: "AI mind map", text: "Let AI tidy up the mind map." },
   "handle.zoom": { name: "Zoom", text: "Zoom, fit, compact or detailed.", keys: "+ − 0" },
+  "handle.mx-edit": {
+    name: "Add card",
+    text: "Add your own card; show hidden cards again.",
+  },
+  "handle.mx-zoom": { name: "Display", text: "Compact or detailed, larger or smaller cards." },
+  "mx.legend": { name: "Categories", text: "Click a category to hide or show its cards." },
 };
 
 /** What a view segment shows: the question, a results view or the solution. */
@@ -95,6 +103,7 @@ const RESULT_ICONS: Record<string, Record<string, LucideIcon>> = {
   wc: { raw: Cloud, consolidated: BrushCleaning, grouped: LayoutGrid },
   ft: { raw: List, results: Gauge, consolidated: Quote, grouped: LayoutGrid },
   mm: { raw: Network, ranking: ListOrdered },
+  mx: { raw: Grid2x2 },
 };
 
 /** The ordered view list of a question: Question · results view(s) ·
@@ -102,7 +111,7 @@ const RESULT_ICONS: Record<string, Record<string, LucideIcon>> = {
  *  (`wc`), free text (`ft`) or mind map (`mm`), in display order; other
  *  kinds pass `group: null` and get one "Results" segment. */
 export function buildViewSegments<V extends string>(opts: {
-  group: "wc" | "ft" | "mm" | null;
+  group: "wc" | "ft" | "mm" | "mx" | null;
   views: V[];
   solution: boolean;
 }): ViewSegment<V>[] {

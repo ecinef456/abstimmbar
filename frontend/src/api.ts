@@ -1086,6 +1086,9 @@ export interface LiveState {
   wordcloud_moderation?: WordCloudModeration;
   /** Mindmap: the shared tree (presenter form incl. hidden nodes). */
   mindmap?: LiveMindmap;
+  /** Matrix: the whole board (presenter form, hidden cards flagged). */
+  matrix?: MatrixBoard;
+  matrix_settings?: MatrixSettingsPayload;
 }
 
 /** One node of the live mind map. `hidden` is only sent to the presenter and
@@ -1400,6 +1403,13 @@ export const selfCheck = {
     `${API_BASE_URL}/c/${token}/qr.png${questionId ? `?q=${questionId}` : ""}`,
 };
 
+function matrixCall(runId: number, questionId: number, action: string, body: unknown) {
+  return request<{ matrix: MatrixBoard }>(`/api/runs/${runId}/matrix/${questionId}/${action}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export const live = {
   status: (setId: number) =>
     request<{
@@ -1456,6 +1466,25 @@ export const live = {
       `/api/runs/${runId}/mindmap/${questionId}/hide`,
       { method: "POST", body: JSON.stringify({ node, hidden }) },
     ),
+  /** Presenter matrix moderation (owner only). Each call answers with the
+   *  whole board as the server resolved it (zone hysteresis, clamping). */
+  matrixMove: (runId: number, questionId: number, card: number, x: number, y: number) =>
+    matrixCall(runId, questionId, "move", { card, x, y }),
+  matrixStack: (runId: number, questionId: number, card: number, onto: number) =>
+    matrixCall(runId, questionId, "stack", { card, onto }),
+  matrixUnstack: (runId: number, questionId: number, card: number) =>
+    matrixCall(runId, questionId, "unstack", { card }),
+  matrixHide: (runId: number, questionId: number, card: number, hidden: boolean) =>
+    matrixCall(runId, questionId, "hide", { card, hidden }),
+  /** A teacher card in `zone` (category required unless the mode is "off"). */
+  matrixAdd: (
+    runId: number,
+    questionId: number,
+    body: { zone: string; title: string; category: string; description: string },
+  ) => matrixCall(runId, questionId, "add", body),
+  /** Deletes a teacher card (participant cards can only be hidden). */
+  matrixDelete: (runId: number, questionId: number, card: number) =>
+    matrixCall(runId, questionId, "delete", { card }),
   /** Presenter switches the mindmap stage (collect / rate); `open` also
    *  opens the vote in the same request (one broadcast, no flash). */
   mindmapStage: (runId: number, questionId: number, stage: "collect" | "rate", open = false) =>

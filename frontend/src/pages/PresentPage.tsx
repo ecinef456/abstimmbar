@@ -36,6 +36,7 @@ import { requestDetail, useMindmapModeration } from "../results/mindmapModeratio
 import { MindmapAiDrawer, useMindmapAi } from "../results/mindmapAi";
 import { Footer, FooterIconButton, buildViewSegments, type ViewSegment } from "./presenter/footer";
 import HelpOverlay from "./presenter/HelpOverlay";
+import MatrixPanel from "./presenter/MatrixPanel";
 import { INK, evalColor, categoryColor, categoryDeep, categoryHue, termColor } from "../results/palette";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -594,6 +595,15 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const mmStopCloses = activeKind === "mindmap" && mmRate && !mmRating?.live;
   const mmShown =
     !!mindmap && (phase === "open" || phase === "results" || (phase === "closed" && mmRate));
+  // Matrix: the board is live while open and stays on "Matrix" (results);
+  // "Frage" (closed) shows the question alone. Arranging and moderating are
+  // for every presenter (not expert-only).
+  const matrixBoard = activeKind === "matrix" ? state?.matrix : undefined;
+  const matrixSettings = activeKind === "matrix" ? state?.matrix_settings : undefined;
+  const mxShown =
+    !!matrixBoard && !!matrixSettings && (phase === "open" || phase === "results");
+  // Full-width layouts (compact title, content fills the height).
+  const wideShown = mmShown || mxShown;
   const mmRateRef = useRef(mmRate);
   mmRateRef.current = mmRate;
   const mmRanking = useMemo(
@@ -719,7 +729,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const handleColumnTop = useHandleColumn(
     (showModHandle || showMmHandle ? 1 : 0) +
       (showAiButton || mmShown ? 1 : 0) +
-      (showMmAi ? 1 : 0),
+      (showMmAi ? 1 : 0) +
+      // Matrix: pencil + display.
+      (mxShown ? 2 : 0),
   );
   const aiHandleTop = handleColumnTop + (showModHandle ? HANDLE_STEP : 0);
   // Mind map: pencil, AI star, zoom.
@@ -1161,7 +1173,15 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const activeQuestion = activeId != null ? questions.find((q) => q.id === activeId) : undefined;
   const hasSolution = canReveal && !!activeQuestion?.options.some((o) => o.is_correct);
   const viewGroup =
-    activeKind === "word_cloud" ? "wc" : isOpenText ? "ft" : activeKind === "mindmap" ? "mm" : null;
+    activeKind === "word_cloud"
+      ? "wc"
+      : isOpenText
+        ? "ft"
+        : activeKind === "mindmap"
+          ? "mm"
+          : activeKind === "matrix"
+            ? "mx"
+            : null;
   const viewValuesKey = wcViewOptions.map((o) => o.value).join(",");
   const viewSegments = useMemo(
     () =>
@@ -1177,7 +1197,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // and "Question" can't hide it.
   const liveShown =
     phase !== "results" &&
-    ((activeKind === "word_cloud" && wcCloudShown) || (activeKind === "mindmap" && mmShown));
+    ((activeKind === "word_cloud" && wcCloudShown) ||
+      (activeKind === "mindmap" && mmShown) ||
+      (activeKind === "matrix" && mxShown));
   const resultSegment = (view: WcView) =>
     viewSegments.find((sg) => sg.level === "results" && (sg.view === undefined || sg.view === view));
   const activeSegment: ViewSegment<WcView> =
@@ -1395,7 +1417,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         if (phase === "open")
           // Word clouds and mindmaps freeze onto the results view (they stay
           // visible), matching the Stop button; other kinds just close.
-          (activeKind === "word_cloud" || activeKind === "mindmap") && !mmStopCloses
+          (activeKind === "word_cloud" || activeKind === "mindmap" || activeKind === "matrix") && !mmStopCloses
             ? void showResults()
             : void live.control(runId, { phase: "closed" });
         else if (phase === "preview" || phase === "closed" || phase === "results")
@@ -1835,7 +1857,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               ? // Word clouds jump straight to results on close so the cloud
                 // stays on screen (and #30's deferred cloud appears); "Frage"
                 // then hides it. Other kinds close first, reveal on demand.
-                (activeKind === "word_cloud" || activeKind === "mindmap") && !mmStopCloses
+                (activeKind === "word_cloud" || activeKind === "mindmap" || activeKind === "matrix") &&
+                !mmStopCloses
                 ? void showResults()
                 : void live.control(runId!, { phase: "closed" })
               : phase === "lobby"
@@ -1946,7 +1969,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         <div
           key={question.id}
           className={
-            mmShown
+            wideShown
               ? "ab-fade-in flex h-full flex-col"
               : "ab-fade-in mx-auto flex min-h-full max-w-4xl flex-col justify-center"
           }
@@ -1961,7 +1984,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               <Timer aria-hidden className="h-9 w-9" /> {countdownLabel(remaining)}
             </div>
           )}
-          {mmShown ? (
+          {wideShown ? (
             // Centred on the full width, kept clear of top-left QR boxes.
             <div className="mx-auto w-full" style={mmClear(56)}>
               <RichText
@@ -2105,8 +2128,22 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
             </div>
           )}
 
+          {/* Matrix: the live board (drag, stack, open, hide, teacher cards). */}
+          {mxShown && runId != null && (
+            <MatrixPanel
+              key={question.id}
+              runId={runId}
+              questionId={question.id}
+              board={matrixBoard!}
+              settings={matrixSettings!}
+              handleTop={handleColumnTop}
+              handleStep={HANDLE_STEP}
+              drawerAttr={WC_DRAWER_ATTR}
+            />
+          )}
+
           {question.kind !== "word_cloud" && question.kind !== "open_text" &&
-            question.kind !== "mindmap" &&
+            question.kind !== "mindmap" && question.kind !== "matrix" &&
             question.kind !== "likert" && phase !== "results" && (
             <ol className="mt-8 space-y-3">
               {question.options.map((option, i) => (
@@ -2200,7 +2237,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
 
           {question.kind !== "word_cloud" && question.kind !== "open_text" &&
             question.kind !== "priorities" && question.kind !== "ordering" &&
-            question.kind !== "mindmap" &&
+            question.kind !== "mindmap" && question.kind !== "matrix" &&
             !(question.kind === "likert" && state.likert) && phase === "results" && (
             <div className="mt-8 space-y-4">
               {(state.results ?? []).map((option, i) => {

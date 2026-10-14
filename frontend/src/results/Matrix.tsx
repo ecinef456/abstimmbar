@@ -20,19 +20,37 @@
  *  edges now off still sits on its axis line (stored x/y); a card whose
  *  category no longer exists gets a neutral grey bar and "no category".
  *
- *  `interactive` is the hook for the presenter's drag/stack/open handlers;
- *  without it the board is read-only. The beamer is always light. */
-import { createElement, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+ *  `interactive` (presenter): cards become buttons in reading order (zone,
+ *  then position). Pointer drag follows the pointer (board point =
+ *  `fromPixel` of the pointer on the plot box, never an offset from the
+ *  clamped drawing) and lights up the zone the card would land in (client
+ *  `resolveZone` with hysteresis) — or, over another card, that card as the
+ *  stack target. A click without movement opens the card; arrow keys move
+ *  it in small steps (Shift: larger). Newly arrived cards flash briefly
+ *  (not with reduced motion). The beamer is always light. */
+import {
+  createElement,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { EyeOff } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
 import type { MatrixBoard, MatrixCard, MatrixSettingsPayload } from "../api";
 import { categoryLabel, paletteEntry } from "../matrixPalette";
-import { toPixel, type Box } from "./matrixGeometry";
+import { fromPixel, resolveZone, toPixel, zoneRect, type Box, type Zone } from "./matrixGeometry";
 import { useReducedMotion } from "./motion";
 
 export interface MatrixInteraction {
-  onMove(cardId: number, x: number, y: number): void;
+  /** Drop / arrow key at board point (x, y) — unclamped; the server resolves
+   *  zone (hysteresis) and position. */
+  onMove(cardId: number, x: number, y: number, via: "pointer" | "keyboard"): void;
   onStack(cardId: number, ontoId: number): void;
   onOpen(cardId: number): void;
 }
@@ -48,7 +66,29 @@ export interface MatrixProps {
   /** Categories switched off in the legend (their cards are not drawn). */
   hiddenCategories?: Set<string>;
   onToggleCategory?(key: string): void;
+  /** `data-help` id of the legend (presenter "?" help). */
+  legendHelp?: string;
+  /** Present mode: also draw hidden cards (marked), to show them again. */
+  showHidden?: boolean;
   interactive?: MatrixInteraction;
+}
+
+/** Arrow-key step in board units (Shift: the larger one). */
+const KEY_STEP = 0.05;
+const KEY_STEP_LARGE = 0.2;
+/** Pointer travel (px) before a press becomes a drag. */
+const DRAG_SLOP = 4;
+/** Reading order of the zones (tab order of the cards). */
+const READING_ORDER = ["q2", "e_top", "q1", "e_left", "e_right", "q3", "e_bottom", "q4"];
+
+interface DragState {
+  id: number;
+  /** Board point under the pointer (clipped to the board). */
+  x: number;
+  y: number;
+  zone: Zone;
+  /** The card (top) under the pointer: drop stacks onto it. */
+  target: number | null;
 }
 
 /** Plot aspect ratio (w/h) of the results view. */
@@ -135,9 +175,11 @@ function PlacedCard({
   box,
   style,
   children,
+  cardRef,
   ...rest
 }: {
   tag: "div" | "button";
+  cardRef?: (el: HTMLElement | null) => void;
   px: number;
   py: number;
   box: Box;
@@ -173,7 +215,11 @@ function PlacedCard({
     Math.max(half, Math.min(v, max - half - SHADOW));
   const left = clamp(px, w / 2, box.width) - w / 2;
   const top = clamp(py, h / 2, box.height) - h / 2;
-  return createElement(tag, { ref, ...rest, style: { ...style, left, top, ...(settled ? null : { transition: "none" }) } }, children);
+  const setRef = (el: HTMLElement | null) => {
+    (ref as { current: HTMLElement | null }).current = el;
+    cardRef?.(el);
+  };
+  return createElement(tag, { ref: setRef, ...rest, style: { ...style, left, top, ...(settled ? null : { transition: "none" }) } }, children);
 }
 
 export default function Matrix({
@@ -184,6 +230,8 @@ export default function Matrix({
   zoom = 1,
   hiddenCategories,
   onToggleCategory,
+  legendHelp,
+  showHidden = false,
   interactive,
 }: MatrixProps) {
   const { t, i18n } = useTranslation();
@@ -200,12 +248,146 @@ export default function Matrix({
 
   // Stacks come from the whole board: a member whose top is filtered out
   // (hidden card or category toggled off) must not be promoted to a top.
-  const stacks = matrixStacks(board.cards).filter(
-    (s) =>
-      !hiddenCategories?.has(s.card.category) &&
-      // Present mode: moderated cards are gone (a hidden top takes its members).
-      (results || !s.card.hidden),
-  );
+  const stacks = matrixStacks(board.cards)
+    .filter(
+      (s) =>
+        !hiddenCategories?.has(s.card.category) &&
+        // Present mode: moderated cards are gone (a hidden top takes its
+        // members) — unless the presenter asked to see them.
+        (results || showHidden || !s.card.hidden),
+    )
+    .sort(
+      (a, b) =>
+        READING_ORDER.indexOf(a.card.zone) - READING_ORDER.indexOf(b.card.zone) ||
+        b.card.y - a.card.y ||
+        a.card.x - b.card.x ||
+        a.card.id - b.card.id,
+    );
+
+  // --- Newly arrived cards flash for ~1 s (present mode, not reduced). ---
+  const seenRef = useRef<Set<number> | null>(null);
+  const [fresh, setFresh] = useState<Set<number>>(() => new Set());
+  const idsKey = board.cards.map((c) => c.id).join(",");
+  useEffect(() => {
+    const ids = new Set(board.cards.map((c) => c.id));
+    const seen = seenRef.current;
+    seenRef.current = ids;
+    if (!seen || results || reduced) return;
+    const added = [...ids].filter((id) => !seen.has(id));
+    if (added.length === 0) return;
+    setFresh((prev) => new Set([...prev, ...added]));
+    const timer = window.setTimeout(
+      () => setFresh((prev) => new Set([...prev].filter((id) => !added.includes(id)))),
+      1000,
+    );
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
+
+  // --- Dragging (pointer) ---
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const press = useRef<{ id: number; zone: string; px: number; py: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const pointAt = (clientX: number, clientY: number): [number, number] | null => {
+    const el = plotRef.current;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const [x, y] = fromPixel(clientX - r.left, clientY - r.top, { width: r.width, height: r.height });
+    const clip = (v: number) => Math.max(-1, Math.min(1, v));
+    return [clip(x), clip(y)];
+  };
+  const targetAt = (clientX: number, clientY: number, self: number): number | null => {
+    for (const el of document.elementsFromPoint(clientX, clientY)) {
+      const hit = (el as HTMLElement).closest?.("[data-card-id]") as HTMLElement | null;
+      if (!hit || !plotRef.current?.contains(hit)) continue;
+      const id = Number(hit.dataset.cardId);
+      if (id !== self) return id;
+    }
+    return null;
+  };
+  const onPointerDown = (e: ReactPointerEvent<HTMLElement>, card: MatrixCard) => {
+    if (!interactive || e.button !== 0) return;
+    press.current = { id: card.id, zone: card.zone, px: e.clientX, py: e.clientY, moved: false };
+    suppressClick.current = false;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
+    const p = press.current;
+    if (!p) return;
+    if (!p.moved && Math.hypot(e.clientX - p.px, e.clientY - p.py) < DRAG_SLOP) return;
+    p.moved = true;
+    const point = pointAt(e.clientX, e.clientY);
+    if (!point) return;
+    const [x, y] = point;
+    setDrag({
+      id: p.id,
+      x,
+      y,
+      zone: resolveZone(p.zone, x, y, settings.edges),
+      target: targetAt(e.clientX, e.clientY, p.id),
+    });
+  };
+  const endDrag = (e: ReactPointerEvent<HTMLElement>, drop: boolean) => {
+    const p = press.current;
+    press.current = null;
+    if (!p) return;
+    if (p.moved) {
+      // The click that may follow the drop is not an "open" (browsers differ
+      // on whether it fires at all after a captured drag).
+      suppressClick.current = true;
+      window.setTimeout(() => (suppressClick.current = false), 0);
+      if (drop && interactive) {
+        const target = targetAt(e.clientX, e.clientY, p.id);
+        const point = pointAt(e.clientX, e.clientY);
+        if (target != null) interactive.onStack(p.id, target);
+        else if (point) interactive.onMove(p.id, point[0], point[1], "pointer");
+      }
+    }
+    setDrag(null);
+  };
+
+  // --- Keyboard: arrows push the card; the intended point accumulates while
+  // the card keeps focus, so repeated presses can overcome the hysteresis
+  // even though the server clamps the stored position back into the zone.
+  const keyPoint = useRef<{ id: number; x: number; y: number } | null>(null);
+  const refocus = useRef<number | null>(null);
+  const cardRefs = useRef(new Map<number, HTMLElement>());
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLElement>, card: MatrixCard) => {
+    if (!interactive) return;
+    const step = e.shiftKey ? KEY_STEP_LARGE : KEY_STEP;
+    const delta: Record<string, [number, number]> = {
+      ArrowRight: [step, 0],
+      ArrowLeft: [-step, 0],
+      ArrowUp: [0, step],
+      ArrowDown: [0, -step],
+    };
+    if (e.key === "Enter" || e.key === " ") {
+      // Activates the button (opens the card) — never the presenter's
+      // advance key.
+      e.stopPropagation();
+      return;
+    }
+    const d = delta[e.key];
+    if (!d || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    e.stopPropagation(); // arrows move the card, they don't navigate questions
+    const base = keyPoint.current?.id === card.id ? keyPoint.current : { id: card.id, x: card.x, y: card.y };
+    const clip = (v: number) => Math.max(-1, Math.min(1, v));
+    const next = { id: card.id, x: clip(base.x + d[0]), y: clip(base.y + d[1]) };
+    keyPoint.current = next;
+    refocus.current = card.id;
+    interactive.onMove(card.id, next.x, next.y, "keyboard");
+  };
+  // The reading order can move the focused card in the DOM (which drops its
+  // focus): put the focus back on it.
+  useLayoutEffect(() => {
+    const id = refocus.current;
+    if (id == null) return;
+    const el = cardRefs.current.get(id);
+    if (el && document.activeElement !== el && (document.activeElement == null || document.activeElement === document.body)) {
+      el.focus({ preventScroll: true });
+    }
+  });
 
   const label = (c: MatrixCard) => {
     if (categoryMode === "off") return { short: "", name: "", a11y: "" };
@@ -261,12 +443,28 @@ export default function Matrix({
           ))}
           <div className={`absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 ${axisLine}`} />
           <div className={`absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 ${axisLine}`} />
+          {drag && drag.target == null && box && (() => {
+            // The zone the card would land in (edge bands only show here).
+            const [xmin, xmax, ymin, ymax] = zoneRect(drag.zone, settings.edges);
+            const [l, t0] = toPixel(xmin, ymax, box);
+            const [r, b] = toPixel(xmax, ymin, box);
+            return (
+              <div
+                data-drop-zone={drag.zone}
+                className="absolute rounded-sm border-2 border-dashed border-brand-600 bg-brand-500/15"
+                style={{ left: l, top: t0, width: r - l, height: b - t0 }}
+              />
+            );
+          })()}
         </div>
 
         {box &&
           stacks.map((stack) => {
             const { card } = stack;
-            const [px, py] = toPixel(card.x, card.y, box);
+            const dragging = drag?.id === card.id;
+            const [px, py] = dragging ? toPixel(drag.x, drag.y, box) : toPixel(card.x, card.y, box);
+            const isTarget = drag != null && drag.target === card.id;
+            const isFresh = fresh.has(card.id);
             const n = stackSize(stack);
             const cat = label(card);
             const hex = !categoryMode || categoryMode === "off"
@@ -282,12 +480,49 @@ export default function Matrix({
                 px={px}
                 py={py}
                 box={box}
-                {...(interactive ? { type: "button" as const } : {})}
+                {...(interactive
+                  ? {
+                      type: "button" as const,
+                      cardRef: (el: HTMLElement | null) => {
+                        if (el) cardRefs.current.set(card.id, el);
+                        else cardRefs.current.delete(card.id);
+                      },
+                      onPointerDown: (e: ReactPointerEvent<HTMLElement>) => onPointerDown(e, card),
+                      onPointerMove,
+                      onPointerUp: (e: ReactPointerEvent<HTMLElement>) => endDrag(e, true),
+                      onPointerCancel: (e: ReactPointerEvent<HTMLElement>) => endDrag(e, false),
+                      onClick: () => {
+                        if (suppressClick.current) {
+                          suppressClick.current = false;
+                          return;
+                        }
+                        interactive.onOpen(card.id);
+                      },
+                      onKeyDown: (e: ReactKeyboardEvent<HTMLElement>) => onKeyDown(e, card),
+                      onBlur: (e: { relatedTarget: EventTarget | null }) => {
+                        // Focus moved elsewhere on purpose: stop pushing.
+                        if (e.relatedTarget) {
+                          keyPoint.current = null;
+                          refocus.current = null;
+                        }
+                      },
+                    }
+                  : {})}
                 data-card-id={card.id}
                 data-zone={card.zone}
                 data-stack-size={n}
                 data-hidden={isHidden ? "true" : undefined}
+                data-stack-target={isTarget ? "true" : undefined}
+                data-fresh={isFresh ? "true" : undefined}
                 className={`absolute max-w-[22%] rounded-md border-l-[5px] px-2 py-1 text-left leading-tight ${
+                  interactive
+                    ? `cursor-grab touch-none focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+                        dragging ? "z-20 cursor-grabbing" : ""
+                      }`
+                    : ""
+                } ${isTarget ? "outline outline-[3px] outline-offset-2 outline-brand-600" : ""} ${
+                  isFresh && !isTarget ? "outline outline-4 outline-amber-300" : ""
+                } ${
                   isHidden
                     ? `border-y border-r border-dashed border-slate-400 bg-slate-100 text-slate-600 ${dk(
                         "dark:border-slate-500 dark:bg-slate-900 dark:text-slate-300",
@@ -297,7 +532,7 @@ export default function Matrix({
                 style={{
                   borderLeftColor: hex,
                   fontSize: `${0.75 * zoom}rem`,
-                  transition: reduced ? "none" : "left .25s ease, top .25s ease",
+                  transition: reduced || dragging ? "none" : "left .25s ease, top .25s ease, outline-color .3s ease",
                   ...(n > 1
                     ? { boxShadow: "3px 3px 0 #ddd, 6px 6px 0 #ccc, 0 1px 3px rgba(0,0,0,.25)" }
                     : null),
@@ -341,6 +576,7 @@ export default function Matrix({
       {categoryMode !== "off" && categories.length > 0 && (
         <ul
           aria-label={t("Categories")}
+          data-help={legendHelp}
           className={`col-start-2 row-start-4 mt-1.5 flex flex-wrap justify-end gap-x-3 gap-y-0.5 px-1.5 text-[0.7rem] text-slate-700 ${dk("dark:text-slate-200")}`}
           style={{ fontSize: `${0.7 * zoom}rem` }}
           data-testid="matrix-legend"
