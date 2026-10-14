@@ -29,7 +29,10 @@ class SectionTranslationOptions(TranslationOptions):
 
 @register(Question)
 class QuestionTranslationOptions(TranslationOptions):
-    fields = ("text", "mindmap_root")
+    fields = (
+        "text", "mindmap_root",
+        "matrix_x_from", "matrix_x_to", "matrix_y_from", "matrix_y_to",
+    )
 
 
 @register(AnswerOption)

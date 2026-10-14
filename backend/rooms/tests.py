@@ -3911,7 +3911,10 @@ class OnboardingSeedTests(TestCase):
     def test_one_question_of_every_kind(self):
         question_set = self.room.question_sets.get()
         kinds = list(question_set.questions.values_list("kind", flat=True))
-        self.assertEqual(sorted(kinds), sorted(Question.Kind.values))
+        # TODO(matrix PR3): the example room gains a matrix question.
+        self.assertEqual(
+            sorted(kinds), sorted(k for k in Question.Kind.values if k != "matrix")
+        )
         self.assertEqual(len(kinds), len(set(kinds)))  # exactly one each
 
     def test_mindmap_is_last_with_bilingual_root_and_branches(self):
@@ -4158,7 +4161,8 @@ class SetTypeRulesTests(TestCase):
         self.assertEqual(set(set_types.allowed_kinds("live_poll")), set(allk))
         # Mindmap is a shared live activity: live polls only.
         self.assertEqual(
-            set(set_types.allowed_kinds("self_paced")), set(allk) - {"mindmap"}
+            set(set_types.allowed_kinds("self_paced")),
+            set(allk) - {"mindmap", "matrix"},
         )
 
     def test_allowed_kinds_self_check(self):
@@ -4685,6 +4689,267 @@ class GenerationWorkerTests(TransactionTestCase):
             generation.run_generation_job(job.id)
         job.refresh_from_db()
         self.assertEqual(job.status, self.GenerationJob.Status.CANCELLED)
+
+
+class MatrixAuthoringTests(ApiTestCase):
+    """Four-field matrix question kind: axis labels, categories, set-type
+    gating and transfer."""
+
+    AXES = {
+        "matrix_x_from": {"de": "altbacken", "en": "dated"},
+        "matrix_x_to": {"de": "modern", "en": "modern"},
+        "matrix_y_from": {"de": "unnuetz", "en": ""},
+        "matrix_y_to": {"de": "nuetzlich", "en": ""},
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.question_set = QuestionSet.objects.create(room=self.room, title_de="Live")
+
+    def _create(self, question_set=None, **overrides):
+        payload = {
+            "question_set": (question_set or self.question_set).pk,
+            "kind": "matrix",
+            "text": {"de": "<p>Wo ordnen Sie das ein?</p>", "en": ""},
+            "options": [],
+            **self.AXES,
+        }
+        payload.update(overrides)
+        return self.client.post("/api/questions/", payload, content_type="application/json")
+
+    def test_create_round_trips_axis_labels(self):
+        response = self._create()
+        self.assertEqual(response.status_code, 201, response.content)
+        data = response.json()
+        self.assertEqual(data["kind"], "matrix")
+        for field, value in self.AXES.items():
+            self.assertEqual(data[field], value)
+        self.assertFalse(data["matrix_edges"])
+        self.assertFalse(data["matrix_descriptions"])
+        self.assertEqual(data["matrix_max_per_person"], 10)
+        self.assertEqual(data["matrix_category_mode"], "off")
+        self.assertEqual(data["matrix_categories"], [])
+
+    def test_every_canonical_axis_label_required(self):
+        for field in self.AXES:
+            response = self._create(**{field: {"de": "", "en": "x"}})
+            self.assertEqual(response.status_code, 400, field)
+            self.assertIn(field, response.json())
+
+    def test_label_length_limited(self):
+        response = self._create(matrix_x_from={"de": "x" * 41, "en": ""})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("matrix_x_from", response.json())
+
+    def test_partial_update_keeps_labels(self):
+        created = self._create().json()
+        response = self.client.patch(
+            f"/api/questions/{created['id']}/", {"matrix_edges": True},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["matrix_edges"])
+        self.assertEqual(response.json()["matrix_x_from"], self.AXES["matrix_x_from"])
+
+    def test_named_categories_stored_as_language_maps(self):
+        response = self._create(
+            matrix_category_mode="named",
+            matrix_categories=[
+                {"key": "blue", "name": "Idee"},
+                {"key": "orange", "name": {"de": "Risiko", "en": "Risk"}},
+            ],
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(
+            response.json()["matrix_categories"],
+            [
+                {"key": "blue", "name": {"de": "Idee", "en": ""}},
+                {"key": "orange", "name": {"de": "Risiko", "en": "Risk"}},
+            ],
+        )
+
+    def test_colors_mode_drops_names(self):
+        response = self._create(
+            matrix_category_mode="colors",
+            matrix_categories=[
+                {"key": "blue", "name": "Idee"}, {"key": "green", "name": "Plan"},
+            ],
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(
+            response.json()["matrix_categories"],
+            [
+                {"key": "blue", "name": {"de": "", "en": ""}},
+                {"key": "green", "name": {"de": "", "en": ""}},
+            ],
+        )
+
+    def test_mode_off_clears_categories(self):
+        response = self._create(
+            matrix_category_mode="off",
+            matrix_categories=[{"key": "blue"}, {"key": "green"}],
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["matrix_categories"], [])
+
+    def test_invalid_categories_rejected(self):
+        named = lambda *keys: [{"key": k, "name": k} for k in keys]  # noqa: E731
+        cases = {
+            "unknown key": ("named", named("blue", "pink")),
+            "duplicate key": ("named", named("blue", "blue")),
+            "seven entries": (
+                "named", named("blue", "orange", "green", "purple", "red", "teal", "blue"),
+            ),
+            "single entry": ("named", named("blue")),
+            "no entries": ("colors", []),
+            "named without name": (
+                "named", [{"key": "blue", "name": "A"}, {"key": "green", "name": ""}],
+            ),
+            "name too long": (
+                "named", [{"key": "blue", "name": "x" * 41}, {"key": "green", "name": "B"}],
+            ),
+            "not a list": ("named", "blue"),
+        }
+        for label, (mode, categories) in cases.items():
+            response = self._create(
+                matrix_category_mode=mode, matrix_categories=categories
+            )
+            self.assertEqual(response.status_code, 400, label)
+            self.assertIn("matrix_categories", response.json(), label)
+
+    def test_six_categories_allowed(self):
+        keys = ["blue", "orange", "green", "purple", "red", "teal"]
+        response = self._create(
+            matrix_category_mode="named",
+            matrix_categories=[{"key": k, "name": k} for k in keys],
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+
+    def test_switching_mode_revalidates_stored_categories(self):
+        created = self._create(
+            matrix_category_mode="named",
+            matrix_categories=[{"key": "blue", "name": "A"}, {"key": "green", "name": "B"}],
+        ).json()
+        response = self.client.patch(
+            f"/api/questions/{created['id']}/", {"matrix_category_mode": "colors"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            response.json()["matrix_categories"],
+            [
+                {"key": "blue", "name": {"de": "", "en": ""}},
+                {"key": "green", "name": {"de": "", "en": ""}},
+            ],
+        )
+
+    def test_max_per_person_bounds(self):
+        for bad in (0, 101):
+            response = self._create(matrix_max_per_person=bad)
+            self.assertEqual(response.status_code, 400, bad)
+            self.assertIn("matrix_max_per_person", response.json())
+        for ok in (1, 100):
+            self.assertEqual(self._create(matrix_max_per_person=ok).status_code, 201, ok)
+
+    def test_no_options_allowed(self):
+        response = self._create(options=[{"text": {"de": "a", "en": ""}}])
+        self.assertEqual(response.status_code, 400)
+
+    def test_only_allowed_in_live_polls(self):
+        for set_type in ("self_paced", "self_check"):
+            qs = QuestionSet.objects.create(room=self.room, title=set_type, type=set_type)
+            response = self._create(question_set=qs)
+            self.assertEqual(response.status_code, 400, set_type)
+            self.assertIn("kind", response.json())
+
+    def test_helpers(self):
+        from . import matrix
+
+        question = Question(kind="matrix")
+        self.assertEqual(matrix.category_keys(question), [])
+        self.assertEqual(matrix.allowed_zones(question), ("q1", "q2", "q3", "q4"))
+        question.matrix_edges = True
+        self.assertEqual(len(matrix.allowed_zones(question)), 8)
+        question.matrix_category_mode = "colors"
+        question.matrix_categories = [{"key": "blue", "name": {}}, {"key": "red", "name": {}}]
+        self.assertEqual(matrix.category_keys(question), ["blue", "red"])
+        question.matrix_category_mode = "off"
+        self.assertEqual(matrix.category_keys(question), [])
+
+    def _matrix_question(self):
+        return Question.objects.create(
+            question_set=self.question_set,
+            kind="matrix",
+            text_de="<p>Wo?</p>", text_en="<p>Where?</p>",
+            matrix_x_from_de="alt", matrix_x_from_en="old",
+            matrix_x_to_de="neu", matrix_x_to_en="new",
+            matrix_y_from_de="schlecht", matrix_y_from_en="bad",
+            matrix_y_to_de="gut", matrix_y_to_en="good",
+            matrix_edges=True, matrix_descriptions=True, matrix_max_per_person=7,
+            matrix_category_mode="named",
+            matrix_categories=[
+                {"key": "blue", "name": {"de": "Idee", "en": "Idea"}},
+                {"key": "orange", "name": {"de": "Risiko", "en": ""}},
+            ],
+        )
+
+    def _assert_same_matrix(self, question):
+        self.assertEqual(question.kind, "matrix")
+        self.assertEqual(
+            [(question.matrix_x_from_de, question.matrix_x_from_en),
+             (question.matrix_x_to_de, question.matrix_x_to_en),
+             (question.matrix_y_from_de, question.matrix_y_from_en),
+             (question.matrix_y_to_de, question.matrix_y_to_en)],
+            [("alt", "old"), ("neu", "new"), ("schlecht", "bad"), ("gut", "good")],
+        )
+        self.assertTrue(question.matrix_edges)
+        self.assertTrue(question.matrix_descriptions)
+        self.assertEqual(question.matrix_max_per_person, 7)
+        self.assertEqual(question.matrix_category_mode, "named")
+        self.assertEqual(
+            question.matrix_categories,
+            [{"key": "blue", "name": {"de": "Idee", "en": "Idea"}},
+             {"key": "orange", "name": {"de": "Risiko", "en": ""}}],
+        )
+
+    def test_duplicate_set_copies_matrix(self):
+        from .transfer import duplicate_set
+
+        self._matrix_question()
+        clone = duplicate_set(self.question_set, self.room)
+        self._assert_same_matrix(clone.questions.get())
+
+    def test_export_import_roundtrip(self):
+        from .transfer import export_set, import_set
+
+        self._matrix_question()
+        data = export_set(self.question_set)
+        exported = data["questions"][0]
+        self.assertEqual(exported["matrix_x_from"], {"de": "alt", "en": "old"})
+        self.assertEqual(exported["matrix_max_per_person"], 7)
+        imported = import_set(self.room, data)
+        self._assert_same_matrix(imported.questions.get())
+
+    def test_import_sanitises_invalid_categories(self):
+        from .transfer import import_set
+
+        imported = import_set(self.room, {
+            "format": "abstimmbar-set-v2",
+            "title": {"de": "Fremd", "en": ""},
+            "questions": [{
+                "kind": "matrix",
+                "text": {"de": "<p>Q</p>", "en": ""},
+                "matrix_x_from": {"de": "a" * 80, "en": ""},
+                "matrix_max_per_person": 500,
+                "matrix_category_mode": "named",
+                "matrix_categories": [{"key": "pink", "name": "x"}, {"key": "blue"}],
+            }],
+        })
+        question = imported.questions.get()
+        self.assertEqual(question.matrix_category_mode, "off")
+        self.assertEqual(question.matrix_categories, [])
+        self.assertEqual(question.matrix_max_per_person, 10)
+        self.assertEqual(len(question.matrix_x_from_de), 40)
 
 
 class MindmapAuthoringTests(ApiTestCase):

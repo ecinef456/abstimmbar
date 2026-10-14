@@ -27,7 +27,7 @@ from rest_framework import serializers
 
 from common.i18n_fields import LANGS, translated_map
 
-from . import mindmap, set_types
+from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Section
 from .naming import unique_title
 from .sanitize import clean_html, clean_media_url
@@ -117,10 +117,18 @@ QUESTION_CONTENT_FIELDS = (
     "mindmap_ai_translate",
     "mindmap_ai_target_lang",
     "mindmap_ai_restructure",
+    "matrix_edges",
+    "matrix_descriptions",
+    "matrix_max_per_person",
+    "matrix_category_mode",
+    "matrix_categories",
 )
 # Translatable Question fields copied column by column (never the bare
 # accessor): the question text and the mindmap root label.
-QUESTION_TRANSLATED_FIELDS = ("text", "mindmap_root")
+QUESTION_TRANSLATED_FIELDS = (
+    "text", "mindmap_root",
+    "matrix_x_from", "matrix_x_to", "matrix_y_from", "matrix_y_to",
+)
 
 
 def _copy_options(source, target):
@@ -303,6 +311,15 @@ def export_set(question_set):
                 "mindmap_ai_translate": question.mindmap_ai_translate,
                 "mindmap_ai_target_lang": question.mindmap_ai_target_lang,
                 "mindmap_ai_restructure": question.mindmap_ai_restructure,
+                **{
+                    base: translated_map(question, base)
+                    for base in matrix.AXIS_LABEL_FIELDS
+                },
+                "matrix_edges": question.matrix_edges,
+                "matrix_descriptions": question.matrix_descriptions,
+                "matrix_max_per_person": question.matrix_max_per_person,
+                "matrix_category_mode": question.matrix_category_mode,
+                "matrix_categories": question.matrix_categories,
                 "section": section_index.get(question.section_id),
                 "options": [
                     {
@@ -446,11 +463,32 @@ def import_set(room, data):
             for lang, v in _lang_map(item.get("mindmap_root")).items()
         }
         mm_depth = mindmap.clamp_depth(item.get("mindmap_depth"))
+        axis_columns = {
+            f"{base}_{lang}": matrix.clean_label(v)
+            for base in matrix.AXIS_LABEL_FIELDS
+            for lang, v in _lang_map(item.get(base)).items()
+        }
+        mx_mode = matrix.clamp_category_mode(item.get("matrix_category_mode"))
+        try:
+            mx_categories = matrix.clean_categories(
+                item.get("matrix_categories"), mx_mode
+            )
+        except matrix.CategoryError:
+            # Foreign file: drop an invalid list rather than reject the import.
+            mx_mode, mx_categories = matrix.MODE_OFF, []
         question = Question.objects.create(
             question_set=question_set,
             kind=item["kind"],
             **{f"text_{lang}": (v or None) for lang, v in text_map.items()},
             **{f"mindmap_root_{lang}": v for lang, v in root_map.items()},
+            **axis_columns,
+            matrix_edges=bool(item.get("matrix_edges")),
+            matrix_descriptions=bool(item.get("matrix_descriptions")),
+            matrix_max_per_person=matrix.clamp_max_per_person(
+                item.get("matrix_max_per_person")
+            ),
+            matrix_category_mode=mx_mode,
+            matrix_categories=mx_categories,
             mindmap_depth=mm_depth,
             mindmap_max_per_person=mindmap.clamp_max_per_person(
                 item.get("mindmap_max_per_person")

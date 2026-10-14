@@ -17,8 +17,12 @@ SET_TYPES = {
     },
     QuestionSet.SetType.SELF_PACED: {
         "run_mode": "self_paced",
-        # Mindmap is a shared, presenter-driven activity: live polls only.
-        "allowed_kinds": tuple(k for k in _ALL_KINDS if k != Question.Kind.MINDMAP),
+        # Mindmap and matrix are shared, presenter-driven activities: live
+        # polls only.
+        "allowed_kinds": tuple(
+            k for k in _ALL_KINDS
+            if k not in (Question.Kind.MINDMAP, Question.Kind.MATRIX)
+        ),
     },
     QuestionSet.SetType.SELF_CHECK: {
         # Only kinds with an auto-checkable answer / shown solution.
