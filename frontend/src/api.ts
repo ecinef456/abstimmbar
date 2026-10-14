@@ -2,6 +2,7 @@
 // Copyright 2026 Universität Osnabrück (virtUOS)
 
 import type { LocalizedText } from "@basicbar/ui";
+import type { MatrixColor } from "./matrixPalette";
 import type { SetType } from "./setTypes";
 
 /** Backend base URL. Defaults to "" (same-origin, relative URLs) — production
@@ -133,7 +134,16 @@ export type QuestionKind =
   | "open_text"
   | "priorities"
   | "ordering"
-  | "mindmap";
+  | "mindmap"
+  | "matrix";
+
+export type MatrixCategoryMode = "off" | "colors" | "named";
+/** A matrix category: a palette colour (see matrixPalette.ts) and, in mode
+ *  "named", a `{de, en}` name. */
+export interface MatrixCategory {
+  key: MatrixColor;
+  name: LocalizedText;
+}
 
 /** One predefined branch of a mindmap question (plain canonical-language
  *  text; level 1 = child of the root). */
@@ -229,6 +239,21 @@ export interface Question {
   mindmap_ai_translate: boolean;
   mindmap_ai_target_lang: "" | "de" | "en";
   mindmap_ai_restructure: boolean;
+  /** matrix only: axis end labels ({de,en}; x runs left→right, y bottom→top). */
+  matrix_x_from: LocalizedText;
+  matrix_x_to: LocalizedText;
+  matrix_y_from: LocalizedText;
+  matrix_y_to: LocalizedText;
+  /** matrix only: cards may also sit on the borders between two fields. */
+  matrix_edges: boolean;
+  /** matrix only: participants add a title + optional description. */
+  matrix_descriptions: boolean;
+  /** matrix only: cards per participant (1–100). */
+  matrix_max_per_person: number;
+  /** matrix only: categories off / colours only / colours with names. */
+  matrix_category_mode: MatrixCategoryMode;
+  /** matrix only: 2–6 categories when the mode is not "off". */
+  matrix_categories: MatrixCategory[];
   /** Per-question reveal override; "inherit" uses the set default (#28). */
   reveal_answers: "inherit" | RevealAnswers;
   /** Before/after pair (#54): the before-question this one mirrors (null if

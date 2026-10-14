@@ -1,0 +1,363 @@
+/** Four-field matrix: editor (type picker, axes, edges, categories, save and
+ *  validation). Runs as `demo` in the German UI; seeds its own "E2E Matrix"
+ *  rooms and deletes them. */
+import AxeBuilder from '@axe-core/playwright';
+import type { Page } from '@playwright/test';
+import { test, expect, API_BASE_URL } from './fixtures';
+import { apiClient, createRoomWithQuestions } from './helpers/seed';
+
+test.use({ locale: 'de-DE', viewport: { width: 1280, height: 900 } });
+
+test.beforeEach(async ({ page }) => {
+  // Pro mode (both content languages visible) and no auto-starting tour.
+  await page.route(/\/api\/whoami\/(\?.*)?$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const json = await response.json();
+    if (json.username) {
+      json.onboarding_tour_seen = true;
+      json.easy_mode = false;
+    }
+    await route.fulfill({ response, json });
+  });
+  await page.goto(`${API_BASE_URL}/oidc/authenticate/`);
+  await page.getByRole('textbox', { name: /Username or email|Benutzername/ }).fill('demo');
+  await page.getByRole('textbox', { name: /Password|Passwort/ }).fill('demo');
+  await page.getByRole('button', { name: /Sign In|Anmelden/ }).click();
+  await page.waitForURL('http://localhost:5174/**');
+});
+
+async function openMatrixEditor(page: Page, setId: number) {
+  await page.goto(`/sets/${setId}`);
+  await page.getByRole('button', { name: /Neue Frage/ }).click();
+  const group = page.getByRole('group', { name: 'Offen antworten' });
+  await group.getByRole('menuitem', { name: /Vier-Felder-Matrix/ }).click();
+  await expect(page.locator('[data-tour="question.editor"]')).toBeVisible();
+}
+
+async function fillQuestionText(page: Page, text: string) {
+  const editor = page.locator('.ProseMirror').first();
+  await editor.click();
+  await page.keyboard.type(text);
+}
+
+test('create a matrix question with axes, edges and named categories; it persists', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+
+  await fillQuestionText(page, 'Wohin gehört die Idee?');
+  await page.getByRole('textbox', { name: 'x-Achse von' }).fill('altbacken');
+  await page.getByRole('textbox', { name: 'x-Achse bis' }).fill('modern');
+  await page.getByRole('textbox', { name: 'y-Achse von' }).fill('nutzlos');
+  await page.getByRole('textbox', { name: 'y-Achse bis' }).fill('nützlich');
+  await page.getByRole('switch', { name: 'Kanten erlauben' }).click();
+
+  await page.getByRole('radio', { name: 'mit Namen' }).click();
+  await page.getByRole('textbox', { name: 'Name der Kategorie 1' }).fill('Idee');
+  await page.getByRole('textbox', { name: 'Name der Kategorie 2' }).fill('Risiko');
+  await page.getByRole('button', { name: '+ Kategorie' }).click();
+  await page.getByRole('textbox', { name: 'Name der Kategorie 3' }).fill('Chance');
+
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  // Saving a new question returns to the set page.
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  const api = apiClient(page.request);
+  const listed = await api.get(`/api/questions/?question_set=${seed.setId}`);
+  const items = Array.isArray(listed) ? listed : listed.results;
+  expect(items).toHaveLength(1);
+  const questionId = items[0].id;
+
+  const stored = await api.get(`/api/questions/${questionId}/`);
+  expect(stored.kind).toBe('matrix');
+  expect(stored.matrix_x_from.de).toBe('altbacken');
+  expect(stored.matrix_x_to.de).toBe('modern');
+  expect(stored.matrix_y_from.de).toBe('nutzlos');
+  expect(stored.matrix_y_to.de).toBe('nützlich');
+  expect(stored.matrix_edges).toBe(true);
+  expect(stored.matrix_category_mode).toBe('named');
+  expect(stored.matrix_categories.map((c: any) => [c.key, c.name.de])).toEqual([
+    ['blue', 'Idee'],
+    ['orange', 'Risiko'],
+    ['green', 'Chance'],
+  ]);
+
+  await page.goto(`/sets/${seed.setId}/questions/${questionId}`);
+  await expect(page.getByRole('textbox', { name: 'x-Achse von' })).toHaveValue('altbacken');
+  await expect(page.getByRole('textbox', { name: 'y-Achse bis' })).toHaveValue('nützlich');
+  await expect(page.getByRole('switch', { name: 'Kanten erlauben' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(page.getByRole('textbox', { name: 'Name der Kategorie 3' })).toHaveValue('Chance');
+});
+
+test('category colours can be chosen; used colours are disabled; "+ Kategorie" takes the next free one', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  await fillQuestionText(page, 'Welche Farbe?');
+  await page.getByRole('textbox', { name: 'x-Achse von' }).fill('a');
+  await page.getByRole('textbox', { name: 'x-Achse bis' }).fill('b');
+  await page.getByRole('textbox', { name: 'y-Achse von' }).fill('c');
+  await page.getByRole('textbox', { name: 'y-Achse bis' }).fill('d');
+  await page.getByRole('radio', { name: 'nur Farben' }).click();
+
+  const first = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 1' });
+  const second = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 2' });
+  await expect(first.getByRole('radio', { name: 'Blau', exact: true })).toBeChecked();
+  await expect(second.getByRole('radio', { name: 'Orange', exact: true })).toBeChecked();
+  // A colour used by another category cannot be picked.
+  await expect(first.getByRole('radio', { name: 'Orange', exact: true })).toBeDisabled();
+  await first.getByRole('radio', { name: 'Violett', exact: true }).click();
+  await expect(first.getByRole('radio', { name: 'Violett', exact: true })).toBeChecked();
+  // The freed colour is available to the other category; the new one is taken.
+  await expect(second.getByRole('radio', { name: 'Blau', exact: true })).toBeEnabled();
+  await expect(second.getByRole('radio', { name: 'Violett', exact: true })).toBeDisabled();
+  // Keyboard: arrow keys move to the next free colour.
+  await second.getByRole('radio', { name: 'Orange', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(second.getByRole('radio', { name: 'Grün', exact: true })).toBeChecked();
+  await second.getByRole('radio', { name: 'Orange', exact: true }).click();
+
+  await page.getByRole('button', { name: '+ Kategorie' }).click();
+  await expect(
+    page.getByRole('radiogroup', { name: 'Farbe der Kategorie 3' }).getByRole('radio', { name: 'Blau', exact: true }),
+  ).toBeChecked();
+
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  const api = apiClient(page.request);
+  const listed = await api.get(`/api/questions/?question_set=${seed.setId}`);
+  const items = Array.isArray(listed) ? listed : listed.results;
+  const stored = await api.get(`/api/questions/${items[0].id}/`);
+  expect(stored.matrix_categories.map((c: any) => c.key)).toEqual(['purple', 'orange', 'blue']);
+});
+
+test('colors mode labels categories A, B, C by position, not by colour; named mode shows no letters', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  await page.getByRole('radio', { name: 'nur Farben' }).click();
+  await page.getByRole('button', { name: '+ Kategorie' }).click();
+  const g1 = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 1' });
+  const g2 = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 2' });
+  const g3 = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 3' });
+  // Pick sky, blue, red out of palette order (free the blue first).
+  await g3.getByRole('radio', { name: 'Rot', exact: true }).click();
+  await g1.getByRole('radio', { name: 'Hellblau', exact: true }).click();
+  await g2.getByRole('radio', { name: 'Blau', exact: true }).click();
+  await expect(g1.getByRole('radio', { name: 'Hellblau', exact: true })).toBeChecked();
+  await expect(g2.getByRole('radio', { name: 'Blau', exact: true })).toBeChecked();
+  await expect(g3.getByRole('radio', { name: 'Rot', exact: true })).toBeChecked();
+  // Swatches carry no number; the colour name is also the tooltip text.
+  await expect(g1.getByRole('radio', { name: 'Hellblau', exact: true })).toHaveText('');
+  await expect(g1.getByRole('radio', { name: 'Hellblau', exact: true })).toHaveAttribute('title', 'Hellblau');
+  // Letters by position.
+  const letters = page.getByTestId('matrix-category-letter');
+  await expect(letters).toHaveText(['A', 'B', 'C']);
+  // Named mode: no letters anywhere.
+  await page.getByRole('radio', { name: 'mit Namen' }).click();
+  await expect(letters).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Name der Kategorie 1' }).first()).toBeVisible();
+});
+
+test('changing a colour keeps focus, the name and its language tab', async ({ page, trackRoom }) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  await page.getByRole('radio', { name: 'mit Namen' }).click();
+  const name = page.getByRole('textbox', { name: 'Name der Kategorie 1' });
+  await name.fill('Idee');
+  await page.getByRole('tablist', { name: 'Name der Kategorie 1' }).getByRole('tab', { name: /^en/ }).click();
+  await page.getByRole('textbox', { name: 'Name der Kategorie 1' }).fill('Idea');
+
+  const group = page.getByRole('radiogroup', { name: 'Farbe der Kategorie 1' });
+  await group.getByRole('radio', { name: 'Blau', exact: true }).focus();
+  // Category 2 holds orange (2): ArrowRight skips it -> green (3), then red (4).
+  await page.keyboard.press('ArrowRight');
+  await expect(group.getByRole('radio', { name: 'Grün', exact: true })).toBeChecked();
+  await page.keyboard.press('ArrowRight');
+  await expect(group.getByRole('radio', { name: 'Rot', exact: true })).toBeChecked();
+  await expect(group.getByRole('radio', { name: 'Rot', exact: true })).toBeFocused();
+  // The name field kept its value and its active (English) language tab.
+  await expect(page.getByRole('textbox', { name: 'Name der Kategorie 1' })).toHaveValue('Idea');
+  await expect(
+    page.getByRole('tablist', { name: 'Name der Kategorie 1' }).getByRole('tab', { name: /^en/ }),
+  ).toHaveAttribute('aria-selected', 'true');
+});
+
+test('axis inputs sit around the coordinate graph; stacked without overflow on phones', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  // The old bottom preview is gone.
+  await expect(page.getByTestId('matrix-preview')).toHaveCount(0);
+
+  const box = async (name: string) =>
+    (await page.getByRole('textbox', { name, exact: true }).boundingBox())!;
+  const graph = (await page.getByTestId('matrix-axes-graph').boundingBox())!;
+  const top = await box('y-Achse bis');
+  const bottom = await box('y-Achse von');
+  const left = await box('x-Achse von');
+  const right = await box('x-Achse bis');
+  expect(top.y + top.height).toBeLessThanOrEqual(graph.y + 4);
+  expect(bottom.y).toBeGreaterThanOrEqual(graph.y + graph.height - 4);
+  expect(left.x + left.width).toBeLessThanOrEqual(graph.x + 4);
+  expect(right.x).toBeGreaterThanOrEqual(graph.x + graph.width - 4);
+
+  // Phone width: stacked top, left, right, bottom; no horizontal overflow.
+  await page.setViewportSize({ width: 324, height: 800 });
+  await expect(page.getByTestId('matrix-axes-graph')).toBeHidden();
+  const ys = [
+    (await box('y-Achse bis')).y,
+    (await box('x-Achse von')).y,
+    (await box('x-Achse bis')).y,
+    (await box('y-Achse von')).y,
+  ];
+  expect(ys).toEqual([...ys].sort((a, b) => a - b));
+  for (const [name, hint] of [
+    ['y-Achse bis', 'oben'],
+    ['x-Achse von', 'links'],
+    ['x-Achse bis', 'rechts'],
+    ['y-Achse von', 'unten'],
+  ]) {
+    await expect(page.getByRole('textbox', { name, exact: true })).toHaveAccessibleDescription(
+      `Position: ${hint}`,
+    );
+  }
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test('"Alle Felder übersetzen" fills every matrix field (axes and category names)', async ({
+  page,
+  trackRoom,
+}) => {
+  await page.route(/\/api\/translate\/$/, async (route) => {
+    const body = route.request().postDataJSON();
+    await route.fulfill({ json: { translated: `EN ${body.text}` } });
+  });
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  const fields = [
+    ['x-Achse von', 'links'],
+    ['x-Achse bis', 'rechts'],
+    ['y-Achse von', 'unten'],
+    ['y-Achse bis', 'oben'],
+    ['Name der Kategorie 1', 'Idee'],
+    ['Name der Kategorie 2', 'Risiko'],
+  ] as const;
+  await page.getByRole('radio', { name: 'mit Namen' }).click();
+  for (const [name, de] of fields) {
+    await page.getByRole('textbox', { name, exact: true }).first().fill(de);
+  }
+  await page.getByRole('button', { name: 'Alle Felder übersetzen' }).click();
+  // After translating, each field shows its (now filled) English tab.
+  for (const [name, de] of fields) {
+    await page.getByRole('tablist', { name, exact: true }).getByRole('tab', { name: /^en/ }).click();
+    await expect(page.getByRole('textbox', { name, exact: true })).toHaveValue(`EN ${de}`);
+  }
+});
+
+test('the Bearbeiten/Vorschau switcher keeps icon and label on one line', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  for (const width of [1280, 1024, 768, 324]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const name of ['Bearbeiten', 'Vorschau']) {
+      const radio = page.getByRole('radio', { name, exact: true });
+      const icon = (await radio.locator('svg').boundingBox())!;
+      const text = (await radio.locator('span').first().boundingBox())!;
+      // Icon and label share a line: the icon's vertical centre lies within the
+      // label's box (stacked, it would sit above it).
+      expect(icon.y + icon.height / 2, `${name} icon centre at ${width}`).toBeGreaterThan(text.y);
+      expect(icon.y + icon.height / 2, `${name} icon centre at ${width}`).toBeLessThan(
+        text.y + text.height,
+      );
+      expect((await radio.boundingBox())!.height, `${name} height at ${width}`).toBeLessThan(34);
+    }
+    const group = (await page.getByRole('group', { name: 'Ansicht' }).boundingBox())!;
+    expect(group.x + group.width).toBeLessThanOrEqual(width);
+  }
+});
+
+test('saving with an empty axis label is blocked', async ({ page, trackRoom }) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await openMatrixEditor(page, seed.setId);
+  await fillQuestionText(page, 'Frage ohne Achsen');
+  await page.getByRole('textbox', { name: 'x-Achse von' }).fill('links');
+  await page.getByRole('textbox', { name: 'x-Achse bis' }).fill('rechts');
+  await page.getByRole('textbox', { name: 'y-Achse von' }).fill('unten');
+  // y-axis end left empty.
+  await expect(page.getByText('Bitte beschriften Sie beide Enden beider Achsen.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Speichern', exact: true })).toBeDisabled();
+  await expect(page).toHaveURL(/\/questions\/new/);
+  // Labelling the last end lifts the block.
+  await page.getByRole('textbox', { name: 'y-Achse bis' }).fill('oben');
+  await expect(page.getByRole('button', { name: 'Speichern', exact: true })).toBeEnabled();
+});
+
+test('a self-paced set does not offer the matrix', async ({ page, trackRoom }) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  const api = apiClient(page.request);
+  const set = await api.post('/api/question-sets/', {
+    room: seed.roomId,
+    type: 'self_paced',
+    title: { de: 'E2E Stillarbeit', en: 'E2E self-paced' },
+  });
+  await page.goto(`/sets/${set.id}`);
+  await page.getByRole('button', { name: /Neue Frage/ }).click();
+  await expect(page.getByRole('menuitem', { name: /Einzelauswahl|Single Choice/ }).first()).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Vier-Felder-Matrix/ })).toHaveCount(0);
+});
+
+for (const scheme of ['light', 'dark'] as const) {
+  test.describe(`axe ${scheme}`, () => {
+  test.use({ colorScheme: scheme });
+  test(`matrix editor (${scheme})`, async ({ page, trackRoom }) => {
+    const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+    await page.addInitScript((s) => {
+      try {
+        localStorage.setItem('abstimmbar_theme', s);
+      } catch {
+        /* ignore */
+      }
+    }, scheme);
+    await openMatrixEditor(page, seed.setId);
+    await page.getByRole('radio', { name: 'mit Namen' }).click();
+    await page.getByRole('textbox', { name: 'Name der Kategorie 1' }).fill('Idee');
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    // Let finite transitions (segmented-control thumb) finish before measuring.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+          .map((a) => a.finished.catch(() => undefined)),
+      ).then(() => undefined),
+    );
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+      .analyze();
+    expect(
+      violations.map((v) => ({
+        rule: v.id,
+        nodes: v.nodes.slice(0, 5).map((n) => `${n.target.join(' ')} — ${n.any[0]?.message ?? ''}`),
+      })),
+    ).toEqual([]);
+  });
+  });
+}

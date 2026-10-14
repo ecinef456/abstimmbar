@@ -564,3 +564,47 @@ msgstr "Die Bewertung läuft – Begriffe können jetzt nicht hinzugefügt oder 
 #: live/templates/live/participant.html
 msgid "This term has already been rated and cannot be removed."
 msgstr "Dieser Begriff wurde bereits bewertet und kann nicht mehr entfernt werden."
+
+#: live/templates/live/participant.html
+msgid "Choose a field"
+msgstr "Wählen Sie ein Feld"
+
+#: live/templates/live/participant.html
+msgid "Choose a category"
+msgstr "Wählen Sie eine Kategorie"
+
+#: live/templates/live/participant.html
+msgid "Title"
+msgstr "Titel"
+
+#: live/templates/live/participant.html
+msgid "Add card"
+msgstr "Karte hinzufügen"
+
+#: live/templates/live/participant.html
+msgid "You have reached the maximum number of cards."
+msgstr "Sie haben die Höchstzahl an Karten erreicht."
+
+#: live/templates/live/participant.html
+msgid "Your cards ({n} of {max})"
+msgstr "Ihre Karten ({n} von {max})"
+
+#: live/templates/live/participant.html
+msgid "Colour {n}"
+msgstr "Farbe {n}"
+
+#: live/templates/live/participant.html
+msgid "between {a} and {b}"
+msgstr "zwischen {a} und {b}"
+
+#: live/templates/live/participant.html
+msgid "Delete card “{title}”"
+msgstr "Karte „{title}“ löschen"
+
+#: live/templates/live/participant.html
+msgid "Card added."
+msgstr "Karte hinzugefügt."
+
+#: live/templates/live/participant.html
+msgid "You have not added any cards yet."
+msgstr "Sie haben noch keine Karten hinzugefügt."
