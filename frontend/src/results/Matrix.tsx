@@ -35,7 +35,15 @@
  *  `resolveZone` with hysteresis) — or, over another card, that card as the
  *  stack target. A click without movement opens the card; arrow keys move
  *  it in small steps (Shift: larger). Newly arrived cards flash briefly
- *  (not with reduced motion). The beamer is always light. */
+ *  (not with reduced motion). The beamer is always light.
+ *
+ *  Rating (`rating` with scores): every rated visible top card gets a score
+ *  row at the bottom of its body — a fill bar (points: category colour,
+ *  relative to the best card; plus/minus: green from the left, rosé from
+ *  the right, relative to the most-rated card) and the score as text, which
+ *  stays on the card tint (contrast). Unrated cards are unchanged; nothing
+ *  grows with the score. `interactive.stackLocked`: a drop onto a card only
+ *  moves (no stack target). */
 import {
   createElement,
   useEffect,
@@ -51,11 +59,17 @@ import {
 import { useTranslation } from "react-i18next";
 import { EyeOff, ZoomIn } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
-import type { MatrixBoard, MatrixCard, MatrixSettingsPayload } from "../api";
+import type { MatrixBoard, MatrixCard, MatrixRating, MatrixScore, MatrixSettingsPayload } from "../api";
 import { categoryLabel, mixHex, paletteEntry, readableOn } from "../matrixPalette";
 import { fromPixel, resolveZone, toPixel, zoneRect, type Box, type Zone } from "./matrixGeometry";
 import { relaxCards, type LayoutItem } from "./matrixLayout";
 import { useReducedMotion } from "./motion";
+import { CORRECT as UP, MINUS as DOWN } from "./palette";
+
+/** Plus / minus counts as text on a tinted card body (≥ 4.5:1 on every
+ *  category tint; the palette's CORRECT_STRONG / MINUS_INK are too light). */
+export const MATRIX_UP_INK = "oklch(0.45 0.13 150)";
+export const MATRIX_DOWN_INK = "oklch(0.45 0.15 20)";
 
 export interface MatrixInteraction {
   /** Drop / arrow key at board point (x, y) — unclamped; the server resolves
@@ -63,6 +77,8 @@ export interface MatrixInteraction {
   onMove(cardId: number, x: number, y: number, via: "pointer" | "keyboard"): Promise<unknown> | void;
   onStack(cardId: number, ontoId: number): void;
   onOpen(cardId: number, byKeyboard: boolean): void;
+  /** Rating stage: stacks are locked — a drop onto a card only moves it. */
+  stackLocked?: boolean;
 }
 
 export interface MatrixProps {
@@ -84,6 +100,38 @@ export interface MatrixProps {
   /** Present mode: also draw hidden cards (marked), to show them again. */
   showHidden?: boolean;
   interactive?: MatrixInteraction;
+  /** Scores to draw on the cards (only when they are to be shown). */
+  rating?: { mode: MatrixRating["mode"]; scores: Record<string, MatrixScore> };
+}
+
+/** Score row of one card: bar shares (0–1) and the text. */
+interface ScoreLook {
+  up: number;
+  down: number;
+  points?: number;
+  counts?: { up: number; down: number };
+}
+
+/** Bar shares per rated card id: points relative to the best card,
+ *  plus/minus (up and down) relative to the most-rated card. */
+export function matrixScoreLooks(rating: MatrixProps["rating"]): Map<number, ScoreLook> {
+  const out = new Map<number, ScoreLook>();
+  if (!rating) return out;
+  const entries = Object.entries(rating.scores).map(([k, v]) => [Number(k), v] as const);
+  if (rating.mode === "points") {
+    const max = Math.max(1, ...entries.map(([, v]) => ("points" in v ? v.points : 0)));
+    for (const [id, v] of entries) {
+      if (!("points" in v) || v.points <= 0) continue;
+      out.set(id, { up: v.points / max, down: 0, points: v.points });
+    }
+  } else {
+    const max = Math.max(1, ...entries.map(([, v]) => ("up" in v ? v.up + v.down : 0)));
+    for (const [id, v] of entries) {
+      if (!("up" in v) || v.up + v.down === 0) continue;
+      out.set(id, { up: v.up / max, down: v.down / max, counts: { up: v.up, down: v.down } });
+    }
+  }
+  return out;
 }
 
 /** Arrow-key step in board units (Shift: the larger one). */
@@ -316,6 +364,7 @@ export default function Matrix({
   legendHelp,
   showHidden = false,
   interactive,
+  rating,
   onZoomQuadrant,
   quadrantFocused = false,
 }: MatrixProps) {
@@ -393,6 +442,7 @@ export default function Matrix({
     return [clip(x), clip(y)];
   };
   const targetAt = (clientX: number, clientY: number, self: number): number | null => {
+    if (interactive?.stackLocked) return null;
     for (const el of document.elementsFromPoint(clientX, clientY)) {
       const hit = (el as HTMLElement).closest?.("[data-card-id]") as HTMLElement | null;
       if (!hit || !plotRef.current?.contains(hit)) continue;
@@ -516,6 +566,10 @@ export default function Matrix({
     if (!knownCategory(c.category)) return { short: "", name: "", a11y: t("no category") };
     return categoryLabel(categories, c.category, categoryMode, lang, t);
   };
+
+  const scoreLooks = useMemo(() => matrixScoreLooks(rating), [rating]);
+  const scoreText = (look: ScoreLook) =>
+    look.points != null ? t("{{count}} points", { count: look.points }) : "";
 
   // Card size: beamer-sized from the plot, scaled down when crowded.
   const cardFont = box
@@ -729,6 +783,15 @@ export default function Matrix({
             const isHidden = card.hidden;
             const zoneName = matrixZoneName(card.zone, settings.axes, t);
             const Tag = interactive ? "button" : "div";
+            const score = isHidden ? undefined : scoreLooks.get(card.id);
+            const scoreA11y = score
+              ? score.counts
+                ? t("{{up}} plus, {{down}} minus, balance {{balance}}", {
+                    ...score.counts,
+                    balance: score.counts.up - score.counts.down,
+                  })
+                : scoreText(score)
+              : "";
             return (
               <PlacedCard
                 key={card.id}
@@ -831,6 +894,51 @@ export default function Matrix({
                       {card.description}
                     </span>
                   )}
+                  {score && (
+                    <span data-card-score="" className="mt-[0.3em] flex items-center gap-[0.4em]">
+                      <span
+                        aria-hidden
+                        data-score-track=""
+                        className="relative block h-[0.5em] min-w-[2.5em] flex-1 overflow-hidden rounded-full bg-white/80 ring-1 ring-inset ring-slate-400/60"
+                      >
+                        {score.counts ? (
+                          <>
+                            {score.up > 0 && (
+                              <span
+                                data-score-up=""
+                                className="absolute inset-y-0 left-0 block"
+                                style={{ width: `${(score.up * 100).toFixed(1)}%`, background: UP, transition: reduced ? undefined : "width .4s ease" }}
+                              />
+                            )}
+                            {score.down > 0 && (
+                              <span
+                                data-score-down=""
+                                className="absolute inset-y-0 right-0 block"
+                                style={{ width: `${(score.down * 100).toFixed(1)}%`, background: DOWN, transition: reduced ? undefined : "width .4s ease" }}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <span
+                            data-score-bar=""
+                            className="absolute inset-y-0 left-0 block"
+                            style={{ width: `${(score.up * 100).toFixed(1)}%`, background: categoryHex ?? "#64748b", transition: reduced ? undefined : "width .4s ease" }}
+                          />
+                        )}
+                      </span>
+                      <span aria-hidden data-score-text="" className="flex-none whitespace-nowrap text-[0.8em] font-bold tabular-nums">
+                        {score.counts ? (
+                          <>
+                            <span style={{ color: MATRIX_UP_INK }}>+{score.counts.up}</span>
+                            {" / "}
+                            <span style={{ color: MATRIX_DOWN_INK }}>−{score.counts.down}</span>
+                          </>
+                        ) : (
+                          scoreText(score)
+                        )}
+                      </span>
+                    </span>
+                  )}
                   {isHidden && (
                     <span data-testid="matrix-hidden-marker" className="mt-0.5 flex items-center gap-1 text-[0.8em] font-medium">
                       <EyeOff aria-hidden className="h-[1em] w-[1em]" />
@@ -838,7 +946,7 @@ export default function Matrix({
                     </span>
                   )}
                   <span className="sr-only">
-                    {` – ${[cat.a11y, zoneName].filter(Boolean).join(", ")}`}
+                    {` – ${[cat.a11y, zoneName, scoreA11y].filter(Boolean).join(", ")}`}
                   </span>
                 </span>
               </PlacedCard>

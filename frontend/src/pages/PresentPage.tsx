@@ -370,6 +370,14 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
             ? [{ value: "ranking" as const }]
             : []),
         ]
+      : activeKind === "matrix"
+        ? [
+            { value: "raw" },
+            // Matrix rating: likewise once the scores are on screen.
+            ...(Object.keys(state?.matrix?.rating?.scores ?? {}).length > 0
+              ? [{ value: "ranking" as const }]
+              : []),
+          ]
       : [
           { value: "raw" },
           ...(aiCloud ? [{ value: "consolidated" as const }, { value: "grouped" as const }] : []),
@@ -600,8 +608,17 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // for every presenter (not expert-only).
   const matrixBoard = activeKind === "matrix" ? state?.matrix : undefined;
   const matrixSettings = activeKind === "matrix" ? state?.matrix_settings : undefined;
+  // Matrix rating: mirrors the mind map's (Stop with hidden scores only
+  // closes; the board stays on a closed rating until E reveals).
+  const mxRating = matrixBoard?.rating;
+  const mxRate = mxRating?.stage === "rate";
   const mxShown =
-    !!matrixBoard && !!matrixSettings && (phase === "open" || phase === "results");
+    !!matrixBoard &&
+    !!matrixSettings &&
+    (phase === "open" || phase === "results" || (phase === "closed" && mxRate));
+  const stopCloses = mmStopCloses || (activeKind === "matrix" && mxRate && !mxRating?.live);
+  // The rating whose raters the counter shows.
+  const rateStats = mmRate ? mmRating : mxRate ? mxRating : undefined;
   // Full-width layouts (compact title, content fills the height).
   const wideShown = mmShown || mxShown;
   const mmRateRef = useRef(mmRate);
@@ -667,6 +684,18 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       setMmToast((p) => ({ text: t(requestDetail(err)), n: (p?.n ?? 0) + 1 }));
     } finally {
       setMmStageBusy(false);
+    }
+  };
+  const [mxStageBusy, setMxStageBusy] = useState(false);
+  const setMatrixStage = async (stage: "collect" | "rate") => {
+    if (runId == null || activeId == null || mxStageBusy) return;
+    setMxStageBusy(true);
+    try {
+      await live.matrixStage(runId, activeId, stage, true);
+    } catch (err) {
+      setMmToast((p) => ({ text: t(requestDetail(err)), n: (p?.n ?? 0) + 1 }));
+    } finally {
+      setMxStageBusy(false);
     }
   };
   const mmModRef = useRef(mmMod);
@@ -1254,7 +1283,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         disabledViews.has(sg.id)
           ? false
           : lookOnly
-            ? sg.level === "results" && !(phase === "closed" && sg.id === "view.mm.ranking")
+            ? sg.level === "results" && !(phase === "closed" && sg.view === "ranking")
             : phase !== "open",
       ),
     [viewSegments, disabledViews, lookOnly, phase],
@@ -1417,7 +1446,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         if (phase === "open")
           // Word clouds and mindmaps freeze onto the results view (they stay
           // visible), matching the Stop button; other kinds just close.
-          (activeKind === "word_cloud" || activeKind === "mindmap" || activeKind === "matrix") && !mmStopCloses
+          (activeKind === "word_cloud" || activeKind === "mindmap" || activeKind === "matrix") && !stopCloses
             ? void showResults()
             : void live.control(runId, { phase: "closed" });
         else if (phase === "preview" || phase === "closed" || phase === "results")
@@ -1436,7 +1465,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         void leave();
       }
     },
-    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, mmStopCloses, pendingFinish, backFromClosing, finishAndLeave],
+    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave],
   );
 
   useEffect(() => {
@@ -1803,10 +1832,10 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       }
       stats={
         // Rating phase: the counter shows how many have rated so far.
-        mmRate && mmRating ? (
+        rateStats ? (
           <LiveStats
             participants={state.participants ?? 0}
-            votes={mmRating.raters}
+            votes={rateStats.raters}
             votesLabel={t("Participants who have rated")}
           />
         ) : (
@@ -1845,6 +1874,34 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   nextStep
                 />
               ) : null
+            ) : activeKind === "matrix" && mxRating && phase !== "lobby" ? (
+              mxRate ? (
+                <FooterIconButton
+                  help="mx.collect"
+                  testId="mx-back-to-collecting"
+                  label={t("Back to collecting")}
+                  icon={Undo2}
+                  detail={t("Back to collecting: participants add cards again; the ratings are kept.")}
+                  disabled={mxStageBusy}
+                  onClick={() => void setMatrixStage("collect")}
+                />
+              ) : phase === "open" || phase === "results" || phase === "closed" ? (
+                <FooterIconButton
+                  help="mx.rate"
+                  testId="mx-start-rating"
+                  label={t("Start rating")}
+                  icon={ThumbsUp}
+                  detail={
+                    mxRating.mode === "points"
+                      ? t("Participants distribute {{count}} points among the cards.", { count: mxRating.budget })
+                      : t("Participants rate up to {{count}} cards with 👍 or 👎.", { count: mxRating.budget })
+                  }
+                  disabled={mxStageBusy}
+                  onClick={() => void setMatrixStage("rate")}
+                  className="border-brand-400 bg-brand-400 text-slate-900 hover:bg-brand-500"
+                  nextStep
+                />
+              ) : null
             ) : undefined
           }
           count={questions.length}
@@ -1858,7 +1915,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 // stays on screen (and #30's deferred cloud appears); "Frage"
                 // then hides it. Other kinds close first, reveal on demand.
                 (activeKind === "word_cloud" || activeKind === "mindmap" || activeKind === "matrix") &&
-                !mmStopCloses
+                !stopCloses
                 ? void showResults()
                 : void live.control(runId!, { phase: "closed" })
               : phase === "lobby"
@@ -2141,6 +2198,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               drawerAttr={WC_DRAWER_ATTR}
               // Esc belongs to these overlays first (the presenter closes them).
               overlayOpen={showJoin || showAiPanel || showModPanel || mmAi.open}
+              rating={mxRating}
+              phase={phase}
+              view={wcView === "ranking" ? "ranking" : "raw"}
             />
           )}
 
@@ -2481,7 +2541,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
             )}
 
           {/* Mindmap moderation refusals (e.g. undo no longer possible). */}
-          {mmToast && mmShown && (
+          {mmToast && (mmShown || mxShown) && (
             <div
               key={mmToast.n}
               role="status"

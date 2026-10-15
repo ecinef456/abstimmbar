@@ -61,6 +61,12 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   "view.mm.raw": { name: "Mind map", text: "The collected terms as a map." },
   "view.mm.ranking": { name: "Ranking", text: "The rated terms, best first." },
   "view.mx.raw": { name: "Matrix", text: "The cards on the four-field board." },
+  "view.mx.ranking": { name: "Ranking", text: "The rated cards, best first." },
+  "mx.rate": { name: "Start rating", text: "Participants rate the collected cards." },
+  "mx.collect": {
+    name: "Back to collecting",
+    text: "Participants add cards again; the ratings are kept.",
+  },
   "mm.rate": { name: "Start rating", text: "Participants rate the collected terms." },
   "mm.collect": {
     name: "Back to collecting",
@@ -119,7 +125,7 @@ const RESULT_ICONS: Record<string, Record<string, LucideIcon>> = {
   wc: { raw: Cloud, consolidated: BrushCleaning, grouped: LayoutGrid },
   ft: { raw: List, results: Gauge, consolidated: Quote, grouped: LayoutGrid },
   mm: { raw: Network, ranking: ListOrdered },
-  mx: { raw: Grid2x2 },
+  mx: { raw: Grid2x2, ranking: ListOrdered },
 };
 
 /** The ordered view list of a question: Question · results view(s) ·
