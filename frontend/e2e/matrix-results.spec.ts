@@ -16,6 +16,19 @@ import {
 
 test.use({ locale: 'de-DE', viewport: { width: 1280, height: 1000 } });
 
+/** WCAG contrast ratio of two computed "rgb(...)" colours. */
+function contrast(a: string, b: string) {
+  const lum = (css: string) => {
+    const [r, g, bl] = (css.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map((v) => {
+      const c = Number(v) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 async function login(page: Page) {
   await page.route(/\/api\/whoami\/(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
@@ -106,6 +119,36 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(board.locator(`[data-card-id="${altlast}"]`)).toHaveCount(0);
       await legend.getByRole('button', { name: 'Risiko' }).click();
       await expect(board.locator(`[data-card-id="${altlast}"]`)).toHaveCount(1);
+
+      // Card colouring: full-colour tab, tinted body, readable text.
+      const colours = await board.locator(`[data-card-id="${altlast}"]`).evaluate((el) => {
+        // Computed colours may be oklch(): paint them to read sRGB back.
+        const toRgb = (css: string) => {
+          const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d')!;
+          ctx.fillStyle = css;
+          ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+          return `rgb(${r}, ${g}, ${b})`;
+        };
+        const tab = el.querySelector('[data-card-tab]') as HTMLElement;
+        const body = el.querySelector('[data-card-body]') as HTMLElement;
+        const title = el.querySelector('[data-card-title]') as HTMLElement;
+        return {
+          tab: toRgb(getComputedStyle(tab).backgroundColor),
+          body: toRgb(getComputedStyle(body).backgroundColor),
+          text: toRgb(getComputedStyle(title).color),
+        };
+      });
+      expect(colours.tab).toBe('rgb(230, 159, 0)'); // Risiko = orange
+      expect(colours.body).not.toBe(scheme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(30, 41, 59)');
+      expect(contrast(colours.text, colours.body)).toBeGreaterThanOrEqual(4.5);
+      // The x ends run vertically, outside the plot.
+      for (const name of ['x_from', 'x_to']) {
+        const mode = await page
+          .locator(`[data-axis="${name}"] [data-axis-text]`)
+          .evaluate((el) => getComputedStyle(el).writingMode);
+        expect(mode).toBe('vertical-rl');
+      }
 
       // Counts are not 0 (4 participant cards).
       await expect(page.getByText(/^4 Stimmen/)).toBeVisible();

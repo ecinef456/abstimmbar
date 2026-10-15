@@ -62,3 +62,35 @@ export function categoryLabel(
   }
   return { short: "", name: "", a11y: colorName(key, lang) };
 }
+
+const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+
+/** `ratio` of `hex` mixed into `base` (both "#rrggbb"), as a CSS colour —
+ *  the light tint of a card body. */
+export function mixHex(hex: string, base: string, ratio: number): string {
+  const a = channels(hex);
+  const b = channels(base);
+  const [r, g, bl] = a.map((v, i) => Math.round(v * ratio + b[i] * (1 - ratio)));
+  return `rgb(${r}, ${g}, ${bl})`;
+}
+
+/** WCAG relative luminance of "#rrggbb". */
+function luminance(hex: string): number {
+  const [r, g, b] = channels(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+const LETTER_LIGHT = "#ffffff";
+const LETTER_DARK = "#111111";
+
+/** Text colour for a letter on a full-colour tab: white or near-black,
+ *  whichever contrasts more (≥ 4.5:1 for every palette colour). */
+export function readableOn(hex: string): string {
+  const l = luminance(hex);
+  const onWhite = 1.05 / (l + 0.05);
+  const onDark = (l + 0.05) / (luminance(LETTER_DARK) + 0.05);
+  return onWhite >= onDark ? LETTER_LIGHT : LETTER_DARK;
+}

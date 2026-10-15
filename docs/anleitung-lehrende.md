@@ -353,11 +353,14 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     **herauslösen**, eine Karte **ausblenden** bzw. **einblenden** und eigene
     Karten löschen. Ausgeblendete Karten sind reversibel.
   - **Eigene Karten:** Der Stift am rechten Rand fügt eine Karte der
-    Lehrperson hinzu (z. B. als Anker oder Beispiel) und zeigt auf Wunsch
+    Lehrperson hinzu (z. B. als Anker oder Beispiel) – das Feld wählen Sie
+    wie die Teilnehmenden am kleinen Koordinatenkreuz – und zeigt auf Wunsch
     **Ausgeblendete anzeigen**.
-  - **Darstellung:** Die Lasche mit dem Anzeige-Symbol schaltet zwischen
-    **Kompakt** und **Ausführlich** (mit Beschreibungen) und macht die Karten
-    größer oder kleiner. Ein Klick auf eine Kategorie in der Legende blendet ihre
+  - **Darstellung:** Die Karten tragen links einen Reiter in der Farbe ihrer
+    Kategorie (bei Farbkategorien mit Buchstaben). Bei vielen Karten werden
+    alle automatisch etwas kleiner. Die Lasche mit dem Anzeige-Symbol
+    schaltet zwischen **Kompakt** und **Ausführlich** (mit Beschreibungen)
+    und macht die Karten größer oder kleiner. Ein Klick auf eine Kategorie in der Legende blendet ihre
     Karten aus bzw. wieder ein.
   - **Tastatur:** Mit Tab erreichen Sie die Karten, Enter öffnet eine Karte,
     die Pfeiltasten verschieben sie (Umschalt für größere Schritte). Ein

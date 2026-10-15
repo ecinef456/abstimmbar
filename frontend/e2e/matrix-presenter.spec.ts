@@ -37,13 +37,17 @@ test.beforeEach(async ({ page }) => {
 
 type Card = { id: number; zone: string; x: number; y: number; stack: number | null; hidden: boolean; teacher: boolean; title: string };
 
-async function seed(page: Page, trackRoom: (id: number) => void) {
+async function seed(
+  page: Page,
+  trackRoom: (id: number) => void,
+  opts: { overrides?: Record<string, unknown>; tokens?: number } = {},
+) {
   const room = await createRoomWithQuestions(page.request, [], 'Matrix Beamer', trackRoom, 'E2E Matrix Beamer');
   const api = apiClient(page.request);
-  const questionId = await createMatrixQuestion(api, room.setId);
+  const questionId = await createMatrixQuestion(api, room.setId, opts.overrides);
   const runId = await startRun(api, room.setId);
   await control(api, runId, 'open', questionId);
-  const tokens = await joinParticipants(page.request, room.code, 3);
+  const tokens = await joinParticipants(page.request, room.code, opts.tokens ?? 3);
   const csrf = await csrfToken(page.request);
   const add = async (token: string, zone: string, title: string, category: string, description = '') => {
     const response = await page.request.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/add/`, {
@@ -71,6 +75,17 @@ async function seed(page: Page, trackRoom: (id: number) => void) {
   return { room, api, questionId, runId, tokens, add, ids, serverCard };
 }
 
+const ZONE = {
+  q1: 'nützlich & modern',
+  q2: 'nicht nützlich & modern',
+  q3: 'nicht nützlich & altbacken',
+  q4: 'nützlich & altbacken',
+  e_top: 'zwischen nicht nützlich & modern und nützlich & modern',
+  e_right: 'zwischen nützlich & modern und nützlich & altbacken',
+  e_bottom: 'zwischen nicht nützlich & altbacken und nützlich & altbacken',
+  e_left: 'zwischen nicht nützlich & modern und nicht nützlich & altbacken',
+} as const;
+
 const board = (page: Page) => page.locator('[data-matrix-board]');
 const card = (page: Page, id: number) => board(page).locator(`[data-card-id="${id}"]`);
 const seg = (page: Page, id: string) => page.locator('footer').locator(`[data-help="${id}"]`);
@@ -89,6 +104,45 @@ async function pointPx(page: Page, x: number, y: number) {
 async function centre(page: Page, id: number) {
   const b = (await card(page, id).boundingBox())!;
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+}
+
+/** "rgb(r, g, b)" → [r, g, b]. */
+const rgb = (css: string) => (css.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number) as [number, number, number];
+/** WCAG contrast ratio of two computed colours. */
+function contrast(a: string, b: string) {
+  const lum = (css: string) => {
+    const [r, g, bl] = rgb(css).map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+/** Computed colours of a card: tab background + text, body background, title colour/size. */
+async function cardColours(page: Page, id: number) {
+  return card(page, id).evaluate((el) => {
+    // Computed colours may be oklch(): paint them to read sRGB back.
+    const toRgb = (css: string) => {
+      const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d')!;
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      return `rgb(${r}, ${g}, ${b})`;
+    };
+    const tab = el.querySelector('[data-card-tab]') as HTMLElement;
+    const body = el.querySelector('[data-card-body]') as HTMLElement;
+    const title = el.querySelector('[data-card-title]') as HTMLElement;
+    return {
+      tab: toRgb(getComputedStyle(tab).backgroundColor),
+      tabText: tab.textContent ?? '',
+      tabColor: toRgb(getComputedStyle(tab).color),
+      body: toRgb(getComputedStyle(body).backgroundColor),
+      text: toRgb(getComputedStyle(title).color),
+      titleSize: parseFloat(getComputedStyle(title).fontSize),
+    };
+  });
 }
 
 const isMove = (action: string) => (r: { url(): string; request(): { method(): string } }) =>
@@ -115,6 +169,18 @@ test('live cards, dragging with hysteresis, stacking, dialog, hiding, teacher ca
   await expect(board(page).locator('[data-card-id]')).toHaveCount(4);
   // Cards are buttons with an accessible name (title, category, zone).
   await expect(card(page, ids.chatbot)).toHaveAccessibleName(/Chatbot.*Idee.*nützlich & modern/);
+
+  // Card colouring (named mode): the tab carries the full category colour
+  // (no letter), the body a light tint of it; the text stays dark.
+  const chatbotStyle = await cardColours(page, ids.chatbot);
+  expect(chatbotStyle.tab).toBe('rgb(0, 114, 178)'); // Idee = blue
+  expect(chatbotStyle.tabText).toBe('');
+  expect(chatbotStyle.body).not.toBe('rgb(255, 255, 255)');
+  const [r, , b] = rgb(chatbotStyle.body);
+  expect(b).toBeGreaterThan(r); // tinted towards the blue
+  expect(contrast(chatbotStyle.text, chatbotStyle.body)).toBeGreaterThanOrEqual(4.5);
+  // Beamer-sized title.
+  expect(chatbotStyle.titleSize).toBeGreaterThanOrEqual(18);
 
   // Live: a new participant card appears without reload.
   const fresh = await s.add(s.tokens[2], 'q4', 'Neue Idee', 'blue');
@@ -191,10 +257,27 @@ test('live cards, dragging with hysteresis, stacking, dialog, hiding, teacher ca
   expect((await s.serverCard(ids.podcast)).hidden).toBe(false);
   await page.keyboard.press('Escape');
 
-  // Teacher card via the pencil handle.
+  // Teacher card via the pencil handle: the same axis-cross picker as the
+  // participants (4 fields + 4 edges with written-out names, "+" until chosen).
   await page.locator('[data-help="handle.mx-edit"]').click();
-  await drawer.getByLabel('Feld').selectOption({ label: 'nützlich & altbacken' });
-  await drawer.getByLabel('Kategorie').selectOption({ label: 'Idee' });
+  const picker = drawer.getByRole('group', { name: 'Feld wählen' });
+  await expect(picker.getByRole('button')).toHaveCount(8);
+  for (const name of Object.values(ZONE)) {
+    await expect(picker.getByRole('button', { name, exact: true })).toBeVisible();
+  }
+  for (const end of ['nicht nützlich', 'nützlich', 'altbacken', 'modern']) {
+    await expect(drawer.locator('[data-picker-axis]', { hasText: end }).first()).toBeVisible();
+  }
+  const q4 = picker.getByRole('button', { name: ZONE.q4, exact: true });
+  await expect(q4.locator('[data-icon="plus"]')).toBeVisible();
+  await q4.click();
+  await expect(q4).toHaveAttribute('aria-pressed', 'true');
+  await expect(q4.locator('[data-icon="check"]')).toBeVisible();
+  await expect(q4.locator('[data-icon="plus"]')).toHaveCount(0);
+  await expect(picker.locator('[aria-pressed="true"]')).toHaveCount(1);
+  const ideaChip = drawer.getByRole('radiogroup', { name: 'Kategorie wählen' }).getByRole('radio', { name: 'Idee' });
+  await ideaChip.click();
+  await expect(ideaChip).toHaveAttribute('aria-checked', 'true');
   await drawer.getByLabel('Titel').fill('Lehrkarte');
   await drawer.getByLabel('Beschreibung').fill('Von der Lehrperson');
   const added = page.waitForResponse(isMove('add'));
@@ -247,7 +330,10 @@ test('keyboard moves, footer views, help labels, zoom handle, axe, no overlap', 
   // Pencil opened from the keyboard: focus moves in; Esc returns it.
   await page.locator('[data-help="handle.mx-edit"]').focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('matrix-drawer').getByLabel('Feld')).toBeFocused();
+  // (the selected field of the picker)
+  await expect(
+    page.getByTestId('matrix-drawer').getByRole('button', { name: ZONE.q1, exact: true }),
+  ).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-help="handle.mx-edit"]')).toBeFocused();
   await expect(page).toHaveURL(/\/present/);
@@ -269,6 +355,37 @@ test('keyboard moves, footer views, help labels, zoom handle, axe, no overlap', 
   expect(helpFor).toEqual(expect.arrayContaining(['view.mx.raw', 'handle.mx-edit', 'handle.mx-zoom']));
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('presenter-help')).toHaveCount(0);
+
+  // Axis labels: presentation-sized; the x ends run vertically (left reads
+  // bottom-to-top, right top-to-bottom), the y ends horizontally.
+  const axis = (name: string) =>
+    page.locator(`[data-axis="${name}"]`).evaluate((el) => {
+      const text = (el.querySelector('[data-axis-text]') ?? el) as HTMLElement;
+      const cs = getComputedStyle(text);
+      const r = text.getBoundingClientRect();
+      return { mode: cs.writingMode, transform: cs.transform, size: parseFloat(cs.fontSize), w: r.width, h: r.height };
+    });
+  for (const name of ['x_from', 'x_to']) {
+    const a = await axis(name);
+    expect(a.mode, name).toBe('vertical-rl');
+    expect(a.h, name).toBeGreaterThan(a.w);
+    expect(a.size, name).toBeGreaterThanOrEqual(18);
+  }
+  expect((await axis('x_from')).transform).not.toBe('none'); // rotated: bottom-to-top
+  for (const name of ['y_from', 'y_to']) {
+    const a = await axis(name);
+    expect(a.mode, name).toBe('horizontal-tb');
+    expect(a.size, name).toBeGreaterThanOrEqual(18);
+  }
+  // Legend: the app's legend look (text-sm, 12px rounded square swatches).
+  const legendStyle = await page.getByTestId('matrix-legend').evaluate((el) => {
+    const swatch = el.querySelector('[data-swatch]') as HTMLElement;
+    return {
+      size: parseFloat(getComputedStyle(el).fontSize),
+      swatch: [swatch.getBoundingClientRect().width, swatch.getBoundingClientRect().height],
+    };
+  });
+  expect(legendStyle).toEqual({ size: 14, swatch: [12, 12] });
 
   // Axis labels and legend never overlap a card (present mode).
   await page.waitForTimeout(400);
@@ -382,4 +499,66 @@ test('mouse-closed drawer leaves no handle focused', async ({ page, trackRoom })
   await drawer.getByRole('button', { name: 'Schließen' }).click();
   await expect(drawer).toHaveAttribute('inert', '');
   expect(await focusedInHandles()).toBe(false);
+});
+
+test('colour mode: lettered tabs with contrast, tinted bodies; crowded boards scale the cards down', async ({ page, trackRoom }) => {
+  test.setTimeout(120_000);
+  const s = await seed(page, trackRoom, {
+    tokens: 8,
+    overrides: {
+      matrix_category_mode: 'colors',
+      matrix_categories: [
+        { key: 'green', name: { de: '', en: '' } },
+        { key: 'blue', name: { de: '', en: '' } },
+        { key: 'red', name: { de: '', en: '' } },
+        { key: 'orange', name: { de: '', en: '' } },
+      ],
+    },
+  });
+  await openPresenter(page, s.room.setId);
+  await expect(board(page).locator('[data-card-id]')).toHaveCount(4);
+  await page.waitForTimeout(400);
+  // The seed's "blue" cards are category B (letters follow the list position).
+  const chatbot = await cardColours(page, s.ids.chatbot);
+  expect(chatbot.tab).toBe('rgb(0, 114, 178)');
+  expect(chatbot.tabText).toBe('B');
+  expect(contrast(chatbot.tabColor, chatbot.tab)).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(chatbot.text, chatbot.body)).toBeGreaterThanOrEqual(4.5);
+  const roomy = chatbot.titleSize;
+  expect(roomy).toBeGreaterThanOrEqual(18);
+  const altlast = await cardColours(page, s.ids.altlast);
+  expect(altlast.tabText).toBe('D'); // orange: near-black letter
+  expect(contrast(altlast.tabColor, altlast.tab)).toBeGreaterThanOrEqual(4.5);
+
+  // Every palette colour used gets a readable letter (white or near-black).
+  const extra: number[] = [];
+  const zones = ['q1', 'q1', 'q1', 'q2', 'q2', 'q3', 'q4', 'q4', 'q4', 'q1'];
+  const cats = ['green', 'red', 'blue'];
+  for (let i = 0; i < zones.length; i++) {
+    extra.push(await s.add(s.tokens[3 + Math.floor(i / 2)], zones[i], `Idee Nummer ${i + 1}`, cats[i % 3]));
+  }
+  await expect(board(page).locator('[data-card-id]')).toHaveCount(14);
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/stack`, { card: extra[9], onto: extra[0] });
+  await expect(board(page).locator('[data-card-id]')).toHaveCount(13);
+  await page.waitForTimeout(600);
+  for (const id of extra.slice(0, 3)) {
+    const c = await cardColours(page, id);
+    expect(['A', 'B', 'C']).toContain(c.tabText);
+    expect(contrast(c.tabColor, c.tab), `letter contrast ${c.tab}`).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(c.text, c.body)).toBeGreaterThanOrEqual(4.5);
+  }
+  // Crowded: smaller cards, but not tiny; all inside the plot box.
+  const crowded = (await cardColours(page, s.ids.chatbot)).titleSize;
+  expect(crowded).toBeLessThan(roomy);
+  expect(crowded).toBeGreaterThanOrEqual(12);
+  const plot = (await board(page).boundingBox())!;
+  for (const loc of await board(page).locator('[data-card-id]').all()) {
+    const b = (await loc.boundingBox())!;
+    expect(b.x).toBeGreaterThanOrEqual(plot.x - 0.5);
+    expect(b.y).toBeGreaterThanOrEqual(plot.y - 0.5);
+    expect(b.x + b.width).toBeLessThanOrEqual(plot.x + plot.width + 0.5);
+    expect(b.y + b.height).toBeLessThanOrEqual(plot.y + plot.height + 0.5);
+  }
+  // Legend shows the letters.
+  await expect(page.getByTestId('matrix-legend').getByRole('button')).toHaveText(['A', 'B', 'C', 'D']);
 });

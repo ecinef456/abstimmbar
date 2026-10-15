@@ -18,6 +18,7 @@ import { live, type MatrixBoard, type MatrixCard, type MatrixSettingsPayload } f
 import Matrix, { matrixStacks, matrixZoneName } from "../../results/Matrix";
 import { clampToZone, resolveZone } from "../../results/matrixGeometry";
 import { categoryLabel } from "../../matrixPalette";
+import { MatrixCategoryChips, MatrixZonePicker } from "../../results/MatrixZonePicker";
 import { requestDetail } from "../../results/mindmapModeration";
 
 type Placement = { zone: string; x: number; y: number; stack?: number | null };
@@ -244,9 +245,10 @@ export default function MatrixPanel({
     // Two frames: the drawer has rendered and lost `inert`.
     window.requestAnimationFrame(() =>
       window.requestAnimationFrame(() =>
-        // The first form field, else the first button.
+        // The chosen field of the zone picker / the first form field, else
+        // the first button.
         (
-          ref.current?.querySelector<HTMLElement>("select, input, textarea") ??
+          ref.current?.querySelector<HTMLElement>("[data-zone][aria-pressed='true'], select, input, textarea") ??
           ref.current?.querySelector<HTMLElement>("button")
         )?.focus({ preventScroll: true }),
       ),
@@ -419,7 +421,6 @@ export default function MatrixPanel({
         drawerAttr={drawerAttr}
         settings={settings}
         zoneName={zoneName}
-        catText={catText}
         showHidden={showHidden}
         onShowHidden={setShowHidden}
         hiddenCount={board.cards.filter((c) => c.hidden).length}
@@ -630,15 +631,15 @@ function CardDialog({
   );
 }
 
-/** Pencil drawer: a teacher card (zone, category, title, description) and
- *  the "show hidden cards" switch. */
+/** Pencil drawer: a teacher card (zone via the participants' axis-cross
+ *  picker, category chips, title, description) and the "show hidden cards"
+ *  switch. */
 function AddDrawer({
   drawerRef,
   open,
   drawerAttr,
   settings,
   zoneName,
-  catText,
   showHidden,
   onShowHidden,
   hiddenCount,
@@ -650,7 +651,6 @@ function AddDrawer({
   drawerAttr: string;
   settings: MatrixSettingsPayload;
   zoneName: (zone: string) => string;
-  catText: (key: string) => string;
   showHidden: boolean;
   onShowHidden: (v: boolean) => void;
   hiddenCount: number;
@@ -712,28 +712,8 @@ function AddDrawer({
         </button>
       </div>
       <form onSubmit={(e) => void submit(e)} className="space-y-3 overflow-y-auto p-3 text-left text-sm">
-        <label className="block font-medium text-slate-700">
-          {t("Field")}
-          <select className={field} value={zone} onChange={(e) => setZone(e.target.value)}>
-            {settings.zones.map((z) => (
-              <option key={z} value={z}>
-                {zoneName(z)}
-              </option>
-            ))}
-          </select>
-        </label>
-        {withCategory && (
-          <label className="block font-medium text-slate-700">
-            {t("Category")}
-            <select className={field} value={category} onChange={(e) => setCategory(e.target.value)}>
-              {settings.categories.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {catText(c.key)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        <MatrixZonePicker settings={settings} value={zone} onChange={setZone} zoneName={zoneName} />
+        {withCategory && <MatrixCategoryChips settings={settings} value={category} onChange={setCategory} />}
         <label className="block font-medium text-slate-700">
           {t("Title")}
           <input

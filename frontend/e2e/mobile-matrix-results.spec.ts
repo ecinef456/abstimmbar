@@ -56,6 +56,12 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(board.getByText('Beantwortet Fragen rund um die Uhr')).toHaveCount(0);
         await expect(board.getByText('Eine sehr lange Beschreibung')).toHaveCount(0);
 
+        // Compact type size on the phone (the beamer sizing does not apply).
+        const titleSize = await board
+          .locator(`[data-card-id="${a}"] [data-card-title]`)
+          .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+        expect(titleSize).toBeLessThanOrEqual(12);
+
         // The badge stays inside its card.
         const cardBox = (await board.locator(`[data-card-id="${a}"]`).boundingBox())!;
         const badgeBox = (await board.locator(`[data-card-id="${a}"]`).getByTestId('matrix-stack-badge').boundingBox())!;

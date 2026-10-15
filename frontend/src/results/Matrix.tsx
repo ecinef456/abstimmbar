@@ -5,9 +5,14 @@
  *
  *  Pure rendering from props: a square-ish plot (16:9 in `present` mode,
  *  `RESULTS_ASPECT` in `results` mode) with four lightly tinted fields, the
- *  two axis lines, the four axis-end labels (inside the board, next to the
- *  line ends), the cards, and a category legend (bottom right, only with
- *  categories).
+ *  two axis lines, the four axis-end labels (outside the plot; the x ends
+ *  run vertically), the cards, and a category legend (bottom right, only
+ *  with categories).
+ *
+ *  Cards: a full-colour category tab (colours mode: with the letter in white
+ *  or near-black) and a body tinted with the same colour. Their type size
+ *  follows the plot width (beamer-sized) and shrinks when a quadrant gets
+ *  crowded (`matrixCardFont`); the presenter's zoom applies on top.
  *
  *  Cards are individually addressable (`data-card-id`) and positioned
  *  absolutely from their (x, y) via `toPixel` on the measured plot box
@@ -43,7 +48,7 @@ import { useTranslation } from "react-i18next";
 import { EyeOff } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
 import type { MatrixBoard, MatrixCard, MatrixSettingsPayload } from "../api";
-import { categoryLabel, paletteEntry } from "../matrixPalette";
+import { categoryLabel, mixHex, paletteEntry, readableOn } from "../matrixPalette";
 import { fromPixel, resolveZone, toPixel, zoneRect, type Box, type Zone } from "./matrixGeometry";
 import { useReducedMotion } from "./motion";
 
@@ -94,6 +99,56 @@ interface DragState {
 /** Plot aspect ratio (w/h) of the results view. */
 const RESULTS_ASPECT = 5 / 4;
 const NO_CATEGORY_GREY = "#94a3b8";
+/** Card bodies: a light tint of the category colour (dark: into slate-800). */
+const TINT_LIGHT = 0.15;
+const TINT_DARK = 0.28;
+const SLATE_800 = "#1e293b";
+
+/** Card type size (px) from the plot width: beamer-sized on the board,
+ *  smaller in the management results view; phones stay compact. */
+const CARD_FONT = {
+  present: { perWidth: 0.02, min: 14, max: 30 },
+  results: { perWidth: 0.017, min: 13, max: 18 },
+  narrow: 12,
+};
+/** Rough card footprint in em (width × height; detailed cards are taller),
+ *  for the crowding estimate. */
+const CARD_EM = { width: 9, height: 2.6, heightDetailed: 4.4 };
+/** Share of a quadrant the cards of its most crowded quadrant may cover
+ *  before all cards are scaled down — never below FIT_MIN or MIN_FONT px. */
+const COVERAGE = 0.18;
+const FIT_MIN = 0.55;
+const MIN_FONT = 12;
+
+/** Font size (px, before zoom) of the cards: the plot-based size, scaled
+ *  down by the load of the most crowded quadrant (an edge card counts half
+ *  for both its neighbours). */
+export function matrixCardFont(
+  box: Box,
+  zones: string[],
+  opts: { mode: "present" | "results"; narrow: boolean; detailed: boolean },
+): number {
+  if (opts.narrow) return CARD_FONT.narrow;
+  const spec = CARD_FONT[opts.mode];
+  const base = Math.max(spec.min, Math.min(spec.max, box.width * spec.perWidth));
+  const load: Record<string, number> = { q1: 0, q2: 0, q3: 0, q4: 0 };
+  const neighbours: Record<string, string[]> = {
+    e_top: ["q1", "q2"],
+    e_right: ["q1", "q4"],
+    e_bottom: ["q3", "q4"],
+    e_left: ["q2", "q3"],
+  };
+  for (const zone of zones) {
+    if (zone in load) load[zone] += 1;
+    else for (const q of neighbours[zone] ?? []) load[q] += 0.5;
+  }
+  const crowd = Math.max(...Object.values(load));
+  if (crowd === 0) return base;
+  const card = CARD_EM.width * base * (opts.detailed ? CARD_EM.heightDetailed : CARD_EM.height) * base;
+  const quadrant = (box.width * box.height) / 4;
+  const fit = Math.max(FIT_MIN, Math.min(1, Math.sqrt((COVERAGE * quadrant) / (crowd * card))));
+  return Math.max(Math.min(base, MIN_FONT), base * fit);
+}
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -432,6 +487,13 @@ export default function Matrix({
     return categoryLabel(categories, c.category, categoryMode, lang, t);
   };
 
+  // Card size: beamer-sized from the plot, scaled down when crowded; the
+  // presenter's zoom applies on top.
+  const cardFont =
+    (box
+      ? matrixCardFont(box, stacks.map((st) => st.card.zone), { mode, narrow, detailed: showDescriptions })
+      : CARD_FONT.narrow) * zoom;
+
   const tint = {
     q1: "bg-[#f5fbf6]",
     q2: "bg-[#f6f8ff]",
@@ -440,26 +502,37 @@ export default function Matrix({
   };
   const axisLine = `bg-slate-500 ${dk("dark:bg-slate-400")}`;
   // Axis labels live in the margin OUTSIDE the plot (the plot box stays the
-  // coordinate box), so they can never overlap cards.
-  const axisLabel = `px-1.5 py-px font-semibold text-slate-700 [overflow-wrap:anywhere] ${dk("dark:text-slate-200")}`;
-  const axisStyle: CSSProperties = { fontSize: `${0.7 * zoom}rem` };
+  // coordinate box), so they can never overlap cards. Presentation-sized on
+  // the beamer. The x ends run vertically (left bottom-to-top, right
+  // top-to-bottom, as on the participant page) in narrow side columns of
+  // up to two lines, so the plot keeps its width.
+  const axisLabel = `font-semibold leading-tight text-slate-700 [overflow-wrap:anywhere] ${dk("dark:text-slate-200")}`;
+  const axisSize = narrow ? "text-xs" : results ? "text-sm" : "text-xl";
+  const xLabel = (side: "x_from" | "x_to") => (
+    <div data-axis={side} className={`relative row-start-2 ${side === "x_from" ? "col-start-1" : "col-start-3"}`}>
+      <span
+        data-axis-text
+        className={`${axisLabel} absolute inset-0 flex items-center justify-center overflow-hidden px-[0.15em] text-center [writing-mode:vertical-rl] ${
+          side === "x_from" ? "rotate-180" : ""
+        }`}
+      >
+        {localizedText(settings.axes[side])}
+      </span>
+    </div>
+  );
 
   return (
     <div
-      className={`grid w-full grid-cols-[minmax(3.5rem,13%)_minmax(0,1fr)_minmax(3.5rem,13%)] ${
+      className={`grid w-full grid-cols-[2.6em_minmax(0,1fr)_2.6em] ${axisSize} ${
         results ? "" : "aspect-video grid-rows-[auto_minmax(0,1fr)_auto_auto]"
       }`}
     >
-      <span className={`${axisLabel} col-start-2 row-start-1 text-center`} style={axisStyle} data-axis="y_to">
+      <span className={`${axisLabel} col-start-2 row-start-1 px-1.5 pb-1 text-center`} data-axis="y_to">
         ↑ {localizedText(settings.axes.y_to)}
       </span>
-      <span className={`${axisLabel} col-start-1 row-start-2 self-center text-right`} style={axisStyle} data-axis="x_from">
-        ← {localizedText(settings.axes.x_from)}
-      </span>
-      <span className={`${axisLabel} col-start-3 row-start-2 self-center`} style={axisStyle} data-axis="x_to">
-        {localizedText(settings.axes.x_to)} →
-      </span>
-      <span className={`${axisLabel} col-start-2 row-start-3 text-center`} style={axisStyle} data-axis="y_from">
+      {xLabel("x_from")}
+      {xLabel("x_to")}
+      <span className={`${axisLabel} col-start-2 row-start-3 px-1.5 pt-1 text-center`} data-axis="y_from">
         ↓ {localizedText(settings.axes.y_from)}
       </span>
       <div
@@ -506,9 +579,11 @@ export default function Matrix({
             const isFresh = fresh.has(card.id);
             const n = stackSize(stack);
             const cat = label(card);
-            const hex = !categoryMode || categoryMode === "off"
-              ? NO_CATEGORY_GREY
-              : (knownCategory(card.category) && paletteEntry(card.category)?.hex) || NO_CATEGORY_GREY;
+            const categoryHex =
+              categoryMode && categoryMode !== "off" && knownCategory(card.category)
+                ? paletteEntry(card.category)?.hex
+                : undefined;
+            const hex = categoryHex ?? NO_CATEGORY_GREY;
             const isHidden = card.hidden;
             const zoneName = matrixZoneName(card.zone, settings.axes, t);
             const Tag = interactive ? "button" : "div";
@@ -550,59 +625,79 @@ export default function Matrix({
                 data-hidden={isHidden ? "true" : undefined}
                 data-stack-target={isTarget ? "true" : undefined}
                 data-fresh={isFresh ? "true" : undefined}
-                className={`absolute ${narrow ? "max-w-[34%]" : "max-w-[22%]"} rounded-md border-l-[5px] px-2 py-1 text-left leading-tight ${
+                className={`absolute flex w-max items-stretch overflow-hidden rounded-md text-left leading-tight ${
                   interactive
                     ? `cursor-grab touch-none focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
                         dragging ? "z-20 cursor-grabbing" : ""
                       }`
                     : ""
-                } ${isTarget ? "outline outline-[3px] outline-offset-2 outline-brand-600" : ""} ${
+                } ${n > 1 && !dragging ? "z-10" : ""} ${isTarget ? "outline outline-[3px] outline-offset-2 outline-brand-600" : ""} ${
                   isFresh && !isTarget ? "outline outline-4 outline-amber-300" : ""
                 } ${
                   isHidden
-                    ? `border-y border-r border-dashed border-slate-400 bg-slate-100 text-slate-600 ${dk(
-                        "dark:border-slate-500 dark:bg-slate-900 dark:text-slate-300",
-                      )}`
-                    : `bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,.25)] ${dk("dark:bg-slate-800 dark:text-slate-100")}`
+                    ? `border border-dashed border-slate-400 text-slate-600 ${dk("dark:border-slate-500 dark:text-slate-300")}`
+                    : `text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,.25)] ${dk("dark:text-slate-100")}`
                 }`}
                 style={{
-                  borderLeftColor: hex,
-                  fontSize: `${0.75 * zoom}rem`,
+                  fontSize: `${cardFont}px`,
+                  maxWidth: narrow ? "34%" : `min(${results ? 26 : 28}%, 11em)`,
                   transition: reduced || dragging ? "none" : "left .25s ease, top .25s ease, outline-color .3s ease",
                   ...(n > 1
                     ? { boxShadow: "3px 3px 0 #ddd, 6px 6px 0 #ccc, 0 1px 3px rgba(0,0,0,.25)" }
                     : null),
                 }}
               >
-                <span className={`flex items-start gap-1 ${narrow ? "flex-wrap" : ""}`}>
-                  {cat.short && (
-                    <span aria-hidden className={`font-bold text-slate-700 ${dk("dark:text-slate-300")}`}>
-                      {cat.short}
-                    </span>
-                  )}
-                  <span className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">{card.title}</span>
-                  {n > 1 && (
-                    <span
-                      data-testid="matrix-stack-badge"
-                      className="ml-auto flex-none rounded-full bg-slate-800 px-1.5 text-[0.65em] font-semibold text-white"
-                    >
-                      ×{n}
-                    </span>
-                  )}
+                {/* Category tab: the full colour, the letter (colours mode) in
+                    white or near-black, whichever contrasts more. */}
+                <span
+                  aria-hidden
+                  data-card-tab
+                  className={`flex flex-none items-center justify-center font-bold ${cat.short ? "w-[1.4em]" : "w-[0.35em]"}`}
+                  style={{ background: hex, color: readableOn(hex) }}
+                >
+                  {cat.short}
                 </span>
-                {showDescriptions && card.description && (
-                  <span className={`mt-0.5 line-clamp-3 block text-[0.85em] text-slate-600 [overflow-wrap:anywhere] ${dk("dark:text-slate-300")}`}>
-                    {card.description}
+                <span
+                  data-card-body
+                  className={`block min-w-0 flex-1 px-[0.55em] py-[0.35em] ${
+                    isHidden
+                      ? `bg-slate-100 ${dk("dark:bg-slate-900")}`
+                      : `bg-[var(--mx-tint)] ${dk("dark:bg-[var(--mx-tint-dark)]")}`
+                  }`}
+                  style={
+                    {
+                      "--mx-tint": categoryHex ? mixHex(categoryHex, "#ffffff", TINT_LIGHT) : "#ffffff",
+                      "--mx-tint-dark": categoryHex ? mixHex(categoryHex, SLATE_800, TINT_DARK) : SLATE_800,
+                    } as CSSProperties
+                  }
+                >
+                  <span className={`flex items-start gap-[0.3em] ${narrow ? "flex-wrap" : ""}`}>
+                    <span data-card-title className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">
+                      {card.title}
+                    </span>
+                    {n > 1 && (
+                      <span
+                        data-testid="matrix-stack-badge"
+                        className="ml-auto flex-none rounded-full bg-slate-800 px-1.5 text-[0.7em] font-semibold text-white"
+                      >
+                        ×{n}
+                      </span>
+                    )}
                   </span>
-                )}
-                {isHidden && (
-                  <span data-testid="matrix-hidden-marker" className="mt-0.5 flex items-center gap-1 text-[0.8em] font-medium">
-                    <EyeOff aria-hidden className="h-3 w-3" />
-                    {t("hidden")}
+                  {showDescriptions && card.description && (
+                    <span className={`mt-0.5 line-clamp-3 block text-[0.85em] text-slate-700 [overflow-wrap:anywhere] ${dk("dark:text-slate-300")}`}>
+                      {card.description}
+                    </span>
+                  )}
+                  {isHidden && (
+                    <span data-testid="matrix-hidden-marker" className="mt-0.5 flex items-center gap-1 text-[0.8em] font-medium">
+                      <EyeOff aria-hidden className="h-[1em] w-[1em]" />
+                      {t("hidden")}
+                    </span>
+                  )}
+                  <span className="sr-only">
+                    {` – ${[cat.a11y, zoneName].filter(Boolean).join(", ")}`}
                   </span>
-                )}
-                <span className="sr-only">
-                  {` – ${[cat.a11y, zoneName].filter(Boolean).join(", ")}`}
                 </span>
               </PlacedCard>
             );
@@ -613,8 +708,8 @@ export default function Matrix({
         <ul
           aria-label={t("Categories")}
           data-help={legendHelp}
-          className={`col-start-2 row-start-4 mt-1.5 flex flex-wrap justify-end gap-x-3 gap-y-0.5 px-1.5 text-[0.7rem] text-slate-700 ${dk("dark:text-slate-200")}`}
-          style={{ fontSize: `${0.7 * zoom}rem` }}
+          // The app's legend look (LikertResult): text-sm, 12px rounded swatches.
+          className={`col-start-2 row-start-4 mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-1.5 px-1.5 text-sm text-slate-600 ${dk("dark:text-slate-300")}`}
           data-testid="matrix-legend"
         >
           {categories.map((c) => {
@@ -624,7 +719,8 @@ export default function Matrix({
               <>
                 <span
                   aria-hidden
-                  className="inline-block h-2.5 w-2.5 rounded-full border"
+                  data-swatch
+                  className="inline-block h-3 w-3 flex-none rounded border"
                   style={{
                     background: off ? "transparent" : paletteEntry(c.key)?.hex,
                     borderColor: paletteEntry(c.key)?.hex,
@@ -641,12 +737,12 @@ export default function Matrix({
                     aria-pressed={!off}
                     aria-label={cat.name || cat.a11y}
                     onClick={() => onToggleCategory(c.key)}
-                    className="inline-flex items-center gap-1 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                    className="inline-flex items-center gap-1.5 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
                   >
                     {content}
                   </button>
                 ) : (
-                  <span className="inline-flex items-center gap-1">{content}</span>
+                  <span className="inline-flex items-center gap-1.5">{content}</span>
                 )}
               </li>
             );
