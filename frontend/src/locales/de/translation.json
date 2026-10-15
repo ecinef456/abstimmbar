@@ -1164,7 +1164,7 @@
   "Next field": "Nächstes Feld",
   "Overview": "Übersicht",
   "Zoom into a field": "Feld vergrößern",
-  "Fills the screen with this field; [ and ] step through the fields, Esc returns to the overview.": "Zeigt dieses Feld bildschirmfüllend; [ und ] wechseln zwischen den Feldern, Esc führt zurück zur Übersicht.",
+  "Fills the screen with this field; , and . (or [ and ]) step through the fields, Esc returns to the overview.": "Zeigt dieses Feld bildschirmfüllend; , und . (oder [ und ]) wechseln zwischen den Feldern, Esc führt zurück zur Übersicht.",
   "Shows the field before this one (reading order).": "Zeigt das vorherige Feld (in Leserichtung).",
   "Shows the next field (reading order).": "Zeigt das nächste Feld (in Leserichtung).",
   "Back to the whole board.": "Zurück zum ganzen Brett.",

@@ -63,10 +63,9 @@ export function relaxCards(
   const clampY = (i: number, v: number) => (items[i].fixed ? items[i].cy : Math.max(yr[i][0], Math.min(yr[i][1], v)));
   const cx = items.map((it, i) => clampX(i, it.cx));
   const cy = items.map((it, i) => clampY(i, it.cy));
-  const overlap = (i: number, j: number) => ({
-    ox: (items[i].w + items[j].w) / 2 + GAP - Math.abs(cx[j] - cx[i]),
-    oy: (items[i].h + items[j].h) / 2 + GAP - Math.abs(cy[j] - cy[i]),
-  });
+  // Overlap of a pair per axis (allocation-free; ≤ 0: apart on that axis).
+  const overlapX = (i: number, j: number) => (items[i].w + items[j].w) / 2 + GAP - Math.abs(cx[j] - cx[i]);
+  const overlapY = (i: number, j: number) => (items[i].h + items[j].h) / 2 + GAP - Math.abs(cy[j] - cy[i]);
   /** Push i and j apart along one axis by `amount`; returns whether either moved. */
   const push = (i: number, j: number, axis: "x" | "y", amount: number) => {
     const c = axis === "x" ? cx : cy;
@@ -93,14 +92,17 @@ export function relaxCards(
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
         if (items[i].fixed && items[j].fixed) continue;
-        const { ox, oy } = overlap(i, j);
-        if (ox <= 0 || oy <= 0) continue;
+        const ox = overlapX(i, j);
+        if (ox <= 0) continue;
+        const oy = overlapY(i, j);
+        if (oy <= 0) continue;
         any = true;
         const first = ox <= oy ? "x" : "y";
         if (!push(i, j, first, first === "x" ? ox : oy)) {
           // That way is blocked: try the other axis.
-          const again = overlap(i, j);
-          if (again.ox > 0 && again.oy > 0) push(i, j, first === "x" ? "y" : "x", first === "x" ? again.oy : again.ox);
+          const ax = overlapX(i, j);
+          const ay = overlapY(i, j);
+          if (ax > 0 && ay > 0) push(i, j, first === "x" ? "y" : "x", first === "x" ? ay : ax);
         }
       }
     }

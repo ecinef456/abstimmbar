@@ -77,6 +77,7 @@ export default function MatrixPanel({
   handleTop,
   handleStep,
   drawerAttr,
+  overlayOpen = false,
 }: {
   runId: number;
   questionId: number;
@@ -87,6 +88,9 @@ export default function MatrixPanel({
   handleStep: number;
   /** Marks drawers/handles so the presenter's Enter/Space leave them alone. */
   drawerAttr: string;
+  /** A presenter overlay (QR/join, AI or moderation panel) is open: its Esc
+   *  comes first. */
+  overlayOpen?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language.startsWith("de") ? "de" : "en";
@@ -287,6 +291,8 @@ export default function MatrixPanel({
   // sees it (it would leave the presentation); inside the dialog no
   // presenter shortcut fires at all, and Tab stays in it.
   const dialogRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef(overlayOpen);
+  overlayRef.current = overlayOpen;
   // --- Board view: zoom / pan / quadrant focus ---------------------------
   const viewportRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -330,8 +336,8 @@ export default function MatrixPanel({
         e.stopPropagation();
         return;
       }
-      // The "?" help overlay closes itself first.
-      if (e.key === "Escape" && document.querySelector("[data-help-overlay]")) return;
+      // The "?" help overlay and the presenter's overlays close first.
+      if (e.key === "Escape" && (overlayRef.current || document.querySelector("[data-help-overlay]"))) return;
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -414,7 +420,7 @@ export default function MatrixPanel({
                 bv.step(-1);
               }}
               aria-label={t("Previous field")}
-              title={`${t("Previous field")} ([)`}
+              title={`${t("Previous field")} (, / [)`}
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -430,7 +436,7 @@ export default function MatrixPanel({
                 bv.step(1);
               }}
               aria-label={t("Next field")}
-              title={`${t("Next field")} (])`}
+              title={`${t("Next field")} (. / ])`}
             >
               <ChevronRight className="h-5 w-5" />
             </button>

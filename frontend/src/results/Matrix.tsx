@@ -40,6 +40,7 @@ import {
   createElement,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -530,10 +531,20 @@ export default function Matrix({
       return new Map(prev).set(id, size);
     });
   const magnifiers = !!onZoomQuadrant && !results;
-  const placements = (() => {
+  // Relaxation is O(n²) per pass: computed only when what it depends on
+  // changes — the stacks' stored positions/zones/sizes, the measured card
+  // sizes, the plot, edges, magnifiers and WHICH card is dragged (not the
+  // pointer position, which changes on every move).
+  const dragId = drag?.id ?? null;
+  const stacksKey = stacks.map((st) => `${st.card.id}:${st.card.x}:${st.card.y}:${st.card.zone}:${stackSize(st)}`).join("|");
+  const stacksRef = useRef(stacks);
+  stacksRef.current = stacks;
+  /** The last drawn centres: the dragged card stays where it was drawn. */
+  const lastPlacements = useRef(new Map<number, { cx: number; cy: number }>());
+  const placements = useMemo(() => {
     if (!box) return new Map<number, { cx: number; cy: number }>();
     const items: LayoutItem[] = [];
-    for (const stack of stacks) {
+    for (const stack of stacksRef.current) {
       const size = sizes.get(stack.card.id);
       if (!size) continue;
       const shadow = stackSize(stack) > 1 ? SHADOW : 0;
@@ -541,18 +552,20 @@ export default function Matrix({
       const [xmin, xmax, ymin, ymax] = zoneRect(stack.card.zone as Zone, settings.edges);
       const [zx0, zy0] = toPixel(xmin, ymax, box);
       const [zx1, zy1] = toPixel(xmax, ymin, box);
+      // The dragged card keeps its drawn place among the others (no
+      // shuffling while dragging); it is drawn at the pointer.
+      const dragged = dragId === stack.card.id;
+      const last = dragged ? lastPlacements.current.get(stack.card.id) : undefined;
       items.push({
         id: stack.card.id,
         // The footprint includes the paper shadow (right/bottom): the centre
         // of the footprint sits half a shadow right/below the card's centre.
-        cx: px + shadow / 2,
-        cy: py + shadow / 2,
+        cx: last?.cx ?? px + shadow / 2,
+        cy: last?.cy ?? py + shadow / 2,
         w: size.width + shadow,
         h: size.height + shadow,
         zone: { x0: zx0, y0: zy0, x1: zx1, y1: zy1 },
-        // The dragged card keeps its place among the others (no shuffling
-        // while dragging); it is drawn at the pointer.
-        fixed: drag?.id === stack.card.id,
+        fixed: dragged,
       });
     }
     if (magnifiers) {
@@ -568,7 +581,9 @@ export default function Matrix({
       );
     }
     return relaxCards(items, box);
-  })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stacksKey, sizes, box, settings.edges, magnifiers, dragId]);
+  lastPlacements.current = placements;
 
   const tint = {
     q1: "bg-[#f5fbf6]",

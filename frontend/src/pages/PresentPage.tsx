@@ -2139,6 +2139,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               handleTop={handleColumnTop}
               handleStep={HANDLE_STEP}
               drawerAttr={WC_DRAWER_ATTR}
+              // Esc belongs to these overlays first (the presenter closes them).
+              overlayOpen={showJoin || showAiPanel || showModPanel || mmAi.open}
             />
           )}
 

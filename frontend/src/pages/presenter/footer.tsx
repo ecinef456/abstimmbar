@@ -90,11 +90,11 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   },
   "mx.focus": {
     name: "Zoom into a field",
-    text: "Fills the screen with this field; [ and ] step through the fields, Esc returns to the overview.",
-    keys: "[ ]",
+    text: "Fills the screen with this field; , and . (or [ and ]) step through the fields, Esc returns to the overview.",
+    keys: ", / .",
   },
-  "mx.prev-field": { name: "Previous field", text: "Shows the field before this one (reading order).", keys: "[" },
-  "mx.next-field": { name: "Next field", text: "Shows the next field (reading order).", keys: "]" },
+  "mx.prev-field": { name: "Previous field", text: "Shows the field before this one (reading order).", keys: ", / [" },
+  "mx.next-field": { name: "Next field", text: "Shows the next field (reading order).", keys: ". / ]" },
   "mx.overview": { name: "Overview", text: "Back to the whole board.", keys: "Esc / 0" },
   "mx.legend": { name: "Categories", text: "Click a category to hide or show its cards." },
 };

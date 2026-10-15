@@ -9,7 +9,7 @@
  *  written-out zone name is the accessible name; the axis ends sit outside
  *  (x ends vertical). Category chips are a radio group (roving tabindex,
  *  arrow keys). The beamer is always light: no dark: classes. */
-import { useRef, type KeyboardEvent } from "react";
+import { useId, useRef, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Plus } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
@@ -43,9 +43,10 @@ export function MatrixZonePicker({
   const edges = settings.edges && EDGES.every((e) => settings.zones.includes(e));
   const zones = settings.zones;
   const axis = (name: keyof MatrixSettingsPayload["axes"]) => localizedText(settings.axes[name]);
+  const capId = useId();
   return (
     <div>
-      <p id="mx-picker-cap" className="font-medium text-slate-700">
+      <p id={capId} className="font-medium text-slate-700">
         {t("Choose a field")}
       </p>
       <div
@@ -60,7 +61,7 @@ export function MatrixZonePicker({
         >
           {axis("x_from")}
         </span>
-        <div role="group" aria-labelledby="mx-picker-cap" className="relative col-start-2 row-start-2">
+        <div role="group" aria-labelledby={capId} className="relative col-start-2 row-start-2">
           <div className="grid aspect-square grid-cols-2 grid-rows-2 gap-0.5 overflow-hidden rounded-xl border-2 border-slate-300 bg-slate-300">
             {QUADRANTS.filter((z) => zones.includes(z)).map((zone) => {
               const on = value === zone;
@@ -144,6 +145,7 @@ export function MatrixCategoryChips({
   const lang = i18n.language.startsWith("de") ? "de" : "en";
   const refs = useRef(new Map<string, HTMLButtonElement>());
   const keys = settings.categories.map((c) => c.key);
+  const capId = useId();
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, key: string) => {
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     if (!step) return;
@@ -154,10 +156,10 @@ export function MatrixCategoryChips({
   };
   return (
     <div>
-      <p id="mx-chips-cap" className="font-medium text-slate-700">
+      <p id={capId} className="font-medium text-slate-700">
         {t("Choose a category")}
       </p>
-      <div role="radiogroup" aria-labelledby="mx-chips-cap" className="mt-1.5 flex flex-wrap gap-2">
+      <div role="radiogroup" aria-labelledby={capId} className="mt-1.5 flex flex-wrap gap-2">
         {settings.categories.map((c, i) => {
           const on = value === c.key;
           const label = categoryLabel(settings.categories, c.key, settings.category_mode, lang, t);

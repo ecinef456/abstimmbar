@@ -6,7 +6,8 @@
  *  their overview size) is scaled and moved with one CSS transform inside
  *  the viewport. Wheel / trackpad pinch zoom at the pointer, dragging empty
  *  space pans, + / − / 0 and Shift+arrows on the keyboard. A quadrant can be
- *  focused: the view animates so the quadrant fills the viewport; [ / ] step
+ *  focused: the view animates so the quadrant fills the viewport; , / . (or
+ *  [ / ]) step
  *  through the quadrants in reading order (q2 → q1 → q3 → q4), Esc / 0
  *  return to the overview. The view never zooms out below the overview and
  *  the board always covers the viewport where it is larger than it. Card
@@ -266,21 +267,29 @@ export function useMatrixView({
     return () => el.removeEventListener("wheel", onWheel);
   }, [viewportRef]);
 
-  // Keys: + / − zoom, 0 overview, [ / ] previous / next field, Shift+arrows
-  // pan. Plain arrows stay the presenter's (or a focused card's).
+  // Keys: + / − zoom, 0 overview, , / . (or [ / ]) previous / next field,
+  // Shift+arrows pan. Plain arrows stay the presenter's (or a focused
+  // card's). `,` / `.` work unmodified on German keyboards; [ / ] need
+  // Option (Mac) or AltGr (Windows: Ctrl+Alt) there, so for them only the
+  // Cmd key is rejected. Not PageUp/PageDown: clickers send those.
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       if (target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
       const a = apiRef.current;
+      if ((e.key === "[" || e.key === "]") && !e.metaKey) {
+        e.preventDefault();
+        a.step(e.key === "]" ? 1 : -1);
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       let handled = true;
       if (e.key === "+" || e.key === "=") a.zoomCentre(STEP);
       else if (e.key === "-" || e.key === "_") a.zoomCentre(1 / STEP);
       else if (e.key === "0") a.overview();
-      else if (e.key === "]") a.step(1);
-      else if (e.key === "[") a.step(-1);
+      else if (e.key === ".") a.step(1);
+      else if (e.key === ",") a.step(-1);
       else if (e.shiftKey && e.key === "ArrowLeft") a.panBy(PAN_STEP, 0);
       else if (e.shiftKey && e.key === "ArrowRight") a.panBy(-PAN_STEP, 0);
       else if (e.shiftKey && e.key === "ArrowUp") a.panBy(0, PAN_STEP);

@@ -742,7 +742,9 @@ test('whole-board zoom and pan, quadrant focus with next/previous/overview, drag
   await settle();
   expect((await boardView(page)).focus).toBe('q3');
   await expectFramed(page, 'q3');
-  await page.keyboard.press(']');
+  // "." / "," work unmodified on German keyboards; [ / ] also with Option /
+  // AltGr (which is how they are typed there).
+  await page.keyboard.press('.');
   await settle();
   expect((await boardView(page)).focus).toBe('q4');
   await expectFramed(page, 'q4');
@@ -750,10 +752,16 @@ test('whole-board zoom and pan, quadrant focus with next/previous/overview, drag
   await settle();
   expect((await boardView(page)).focus).toBe('q2');
   await expectFramed(page, 'q2');
-  await page.keyboard.press('[');
+  await page.keyboard.press(',');
   await settle();
   expect((await boardView(page)).focus).toBe('q4');
   await toolbar.getByRole('button', { name: 'Vorheriges Feld' }).click();
+  await settle();
+  expect((await boardView(page)).focus).toBe('q3');
+  await page.keyboard.press('Alt+[');
+  await settle();
+  expect((await boardView(page)).focus).toBe('q1');
+  await page.keyboard.press('Control+Alt+]');
   await settle();
   expect((await boardView(page)).focus).toBe('q3');
   await page.keyboard.press('[');

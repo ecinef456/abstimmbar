@@ -366,8 +366,9 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     vergrößern (Mausrad, + / −, Lasche) und durch Ziehen auf freier Fläche
     oder mit Umschalt+Pfeiltasten verschieben; 0 passt es wieder ein. Die
     Lupe in der Ecke eines Feldes zeigt dieses Feld bildschirmfüllend; mit
-    **[** und **]** (oder den Pfeilen in der Leiste oben) wechseln Sie zum
-    vorherigen bzw. nächsten Feld, **Esc** oder **Übersicht** führt zurück.
+    **,** und **.** (alternativ **[** und **]**, oder den Pfeilen in der
+    Leiste oben) wechseln Sie zum vorherigen bzw. nächsten Feld, **Esc** oder
+    **Übersicht** führt zurück.
   - **Tastatur:** Mit Tab erreichen Sie die Karten, Enter öffnet eine Karte,
     die Pfeiltasten verschieben sie (Umschalt für größere Schritte). Ein
     Mausklick beendet die Tastatursteuerung wieder. **?** beschriftet alle
