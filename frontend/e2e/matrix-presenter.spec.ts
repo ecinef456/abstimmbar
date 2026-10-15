@@ -581,6 +581,75 @@ async function boardView(page: Page) {
   });
 }
 
+type Rect = { x: number; y: number; width: number; height: number };
+const inside = (a: Rect, b: Rect, tol = 0.5) =>
+  a.x >= b.x - tol && a.y >= b.y - tol && a.x + a.width <= b.x + b.width + tol && a.y + a.height <= b.y + b.height + tol;
+const intersects = (a: Rect, b: Rect) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const OUTER: Record<string, [string, string]> = {
+  q1: ['y_to', 'x_to'],
+  q2: ['y_to', 'x_from'],
+  q3: ['y_from', 'x_from'],
+  q4: ['y_from', 'x_to'],
+};
+
+/** A focused quadrant is framed exactly: its rect fully inside the stage
+ *  (the viewport, clear of the edge handles / overlays and the focus bar),
+ *  its two outer axis labels fully visible, the other quadrants' interiors
+ *  not visible (a few px at the inner axis lines at most). */
+async function expectFramed(page: Page, q: 'q1' | 'q2' | 'q3' | 'q4') {
+  const vp = (await page.getByTestId('matrix-viewport').boundingBox())!;
+  const plot = (await board(page).boundingBox())!;
+  const right = q === 'q1' || q === 'q4';
+  const bottom = q === 'q3' || q === 'q4';
+  const quad = { x: plot.x + (right ? plot.width / 2 : 0), y: plot.y + (bottom ? plot.height / 2 : 0), width: plot.width / 2, height: plot.height / 2 };
+  expect(inside(quad, vp), `${q} inside the viewport: ${JSON.stringify({ quad, vp })}`).toBe(true);
+  const blockers = [
+    ...(await page.locator('[data-beamer-inset]').all()),
+    page.getByTestId('matrix-focus-bar'),
+  ];
+  for (const el of blockers) {
+    if (!(await el.isVisible())) continue;
+    const b = await el.boundingBox();
+    if (b && b.width > 0) expect(intersects(quad, b), `${q} under an overlay: ${JSON.stringify(b)}`).toBe(false);
+  }
+  for (const name of OUTER[q]) {
+    const label = page.locator(`[data-axis="${name}"] [data-axis-label]`);
+    const b = (await label.boundingBox())!;
+    expect(inside(b, vp), `${q}: label ${name} inside the viewport`).toBe(true);
+    // Fully visible: every corner hits the label (not clipped, not covered).
+    const corners = [
+      [b.x + 2, b.y + 2],
+      [b.x + b.width - 2, b.y + 2],
+      [b.x + 2, b.y + b.height - 2],
+      [b.x + b.width - 2, b.y + b.height - 2],
+    ];
+    for (const [x, y] of corners) {
+      const hit = await page.evaluate(([px, py]) => {
+        const el = document.elementFromPoint(px, py);
+        return el?.closest('[data-axis]')?.getAttribute('data-axis') ?? el?.tagName ?? null;
+      }, [x, y]);
+      expect(hit, `${q}: label ${name} visible at ${x},${y}`).toBe(name);
+    }
+  }
+  // The other quadrants' interiors are not visible 8 px past the inner axes.
+  const ax = plot.x + plot.width / 2;
+  const ay = plot.y + plot.height / 2;
+  const sx = right ? -1 : 1;
+  const sy = bottom ? -1 : 1;
+  const qcx = quad.x + quad.width / 2;
+  const qcy = quad.y + quad.height / 2;
+  const probes = [
+    [ax + sx * 8, qcy],
+    [qcx, ay + sy * 8],
+    [ax + sx * 8, ay + sy * 8],
+  ];
+  for (const [x, y] of probes) {
+    if (x < vp.x || x > vp.x + vp.width || y < vp.y || y > vp.y + vp.height) continue;
+    const inWorld = await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest('[data-matrix-world]'), [x, y]);
+    expect(inWorld, `${q}: neighbour visible at ${x},${y}`).toBe(false);
+  }
+}
+
 test('whole-board zoom and pan, quadrant focus with next/previous/overview, drag while zoomed', async ({ page, trackRoom }) => {
   test.setTimeout(120_000);
   const s = await seed(page, trackRoom);
@@ -648,11 +717,12 @@ test('whole-board zoom and pan, quadrant focus with next/previous/overview, drag
   expect(v.s).toBeGreaterThan(1.6);
   const toolbar = page.getByTestId('matrix-focus-bar');
   await expect(toolbar).toContainText('nützlich & modern');
-  // The quadrant now spans (almost) the viewport's width or height.
+  // The quadrant now spans (almost) the stage's width or height.
   const plot = (await board(page).boundingBox())!;
   const qw = plot.width / 2;
   const qh = plot.height / 2;
-  expect(Math.max(qw / vp.width, qh / vp.height)).toBeGreaterThan(0.85);
+  expect(Math.max(qw / vp.width, qh / vp.height)).toBeGreaterThan(0.7);
+  await expectFramed(page, 'q1');
 
   // Drag still lands where the pointer is (board coordinates under zoom).
   await drag(page, ids.chatbot, await pointPx(page, 0.7, 0.6));
@@ -671,13 +741,22 @@ test('whole-board zoom and pan, quadrant focus with next/previous/overview, drag
   await toolbar.getByRole('button', { name: 'Nächstes Feld' }).click();
   await settle();
   expect((await boardView(page)).focus).toBe('q3');
+  await expectFramed(page, 'q3');
   await page.keyboard.press(']');
   await settle();
   expect((await boardView(page)).focus).toBe('q4');
+  await expectFramed(page, 'q4');
+  await page.keyboard.press(']');
+  await settle();
+  expect((await boardView(page)).focus).toBe('q2');
+  await expectFramed(page, 'q2');
   await page.keyboard.press('[');
   await settle();
-  expect((await boardView(page)).focus).toBe('q3');
+  expect((await boardView(page)).focus).toBe('q4');
   await toolbar.getByRole('button', { name: 'Vorheriges Feld' }).click();
+  await settle();
+  expect((await boardView(page)).focus).toBe('q3');
+  await page.keyboard.press('[');
   await settle();
   expect((await boardView(page)).focus).toBe('q1');
 
@@ -733,19 +812,35 @@ test('crowded board: drawn cards never overlap (collision avoidance within the z
   await openPresenter(page, s.room.setId);
   await expect(board(page).locator('[data-card-id]')).toHaveCount(13);
   await page.waitForTimeout(900);
+  // Boxes incl. a stack's paper offset (6 px right/bottom, box-shadow).
   const boxes = await Promise.all(
-    (await board(page).locator('[data-card-id]').all()).map(async (l) => ({
-      id: await l.getAttribute('data-card-id'),
-      zone: await l.getAttribute('data-zone'),
-      ...(await l.boundingBox())!,
-    })),
+    (await board(page).locator('[data-card-id]').all()).map(async (l) => {
+      const b = (await l.boundingBox())!;
+      const pad = Number(await l.getAttribute('data-stack-size')) > 1 ? 6 : 0;
+      return {
+        id: await l.getAttribute('data-card-id'),
+        zone: await l.getAttribute('data-zone'),
+        x: b.x,
+        y: b.y,
+        width: b.width + pad,
+        height: b.height + pad,
+      };
+    }),
   );
+  expect(boxes.some((b) => b.id === String(s.ids.chatbot))).toBe(true); // the stack is drawn
   const hit = (a: (typeof boxes)[number], b: (typeof boxes)[number]) =>
     a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
   for (let i = 0; i < boxes.length; i++)
     for (let j = i + 1; j < boxes.length; j++) expect(hit(boxes[i], boxes[j]), JSON.stringify([boxes[i], boxes[j]])).toBe(false);
-  // Quadrant cards stay in their quadrant (centre on the right side of the axes).
+  // Every card (with its paper offset) lies fully inside the plot border.
   const plot = (await board(page).boundingBox())!;
+  for (const b of boxes) {
+    expect(b.x, JSON.stringify(b)).toBeGreaterThanOrEqual(plot.x + 1);
+    expect(b.y, JSON.stringify(b)).toBeGreaterThanOrEqual(plot.y + 1);
+    expect(b.x + b.width, JSON.stringify(b)).toBeLessThanOrEqual(plot.x + plot.width - 1);
+    expect(b.y + b.height, JSON.stringify(b)).toBeLessThanOrEqual(plot.y + plot.height - 1);
+  }
+  // Quadrant cards stay in their quadrant (centre on the right side of the axes).
   const cx = plot.x + plot.width / 2;
   const cy = plot.y + plot.height / 2;
   for (const b of boxes) {

@@ -8,8 +8,9 @@
  *  pushed apart in a few deterministic relaxation passes (along the axis of
  *  the smaller overlap, half each; a fixed item — the card being dragged,
  *  an obstacle like the quadrant magnifiers — does not move), and every
- *  card's centre is kept inside its zone (fully inside, where the card
- *  fits) and the card inside the plot. Pure: same input, same output. */
+ *  card's footprint (incl. a stack's paper offset) is kept inside its zone
+ *  where it fits (else its centre stays in the zone) and inside the plot,
+ *  a little clear of the border. Pure: same input, same output. */
 
 export interface LayoutRect {
   x0: number;
@@ -33,13 +34,15 @@ export interface LayoutItem {
 }
 
 const GAP = 4;
+/** Distance kept from the plot border (px). */
+const INSET = 2;
 const PASSES = 120;
 
 /** Allowed range of a centre on one axis: fully inside the zone and the
  *  plot where the card fits; else the centre stays within the zone. */
 function range(z0: number, z1: number, half: number, plot: number): [number, number] {
-  const lo = Math.max(z0 + half, half);
-  const hi = Math.min(z1 - half, plot - half);
+  const lo = Math.max(z0 + half, half + INSET);
+  const hi = Math.min(z1 - half, plot - half - INSET);
   if (lo <= hi) return [lo, hi];
   const flo = Math.max(z0, Math.min(half, plot / 2));
   const fhi = Math.min(z1, Math.max(plot - half, plot / 2));

@@ -378,6 +378,8 @@ export default function MatrixPanel({
               width: fitWidth,
               transform: `translate(${bv.view.x}px, ${bv.view.y}px) scale(${bv.view.s})`,
               transformOrigin: "0 0",
+              // A focused quadrant: the rest of the board is clipped away.
+              clipPath: bv.clip ?? undefined,
               transition: bv.view.smooth && !reduced ? "transform 450ms cubic-bezier(.2,.7,.2,1)" : undefined,
             }}
           >

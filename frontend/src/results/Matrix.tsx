@@ -592,7 +592,7 @@ export default function Matrix({
           side === "x_from" ? "rotate-180" : ""
         }`}
       >
-        {localizedText(settings.axes[side])}
+        <span data-axis-label>{localizedText(settings.axes[side])}</span>
       </span>
     </div>
   );
@@ -604,12 +604,12 @@ export default function Matrix({
       }`}
     >
       <span className={`${axisLabel} col-start-2 row-start-1 px-1.5 pb-1 text-center`} data-axis="y_to">
-        ↑ {localizedText(settings.axes.y_to)}
+        <span data-axis-label>↑ {localizedText(settings.axes.y_to)}</span>
       </span>
       {xLabel("x_from")}
       {xLabel("x_to")}
       <span className={`${axisLabel} col-start-2 row-start-3 px-1.5 pt-1 text-center`} data-axis="y_from">
-        ↓ {localizedText(settings.axes.y_from)}
+        <span data-axis-label>↓ {localizedText(settings.axes.y_from)}</span>
       </span>
       <div
         ref={plotRef}

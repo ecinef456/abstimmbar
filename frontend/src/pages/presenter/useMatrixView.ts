@@ -28,10 +28,40 @@ export interface View {
 const MAX_ZOOM = 4;
 const STEP = 1.25;
 const PAN_STEP = 90;
-/** Margin around a focused quadrant (px, viewport); on top it leaves room
- *  for the focus bar. */
+/** Margin of the stage around a focused quadrant (px, viewport); on top it
+ *  leaves room for the focus bar. */
 const FOCUS_PAD = 12;
 const FOCUS_TOP = 60;
+/** A focused quadrant shows this much (px, board) past its inner axis lines. */
+const INNER = 3;
+/** Margin around the outer axis labels (px, board). */
+const LABEL_PAD = 4;
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Layout rect of `el` in `root`'s coordinates (offsets, so the transform
+ *  on `root` does not matter). */
+function rectIn(el: HTMLElement, root: HTMLElement): Rect {
+  let x = 0;
+  let y = 0;
+  let e: HTMLElement | null = el;
+  while (e && e !== root) {
+    x += e.offsetLeft;
+    y += e.offsetTop;
+    const parent = e.offsetParent as HTMLElement | null;
+    if (parent && parent !== root) {
+      x += parent.clientLeft;
+      y += parent.clientTop;
+    }
+    e = parent;
+  }
+  return { x, y, w: el.offsetWidth, h: el.offsetHeight };
+}
 
 interface Size {
   w: number;
@@ -66,6 +96,8 @@ export function useMatrixView({
   const [world, setWorld] = useState<Size>({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ s: 1, x: 0, y: 0, smooth: false });
   const [focus, setFocus] = useState<Quadrant | null>(null);
+  /** clip-path of the board while a quadrant is focused. */
+  const [clip, setClip] = useState<string | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
   const sizes = useRef({ vp, world });
@@ -87,24 +119,88 @@ export function useMatrixView({
     return () => ro.disconnect();
   }, [viewportRef, worldRef, worldKey]);
 
-  /** The view that fills the viewport with a quadrant of the plot. */
+  /** The free stage inside the viewport (viewport coordinates): clear of
+   *  the focus bar on top and of fixed overlays (`data-beamer-inset`: edge
+   *  handles, LiveStats, QR, logo) — each overlay cuts the side that costs
+   *  the least area. */
+  const stage = useCallback((): Rect | null => {
+    const el = viewportRef.current;
+    if (!el) return null;
+    const v = el.getBoundingClientRect();
+    let x0 = FOCUS_PAD;
+    let y0 = FOCUS_TOP;
+    let x1 = v.width - FOCUS_PAD;
+    let y1 = v.height - FOCUS_PAD;
+    for (const o of document.querySelectorAll<HTMLElement>("[data-beamer-inset]")) {
+      if (el.contains(o)) continue;
+      const r = o.getBoundingClientRect();
+      const l = r.left - v.left;
+      const t = r.top - v.top;
+      const rr = r.right - v.left;
+      const b = r.bottom - v.top;
+      if (r.width === 0 || r.height === 0 || rr <= x0 || l >= x1 || b <= y0 || t >= y1) continue;
+      const cuts = [
+        { side: "right", cost: (x1 - (l - FOCUS_PAD)) * (y1 - y0) },
+        { side: "left", cost: (rr + FOCUS_PAD - x0) * (y1 - y0) },
+        { side: "bottom", cost: (y1 - (t - FOCUS_PAD)) * (x1 - x0) },
+        { side: "top", cost: (b + FOCUS_PAD - y0) * (x1 - x0) },
+      ].sort((a, c) => a.cost - c.cost);
+      const side = cuts[0].side;
+      if (side === "right") x1 = l - FOCUS_PAD;
+      else if (side === "left") x0 = rr + FOCUS_PAD;
+      else if (side === "bottom") y1 = t - FOCUS_PAD;
+      else y0 = b + FOCUS_PAD;
+    }
+    return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+  }, [viewportRef]);
+
+  /** Framing of a quadrant: the quadrant's rect plus its two outer axis
+   *  labels (board coordinates), fitted uniformly and centred into the
+   *  stage; everything else of the board is clipped away (a few px past the
+   *  inner axis lines stay, so edge cards on them show half). */
   const focusView = useCallback(
-    (q: Quadrant): View | null => {
-      const plot = worldRef.current?.querySelector<HTMLElement>("[data-matrix-board]");
-      const { vp: v } = sizes.current;
-      if (!plot || v.w === 0) return null;
-      // Plot box in board coordinates (its offsetParent is the board).
-      const pw = plot.offsetWidth;
-      const ph = plot.offsetHeight;
-      const qx = plot.offsetLeft + (q === "q1" || q === "q4" ? pw / 2 : 0);
-      const qy = plot.offsetTop + (q === "q3" || q === "q4" ? ph / 2 : 0);
-      const qw = pw / 2;
-      const qh = ph / 2;
-      const availH = v.h - FOCUS_TOP - FOCUS_PAD;
-      const s = Math.min(MAX_ZOOM, Math.min((v.w - 2 * FOCUS_PAD) / qw, availH / qh));
-      return { s, x: v.w / 2 - (qx + qw / 2) * s, y: FOCUS_TOP + availH / 2 - (qy + qh / 2) * s, smooth: true };
+    (q: Quadrant): { view: View; clip: string } | null => {
+      const board = worldRef.current;
+      const plot = board?.querySelector<HTMLElement>("[data-matrix-board]");
+      const st = stage();
+      if (!board || !plot || !st) return null;
+      const right = q === "q1" || q === "q4";
+      const bottom = q === "q3" || q === "q4";
+      const p = rectIn(plot, board);
+      const quad: Rect = { x: p.x + (right ? p.w / 2 : 0), y: p.y + (bottom ? p.h / 2 : 0), w: p.w / 2, h: p.h / 2 };
+      // Inner sides: just past the axis lines; outer sides: the plot border.
+      const rects: Rect[] = [
+        {
+          x: quad.x - (right ? INNER : 0),
+          y: quad.y - (bottom ? INNER : 0),
+          w: quad.w + INNER,
+          h: quad.h + INNER,
+        },
+      ];
+      for (const name of [bottom ? "y_from" : "y_to", right ? "x_to" : "x_from"]) {
+        const label = board.querySelector<HTMLElement>(`[data-axis="${name}"] [data-axis-label]`);
+        if (!label) continue;
+        const r = rectIn(label, board);
+        rects.push({ x: r.x - LABEL_PAD, y: r.y - LABEL_PAD, w: r.w + 2 * LABEL_PAD, h: r.h + 2 * LABEL_PAD });
+      }
+      const bx0 = Math.min(...rects.map((r) => r.x));
+      const by0 = Math.min(...rects.map((r) => r.y));
+      const bx1 = Math.max(...rects.map((r) => r.x + r.w));
+      const by1 = Math.max(...rects.map((r) => r.y + r.h));
+      const s = Math.min(MAX_ZOOM, st.w / (bx1 - bx0), st.h / (by1 - by0));
+      const view = {
+        s,
+        x: st.x + (st.w - (bx1 - bx0) * s) / 2 - bx0 * s,
+        y: st.y + (st.h - (by1 - by0) * s) / 2 - by0 * s,
+        smooth: true,
+      };
+      // Union of the rects (same winding: nonzero fill = union).
+      const clip = `path('${rects
+        .map((r) => `M${r.x} ${r.y}H${r.x + r.w}V${r.y + r.h}H${r.x}Z`)
+        .join(" ")}')`;
+      return { view, clip };
     },
-    [worldRef],
+    [worldRef, stage],
   );
 
   // Re-fit on resize: overview stays the overview, a focus stays focused.
@@ -114,15 +210,18 @@ export function useMatrixView({
     if (vp.w === 0 || world.w === 0) return;
     const q = focusRef.current;
     const target = q ? focusView(q) : null;
-    setView((v) => clampView(target ?? { ...v, smooth: false }, world, vp));
+    if (target) {
+      setClip(target.clip);
+      setView({ ...target.view, smooth: false });
+    } else setView((v) => clampView({ ...v, smooth: false }, world, vp));
   }, [vp, world, focusView]);
 
+  /** A manual zoom / pan: leaves a quadrant focus (and its clipping). */
   const apply = (v: View) => {
     const { vp: p, world: w } = sizes.current;
-    const next = clampView(v, w, p);
-    // Back at the overview: no quadrant focus left.
-    if (next.s <= 1.0001) setFocus(null);
-    setView(next);
+    setFocus(null);
+    setClip(null);
+    setView(clampView(v, w, p));
   };
   const zoomAt = (factor: number, px: number, py: number, smooth: boolean) => {
     const v = viewRef.current;
@@ -134,16 +233,13 @@ export function useMatrixView({
     const v = viewRef.current;
     apply({ ...v, x: v.x + dx, y: v.y + dy, smooth: true });
   };
-  const overview = () => {
-    setFocus(null);
-    apply({ s: 1, x: 0, y: 0, smooth: true });
-  };
+  const overview = () => apply({ s: 1, x: 0, y: 0, smooth: true });
   const focusOn = (q: Quadrant) => {
     const target = focusView(q);
     if (!target) return;
     setFocus(q);
-    const { vp: p, world: w } = sizes.current;
-    setView(clampView(target, w, p));
+    setClip(target.clip);
+    setView(target.view);
   };
   const step = (dir: 1 | -1) => {
     const at = focusRef.current ? QUADRANT_ORDER.indexOf(focusRef.current) : dir === 1 ? -1 : QUADRANT_ORDER.length;
@@ -219,5 +315,5 @@ export function useMatrixView({
     window.addEventListener("pointercancel", up);
   };
 
-  return { view, focus, zoomed, onPointerDown, ...api };
+  return { view, focus, clip, zoomed, onPointerDown, ...api };
 }
