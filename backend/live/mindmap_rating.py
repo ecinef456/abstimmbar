@@ -66,6 +66,9 @@ def set_stage(run, question, stage, *, open_vote=False):
         raise MindmapError("This question has no rating phase.", 409)
     with transaction.atomic():
         _lock_run(run)
+        run.refresh_from_db()  # a concurrent control_run may have changed it
+        if not run.is_active:
+            raise MindmapError("Run is finished.", 409)
         phase, _ = MindmapPhase.objects.get_or_create(run=run, question=question)
         phase.stage = stage
         fields = ["stage"]

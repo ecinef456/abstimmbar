@@ -45,6 +45,9 @@ def set_stage(run, question, stage, *, open_vote=False):
         raise MatrixError("This question has no rating phase.", 409)
     with transaction.atomic():
         _lock_run(run)
+        run.refresh_from_db()  # a concurrent control_run may have changed it
+        if not run.is_active:
+            raise MatrixError("Run is finished.", 409)
         phase, _ = MatrixPhase.objects.get_or_create(run=run, question=question)
         phase.stage = stage
         fields = ["stage"]
@@ -246,6 +249,14 @@ def participant_payload(run, question):
     if "totals" in shared:
         data["scores"] = shared["totals"]
     return data
+
+
+def votes(run, question):
+    """"votes" of a matrix question: distinct participants who contributed
+    cards or rated (a run with only ratings must not show 0)."""
+    from .matrix import contributor_count
+
+    return max(contributor_count(run, question), aggregate(run, question)[1])
 
 
 def ranking(question, cards, scores):

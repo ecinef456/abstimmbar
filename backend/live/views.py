@@ -2808,7 +2808,7 @@ def results_csv(request, set_id):
                 )
                 for card in matrix.csv_rows(run, question):
                     cell = (
-                        "" if hidden
+                        "" if hidden or card["stack"]
                         else matrix_rating.csv_cell(question, scores, card["id"])
                     )
                     writer.writerow(

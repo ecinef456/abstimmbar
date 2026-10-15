@@ -487,6 +487,20 @@ def import_set(room, data):
         except matrix.CategoryError:
             # Foreign file: drop an invalid list rather than reject the import.
             mx_mode, mx_categories = matrix.CATEGORY_OFF, []
+        # Matrix rating settings only make sense for matrix questions.
+        if item["kind"] == Question.Kind.MATRIX:
+            mx_rating = {
+                "matrix_rating_mode": mindmap.clamp_rating_mode(
+                    item.get("matrix_rating_mode")
+                ),
+                "matrix_rating_budget": mindmap.clamp_rating_budget(
+                    item.get("matrix_rating_budget")
+                ),
+                "matrix_rating_multi": bool(item.get("matrix_rating_multi", True)),
+                "matrix_rating_live": bool(item.get("matrix_rating_live", False)),
+            }
+        else:
+            mx_rating = {}
         question = Question.objects.create(
             question_set=question_set,
             kind=item["kind"],
@@ -500,12 +514,7 @@ def import_set(room, data):
             ),
             matrix_category_mode=mx_mode,
             matrix_categories=mx_categories,
-            matrix_rating_mode=mindmap.clamp_rating_mode(item.get("matrix_rating_mode")),
-            matrix_rating_budget=mindmap.clamp_rating_budget(
-                item.get("matrix_rating_budget")
-            ),
-            matrix_rating_multi=bool(item.get("matrix_rating_multi", True)),
-            matrix_rating_live=bool(item.get("matrix_rating_live", False)),
+            **mx_rating,
             mindmap_depth=mm_depth,
             mindmap_max_per_person=mindmap.clamp_max_per_person(
                 item.get("mindmap_max_per_person")

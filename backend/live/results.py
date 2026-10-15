@@ -403,13 +403,11 @@ def run_results(run):
         elif question.kind == Question.Kind.MATRIX:
             # Owner-only endpoint: hidden cards are marked, not dropped.
             item["matrix"] = matrix.board_payload(run, question, presenter=True)
-            rating = matrix_rating.results(
-                run, question, matrix.board_payload(run, question, presenter=False)
-            )
+            rating = matrix_rating.results(run, question, item["matrix"])
             if rating is not None:
                 item["matrix"]["rating"] = rating
             item["matrix_settings"] = matrix.settings_payload(question)
-            item["votes"] = matrix.contributor_count(run, question)
+            item["votes"] = matrix_rating.votes(run, question)
         elif question.kind in Question.TEXT_KINDS:
             item["words"] = words_with_counts(run, question)
             if question.kind == Question.Kind.OPEN_TEXT and question.ai_evaluate:

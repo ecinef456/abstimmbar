@@ -5745,6 +5745,27 @@ class MatrixRatingSettingsTests(ApiTestCase):
         self.assertTrue(question.matrix_rating_multi)
         self.assertFalse(question.matrix_rating_live)
 
+    def test_import_resets_matrix_rating_for_other_kinds(self):
+        from .transfer import import_set
+
+        imported = import_set(self.room, {
+            "format": "abstimmbar-set-v2",
+            "title": {"de": "Fremd", "en": ""},
+            "questions": [{
+                "kind": "mindmap",
+                "text": {"de": "<p>Q</p>", "en": ""},
+                "matrix_rating_mode": "points",
+                "matrix_rating_budget": 9,
+                "matrix_rating_multi": False,
+                "matrix_rating_live": True,
+            }],
+        })
+        question = imported.questions.get()
+        self.assertEqual(question.matrix_rating_mode, "")
+        self.assertEqual(question.matrix_rating_budget, 5)
+        self.assertTrue(question.matrix_rating_multi)
+        self.assertFalse(question.matrix_rating_live)
+
     def _with_run(self, phase, stage=None, rating=False):
         from live.models import MatrixCard, MatrixPhase, MatrixRating
 

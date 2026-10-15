@@ -8986,3 +8986,88 @@ class MatrixRatingResultsTests(MatrixTestCase):
         self.configure(matrix_rating_mode="")
         self.assertNotIn("rating", self.item()["matrix"])
         self.assertEqual(self.csv_cards(), {"A": "", "B": ""})
+
+
+class MatrixRatingFixWaveTests(MatrixTestCase):
+    def setUp(self):
+        super().setUp()
+        from . import matrix_rating as mr
+
+        self.mr = mr
+        self.configure(matrix_rating_mode="points", matrix_rating_budget=3,
+                       matrix_rating_live=True)
+        self.t = mxs.add_teacher_card(self.run, self.xq, "q1", "Teacher")
+        self.mr.set_stage(self.run, self.xq, "rate")
+        self.mr.rate(self.run, self.xq, self.tok, self.t.pk, delta=1)
+
+    def test_rating_only_run_counts_as_answered(self):
+        from .mindmap import answered_runs_q, run_has_answers
+
+        self.assertTrue(run_has_answers(self.run))
+        self.assertEqual(
+            list(self.question_set.runs.filter(answered_runs_q())), [self.run]
+        )
+
+    def test_rating_only_run_in_results_with_votes(self):
+        self.client.force_login(self.owner)
+        data = self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/results/"
+        ).json()["results"]
+        item = next(
+            q for r in data for q in r["questions"] if q["kind"] == "matrix"
+        )
+        self.assertEqual(item["votes"], 1)
+        self.assertEqual(build_payloads(self.room)["presenter"]["votes"], 1)
+
+    def test_start_run_archive_keeps_rating_only_run(self):
+        self.client.force_login(self.owner)
+        resp = self.client.post(
+            f"/api/question-sets/{self.question_set.pk}/start-run/",
+            {"existing": "archive"}, content_type="application/json",
+        ).json()
+        self.assertNotEqual(resp["run"], self.run.pk)
+        self.run.refresh_from_db()
+        self.assertEqual(self.run.phase, Run.Phase.FINISHED)
+
+    def test_csv_stack_member_rows_have_empty_rating(self):
+        import csv
+        import io
+
+        self.mr.set_stage(self.run, self.xq, "collect")
+        top = self.add(title="Top")
+        member = self.add(title="Member")
+        self.stacked(top, member)
+        self.mr.set_stage(self.run, self.xq, "rate")
+        self.mr.rate(self.run, self.xq, self.tok, top.pk, delta=1)
+        self.client.force_login(self.owner)
+        body = self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/results.csv"
+        ).content.decode("utf-8-sig")
+        rows = list(csv.reader(io.StringIO(body), delimiter=";"))
+        header = rows[0]
+        cells = {
+            r[header.index("antwort")]: r[header.index("bewertung")]
+            for r in rows[1:] if r[3] == "Where?"
+        }
+        self.assertEqual(cells["Member"], "")
+        self.assertEqual(cells["Top"], "1")
+        self.assertEqual(cells["Teacher"], "1")
+
+    def test_set_stage_uses_fresh_run(self):
+        stale = Run.objects.get(pk=self.run.pk)
+        Run.objects.filter(pk=self.run.pk).update(phase=Run.Phase.FINISHED)
+        with self.assertRaises(MatrixError) as cm:
+            self.mr.set_stage(stale, self.xq, "collect", open_vote=True)
+        self.assertEqual(cm.exception.status, 409)
+        self.run.refresh_from_db()
+        self.assertEqual(self.run.phase, Run.Phase.FINISHED)
+
+    def test_rate_without_mode_is_409(self):
+        self.configure(matrix_rating_mode="")
+        r = self.client.post(
+            f"/api/live/rooms/{self.room.code}/matrix/rate/",
+            {"token": self.tok.key, "question": self.xq.pk, "card": self.t.pk, "delta": 1},
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(r.json()["detail"], "Rating has not started.")

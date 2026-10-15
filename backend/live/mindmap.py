@@ -35,6 +35,7 @@ from rooms.mindmap import (
 
 from .models import (
     MatrixCard,
+    MatrixRating,
     MindmapContribution,
     MindmapNode,
     MindmapPhase,
@@ -75,6 +76,7 @@ def answered_runs_q(run_ref="pk"):
         | Q(Exists(MindmapContribution.objects.filter(node__run=OuterRef(run_ref))))
         | Q(Exists(MindmapRating.objects.filter(node__run=OuterRef(run_ref))))
         | Q(Exists(MatrixCard.objects.filter(run=OuterRef(run_ref), teacher=False)))
+        | Q(Exists(MatrixRating.objects.filter(card__run=OuterRef(run_ref))))
     )
 
 
@@ -91,6 +93,7 @@ def run_has_answers(run):
         or run_has_contributions(run)
         or MindmapRating.objects.filter(node__run=run).exists()
         or MatrixCard.objects.filter(run=run, teacher=False).exists()
+        or MatrixRating.objects.filter(card__run=run).exists()
     )
 
 

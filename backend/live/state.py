@@ -248,7 +248,7 @@ def build_payloads(room):
                     )
                 presenter["matrix"]["rating"] = rating
             presenter["matrix_settings"] = matrix.settings_payload(question)
-            presenter["votes"] = matrix.contributor_count(run, question)
+            presenter["votes"] = matrix_rating.votes(run, question)
         elif question.kind in Question.TEXT_KINDS:
             presenter["words"] = words_with_counts(run, question)
             mod = WordCloudModeration.objects.filter(run=run, question=question).first()
