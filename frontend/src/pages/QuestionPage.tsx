@@ -825,7 +825,10 @@ export default function QuestionPage() {
     setAiDistractors((current) => current.filter((item) => item !== value));
   }
 
-  if (!question) return null;
+  // Wait for the set as well: it fills the breadcrumb (room / set title),
+  // and rendering the form first made the whole editor jump down a line or
+  // two once that request finished (a layout shift under the user's cursor).
+  if (!question || !set) return null;
   const isLikert = question.kind === "likert";
   const isMindmap = question.kind === "mindmap";
   const isMatrix = question.kind === "matrix";

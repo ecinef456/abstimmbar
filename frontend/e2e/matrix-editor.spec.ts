@@ -294,6 +294,39 @@ test('the Bearbeiten/Vorschau switcher keeps icon and label on one line', async 
   }
 });
 
+test('the editor appears only with its breadcrumb, so nothing shifts under it', async ({
+  page,
+  trackRoom,
+}) => {
+  // Regression (flaky switcher test): the form rendered before the set
+  // request finished; the breadcrumb then grew by the room/set title and
+  // pushed the whole editor down while the user (or a test) was measuring.
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await page.goto(`/sets/${seed.setId}`);
+  const newQuestion = page.getByRole('button', { name: /Neue Frage/ });
+  await expect(newQuestion).toBeVisible(); // the set page has its set already
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let held!: () => void;
+  const holding = new Promise<void>((resolve) => (held = resolve));
+  await page.route(new RegExp(`/api/question-sets/${seed.setId}/$`), async (route) => {
+    const response = await route.fetch();
+    held();
+    await gate;
+    await route.fulfill({ response });
+  });
+  await newQuestion.click();
+  await page
+    .getByRole('group', { name: 'Offen antworten' })
+    .getByRole('menuitem', { name: /Vier-Felder-Matrix/ })
+    .click();
+  await holding;
+  await expect(page.locator('[data-tour="question.editor"]')).toBeHidden();
+  release();
+  await expect(page.locator('[data-tour="question.editor"]')).toBeVisible();
+  await expect(page.getByRole('link', { name: /^E2E Matrix Matrix – ein ziemlich langer/ })).toBeVisible();
+});
+
 test('saving with an empty axis label is blocked', async ({ page, trackRoom }) => {
   const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
   await openMatrixEditor(page, seed.setId);
