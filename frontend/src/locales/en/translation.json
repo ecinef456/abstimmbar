@@ -38,5 +38,13 @@
   "{{count}} changes applied — Ctrl/Cmd+Z undoes them._one": "{{count}} change applied — Ctrl/Cmd+Z undoes it.",
   "{{count}} changes applied — Ctrl/Cmd+Z undoes them._other": "{{count}} changes applied — Ctrl/Cmd+Z undoes them.",
   "{{count}} no longer fitted the map and were skipped._one": "{{count}} no longer fitted the map and was skipped.",
-  "{{count}} no longer fitted the map and were skipped._other": "{{count}} no longer fitted the map and were skipped."
+  "{{count}} no longer fitted the map and were skipped._other": "{{count}} no longer fitted the map and were skipped.",
+  "Participants distribute {{count}} points among the cards._one": "Participants distribute {{count}} point among the cards.",
+  "Participants distribute {{count}} points among the cards._other": "Participants distribute {{count}} points among the cards.",
+  "Participants rate up to {{count}} cards with 👍 or 👎._one": "Participants rate up to {{count}} card with 👍 or 👎.",
+  "Participants rate up to {{count}} cards with 👍 or 👎._other": "Participants rate up to {{count}} cards with 👍 or 👎.",
+  "Rate the cards on your device: {{count}} points per person_one": "Rate the cards on your device: {{count}} point per person",
+  "Rate the cards on your device: {{count}} points per person_other": "Rate the cards on your device: {{count}} points per person",
+  "Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person_one": "Rate the cards on your device with 👍 / 👎: up to {{count}} rating per person",
+  "Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person_other": "Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person"
 }

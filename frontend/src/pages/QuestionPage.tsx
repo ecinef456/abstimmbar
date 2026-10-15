@@ -11,6 +11,7 @@ import {
   type AnswerOption,
   type MatrixCategory,
   type MatrixCategoryMode,
+  type MatrixRatingMode,
   type MindmapRatingMode,
   type Question,
   type QuestionSet,
@@ -273,6 +274,10 @@ export default function QuestionPage() {
   const [matrixMaxPerPerson, setMatrixMaxPerPerson] = useState(10);
   const [matrixCategoryMode, setMatrixCategoryMode] = useState<MatrixCategoryMode>("off");
   const [matrixCategories, setMatrixCategories] = useState<MatrixCategory[]>([]);
+  const [matrixRatingMode, setMatrixRatingMode] = useState<MatrixRatingMode>("");
+  const [matrixRatingBudget, setMatrixRatingBudget] = useState(5);
+  const [matrixRatingMulti, setMatrixRatingMulti] = useState(true);
+  const [matrixRatingLive, setMatrixRatingLive] = useState(false);
   const matrixRef = useRef<MatrixSettingsValue | null>(null);
   // Server refusal for the rating mode (locked while a running session has
   // ratings), shown at the field.
@@ -383,6 +388,10 @@ export default function QuestionPage() {
       setMatrixMaxPerPerson(data.matrix_max_per_person ?? 10);
       setMatrixCategoryMode(data.matrix_category_mode ?? "off");
       setMatrixCategories(data.matrix_categories ?? []);
+      setMatrixRatingMode(data.matrix_rating_mode ?? "");
+      setMatrixRatingBudget(data.matrix_rating_budget ?? 5);
+      setMatrixRatingMulti(data.matrix_rating_multi ?? true);
+      setMatrixRatingLive(data.matrix_rating_live ?? false);
       setTimeLimit(data.time_limit ? String(data.time_limit) : "");
       // Options keep the full {de, en} map so each can be edited bilingually
       // (#33 MR2 Task 9).
@@ -621,6 +630,10 @@ export default function QuestionPage() {
               matrix_descriptions: matrixDescriptions,
               matrix_max_per_person: matrixMaxPerPerson,
               matrix_category_mode: matrixCategoryMode,
+              matrix_rating_mode: matrixRatingMode,
+              matrix_rating_budget: matrixRatingBudget,
+              matrix_rating_multi: matrixRatingMulti,
+              matrix_rating_live: matrixRatingLive,
               matrix_categories:
                 matrixCategoryMode === "off"
                   ? []
@@ -673,7 +686,7 @@ export default function QuestionPage() {
       let modeError = "";
       try {
         const body = JSON.parse((err as Error).message);
-        const msg = body?.mindmap_rating_mode;
+        const msg = body?.mindmap_rating_mode ?? body?.matrix_rating_mode;
         modeError = Array.isArray(msg) ? String(msg[0] ?? "") : typeof msg === "string" ? msg : "";
       } catch {
         /* not a JSON body */
@@ -853,6 +866,8 @@ export default function QuestionPage() {
     xFrom: matrixXFrom, xTo: matrixXTo, yFrom: matrixYFrom, yTo: matrixYTo,
     edges: matrixEdges, descriptions: matrixDescriptions, maxPerPerson: matrixMaxPerPerson,
     categoryMode: matrixCategoryMode, categories: matrixCategories,
+    ratingMode: matrixRatingMode, ratingBudget: matrixRatingBudget,
+    ratingMulti: matrixRatingMulti, ratingLive: matrixRatingLive,
   };
   // Updates compose: "translate all fields" fires several onChange calls in one
   // tick, each of which must build on the previous result rather than on the
@@ -871,6 +886,10 @@ export default function QuestionPage() {
     setMatrixMaxPerPerson(v.maxPerPerson);
     setMatrixCategoryMode(v.categoryMode);
     setMatrixCategories(v.categories);
+    setMatrixRatingMode(v.ratingMode);
+    setMatrixRatingBudget(v.ratingBudget);
+    setMatrixRatingMulti(v.ratingMulti);
+    setMatrixRatingLive(v.ratingLive);
   }
   const matrixIssue = isMatrix ? matrixProblem(matrixValue) : null;
   const invalid = textMissing || optionsMissing || !!mindmapProblem || !!matrixIssue;
@@ -897,6 +916,7 @@ export default function QuestionPage() {
       mindmapAiMerge, mindmapAiTranslate, mindmapAiTargetLang, mindmapAiRestructure,
       matrixXFrom, matrixXTo, matrixYFrom, matrixYTo, matrixEdges, matrixDescriptions,
       matrixMaxPerPerson, matrixCategoryMode, matrixCategories,
+      matrixRatingMode, matrixRatingBudget, matrixRatingMulti, matrixRatingLive,
     });
   }
 
@@ -1523,6 +1543,8 @@ export default function QuestionPage() {
           <MatrixSettings
             value={matrixValue}
             onChange={updateMatrix}
+            ratingError={ratingModeError}
+            onRatingModeTouched={() => setRatingModeError("")}
           />
         )}
 

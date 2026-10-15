@@ -7,10 +7,10 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { getDefaultContentLang, localizedMap, type LocalizedText } from "@basicbar/ui";
-import type { MatrixCategory, MatrixCategoryMode } from "../api";
+import type { MatrixCategory, MatrixCategoryMode, MatrixRatingMode } from "../api";
 import { MATRIX_PALETTE, categoryLabel, colorName, type MatrixColor } from "../matrixPalette";
 import TranslatableField from "./TranslatableField";
-import { SegmentedControl, ToggleSwitch } from "./ui";
+import { InfoHint, SegmentedControl, ToggleSwitch } from "./ui";
 
 export interface MatrixSettingsValue {
   xFrom: LocalizedText;
@@ -22,6 +22,10 @@ export interface MatrixSettingsValue {
   maxPerPerson: number;
   categoryMode: MatrixCategoryMode;
   categories: MatrixCategory[];
+  ratingMode: MatrixRatingMode;
+  ratingBudget: number;
+  ratingMulti: boolean;
+  ratingLive: boolean;
 }
 
 export type MatrixUpdateFn = (prev: MatrixSettingsValue) => Partial<MatrixSettingsValue>;
@@ -162,6 +166,8 @@ export default function MatrixSettings({
   value,
   onChange,
   disabled = false,
+  ratingError = "",
+  onRatingModeTouched,
 }: {
   value: MatrixSettingsValue;
   /** Receives an updater, not a value: several fields can change in the same
@@ -169,6 +175,10 @@ export default function MatrixSettings({
    *  previous one instead of the render-time `value`. */
   onChange: (update: MatrixUpdate) => void;
   disabled?: boolean;
+  /** Server message of a refused rating-mode change (cleared by the parent). */
+  ratingError?: string;
+  /** The author picked another mode: the parent drops `ratingError`. */
+  onRatingModeTouched?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language.startsWith("de") ? "de" : "en";
@@ -360,6 +370,70 @@ export default function MatrixSettings({
         )}
       </div>
 
+      <div className="grid gap-3 border-t border-slate-200 pt-4 dark:border-slate-700" data-testid="matrix-rating">
+        <div>
+          <span className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t("Rating phase")}
+          </span>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+            {t(
+              "Optional: after collecting, you start a rating on the beamer and participants rate the cards. The scores stay hidden until you show the results.",
+            )}
+          </p>
+        </div>
+        <SegmentedControl
+          className="max-w-md"
+          ariaLabel={t("Rating phase")}
+          value={value.ratingMode === "" ? "off" : value.ratingMode}
+          onChange={(v) => {
+            patch({ ratingMode: v === "off" ? "" : v });
+            onRatingModeTouched?.();
+          }}
+          options={[
+            { value: "off", label: t("Off") },
+            { value: "points", label: t("Points") },
+            { value: "updown", label: t("Plus/minus") },
+          ]}
+        />
+        {ratingError && (
+          <p className="text-sm text-danger" data-testid="rating-mode-error">
+            {ratingError}
+          </p>
+        )}
+        {value.ratingMode !== "" && (
+          <>
+            <div className="flex items-center gap-2">
+              <MaxPerPerson
+                value={value.ratingBudget}
+                max={50}
+                onCommit={(ratingBudget) => patch({ ratingBudget })}
+                label={value.ratingMode === "points" ? t("Points per person") : t("Ratings per person")}
+              />
+              <InfoHint
+                text={
+                  value.ratingMode === "points"
+                    ? t("Each participant distributes this many points among the cards (1–50).")
+                    : t("Each participant may rate this many cards with 👍 or 👎 (1–50).")
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              {value.ratingMode === "points" && (
+                <ToggleSwitch
+                  checked={value.ratingMulti}
+                  onChange={(ratingMulti) => patch({ ratingMulti })}
+                  label={t("Allow several points per card")}
+                />
+              )}
+              <ToggleSwitch
+                checked={value.ratingLive}
+                onChange={(ratingLive) => patch({ ratingLive })}
+                label={t("Show ratings during the rating")}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </fieldset>
   );
 }
@@ -368,12 +442,12 @@ const numberInput =
   "w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none";
 
 /** Number input with a local string draft: clearing it with backspace must not
- *  snap to 1 while typing; the value is clamped to 1–100 on blur. */
-function MaxPerPerson({ value, onCommit, label }: { value: number; onCommit: (n: number) => void; label: string }) {
+ *  snap to 1 while typing; the value is clamped to 1–max (default 100) on blur. */
+function MaxPerPerson({ value, onCommit, label, max = 100 }: { value: number; onCommit: (n: number) => void; label: string; max?: number }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   const commit = () => {
-    const n = Math.min(100, Math.max(1, Math.round(Number(draft)) || 1));
+    const n = Math.min(max, Math.max(1, Math.round(Number(draft)) || 1));
     setDraft(String(n));
     onCommit(n);
   };
@@ -383,12 +457,12 @@ function MaxPerPerson({ value, onCommit, label }: { value: number; onCommit: (n:
       <input
         type="number"
         min={1}
-        max={100}
+        max={max}
         value={draft}
         onChange={(event) => {
           setDraft(event.target.value);
           const n = Number(event.target.value);
-          if (event.target.value !== "" && n >= 1 && n <= 100) onCommit(Math.round(n));
+          if (event.target.value !== "" && n >= 1 && n <= max) onCommit(Math.round(n));
         }}
         onBlur={commit}
         className={numberInput}

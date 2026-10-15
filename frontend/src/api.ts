@@ -168,6 +168,38 @@ export interface MatrixBoard {
   /** Visible cards (hidden cards and members of a hidden top excluded). */
   count: number;
   contributors: number;
+  /** Rating phase (presenter snapshot / results; only with a rating mode). */
+  rating?: MatrixRating;
+}
+
+/** Aggregated rating of one visible top card (same shape as the mind map). */
+export type MatrixScore = MindmapScore;
+
+/** One entry of a matrix ranking (rated visible top cards, best first). */
+export type MatrixRankingEntry = {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  zone: string;
+} & ({ points: number } | { up: number; down: number; balance: number });
+
+/** Rating phase of a matrix question (present only with a rating mode).
+ *  Presenter: `scores`/`ranking` only while rating with `live` on, or in the
+ *  results phase (reveal). Results: with `scores` + `ranking` unless
+ *  `rating_in_progress`. */
+export interface MatrixRating {
+  mode: "points" | "updown";
+  budget: number;
+  multi: boolean;
+  live: boolean;
+  /** Absent in results. */
+  stage?: "collect" | "rate";
+  /** Distinct participants with at least one rating (visible top cards). */
+  raters: number;
+  scores?: Record<string, MatrixScore>;
+  ranking?: MatrixRankingEntry[];
+  rating_in_progress?: boolean;
 }
 
 /** What a device needs to render the matrix (`matrix_settings`). */
@@ -290,6 +322,15 @@ export interface Question {
   matrix_category_mode: MatrixCategoryMode;
   /** matrix only: 2–6 categories when the mode is not "off". */
   matrix_categories: MatrixCategory[];
+  /** matrix only: optional rating phase after collecting ("" = off). */
+  matrix_rating_mode: MatrixRatingMode;
+  /** matrix only: points (points) or ratings (updown) per person (1–50). */
+  matrix_rating_budget: number;
+  /** matrix only, points: several points on one card allowed. */
+  matrix_rating_multi: boolean;
+  /** matrix only: scores are shown live while rating (default: hidden until
+   *  the results). */
+  matrix_rating_live: boolean;
   /** Per-question reveal override; "inherit" uses the set default (#28). */
   reveal_answers: "inherit" | RevealAnswers;
   /** Before/after pair (#54): the before-question this one mirrors (null if
@@ -1166,6 +1207,8 @@ export interface MindmapAiSimulation {
 export type MindmapAiUndo = { type: string; data: unknown }[];
 
 export type MindmapRatingMode = "" | "points" | "updown";
+/** Rating phase of a matrix question (same modes as the mind map). */
+export type MatrixRatingMode = MindmapRatingMode;
 
 /** Aggregated rating of one node (only rated visible nodes are keys). */
 export type MindmapScore =
@@ -1485,6 +1528,13 @@ export const live = {
   /** Deletes a teacher card (participant cards can only be hidden). */
   matrixDelete: (runId: number, questionId: number, card: number) =>
     matrixCall(runId, questionId, "delete", { card }),
+  /** Presenter switches the matrix stage (collect / rate); `open` also
+   *  opens the vote in the same request (like `mindmapStage`). */
+  matrixStage: (runId: number, questionId: number, stage: "collect" | "rate", open = false) =>
+    request<{ stage: "collect" | "rate"; phase: string }>(
+      `/api/runs/${runId}/matrix/${questionId}/stage`,
+      { method: "POST", body: JSON.stringify({ stage, open }) },
+    ),
   /** Presenter switches the mindmap stage (collect / rate); `open` also
    *  opens the vote in the same request (one broadcast, no flash). */
   mindmapStage: (runId: number, questionId: number, stage: "collect" | "rate", open = false) =>

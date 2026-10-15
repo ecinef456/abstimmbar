@@ -91,3 +91,68 @@ for (const scheme of ['light', 'dark'] as const) {
     });
   });
 }
+
+for (const scheme of ['light', 'dark'] as const) {
+  test.describe(`matrix rating results phone (${scheme})`, () => {
+    test.use({ colorScheme: scheme, storageState: AUTH.demo });
+
+    for (const mode of ['points', 'updown'] as const) {
+      test(`${mode}: bars and ranking without overflow, readable, axe`, async ({ page, playwright }) => {
+        test.setTimeout(90_000);
+        const demoApi = await playwright.request.newContext({ storageState: AUTH.demo });
+        const created: number[] = [];
+        try {
+          const room = await createRoomWithQuestions(demoApi, [], 'Matrix', (id) => created.push(id), 'E2E Matrix Rating');
+          const api = apiClient(demoApi);
+          const questionId = await createMatrixQuestion(api, room.setId, {
+            matrix_rating_mode: mode, matrix_rating_budget: 5, matrix_rating_multi: true,
+          });
+          const runId = await startRun(api, room.setId);
+          await control(api, runId, 'open', questionId);
+          const tokens = await joinParticipants(demoApi, room.code, 3);
+          const csrf = (await demoApi.storageState()).cookies.find((c) => c.name === 'abstimmbar_csrftoken')?.value ?? '';
+          const post = async (path: string, data: object) => {
+            const response = await demoApi.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/${path}/`, {
+              data, headers: { 'X-CSRFToken': csrf },
+            });
+            expect(response.ok(), await response.text()).toBeTruthy();
+            return response.json();
+          };
+          const long = 'Donaudampfschifffahrtsgesellschaftskapitän';
+          const a = (await post('add', { token: tokens[0], question: questionId, zone: 'q1', title: 'Chatbot für die Lehre', category: 'blue', description: '' })).card_id;
+          const b = (await post('add', { token: tokens[1], question: questionId, zone: 'q3', title: long, category: 'orange', description: '' })).card_id;
+          await api.post(`/api/runs/${runId}/matrix/${questionId}/stage`, { stage: 'rate' });
+          for (const [token, card] of [[0, a], [1, a], [2, b]] as const)
+            await post('rate', mode === 'points'
+              ? { token: tokens[token], question: questionId, card, delta: 1 }
+              : { token: tokens[token], question: questionId, card, value: card === a ? 1 : -1 });
+          await control(api, runId, 'finished');
+
+          await page.goto(`/sets/${room.setId}/results`);
+          const board = page.locator('[data-matrix-board]');
+          await expect(board).toBeVisible();
+          await expect(board.locator(`[data-card-id="${a}"] [data-card-score]`)).toHaveCount(1);
+          await page.evaluate(() => document.fonts.ready.then(() => undefined));
+          await page.waitForTimeout(600);
+          await expect(page.getByTestId('matrix-ranking').locator('[data-ranking-row]')).toHaveCount(2);
+          await expectNoHorizontalOverflow(page, `matrix rating results ${mode} (${scheme})`);
+          // The score row stays inside its card.
+          const cardBox = (await board.locator(`[data-card-id="${a}"]`).boundingBox())!;
+          const scoreBox = (await board.locator(`[data-card-id="${a}"] [data-card-score]`).boundingBox())!;
+          expect(scoreBox.x).toBeGreaterThanOrEqual(cardBox.x - 0.5);
+          expect(scoreBox.x + scoreBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 0.5);
+          if (process.env.MATRIX_RESULTS_SHOTS)
+            await page.screenshot({ path: `${process.env.MATRIX_RESULTS_SHOTS}/results-${mode}-phone-${scheme}.png`, fullPage: true });
+          const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+          expect(
+            violations.map((v) => ({ rule: v.id, nodes: v.nodes.slice(0, 5).map((n) => `${n.target.join(' ')} — ${n.any[0]?.message ?? ''}`) })),
+            `axe on matrix rating results phone (${mode}, ${scheme})`,
+          ).toEqual([]);
+        } finally {
+          await deleteRooms(demoApi, created);
+          await demoApi.dispose();
+        }
+      });
+    }
+  });
+}

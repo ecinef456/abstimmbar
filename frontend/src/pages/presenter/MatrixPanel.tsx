@@ -10,11 +10,18 @@
  *  with previous / next field and overview in a bar on top. Every presenter
  *  may arrange and moderate (not expert-only).
  *
+ *  Rating stage (`rating`): a line says what participants do (or that the
+ *  rating is closed and E reveals it); once the scores are shown the cards
+ *  carry fill bars and `view` "ranking" lays the ranked list over the board
+ *  (the board stays mounted and measured). Stacks are locked while rating:
+ *  a drop onto a card only moves it, unstack / dissolve / delete are
+ *  disabled with a hint (the server refuses them too, 409 → toast).
+ *
  *  Server answers are authoritative: every call returns the whole board,
  *  which replaces the shown one until the next SSE update arrives; errors
  *  revert the optimistic position and show a short toast. */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import {
   AlignJustify,
   ChevronLeft,
@@ -29,8 +36,9 @@ import {
   X,
   ZoomIn,
 } from "lucide-react";
-import { live, type MatrixBoard, type MatrixCard, type MatrixSettingsPayload } from "../../api";
+import { live, type MatrixBoard, type MatrixCard, type MatrixRating, type MatrixSettingsPayload } from "../../api";
 import Matrix, { matrixStacks, matrixZoneName } from "../../results/Matrix";
+import MatrixRanking from "../../results/MatrixRanking";
 import { clampToZone, resolveZone } from "../../results/matrixGeometry";
 import { categoryLabel } from "../../matrixPalette";
 import { MatrixCategoryChips, MatrixZonePicker } from "../../results/MatrixZonePicker";
@@ -49,7 +57,7 @@ const HANDLE =
 const ROUND_BTN =
   "flex h-9 w-9 items-center justify-center rounded-full hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600";
 const SMALL_BTN =
-  "rounded-lg border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600";
+  "rounded-lg border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:opacity-50";
 
 /** Width of the largest 16:9 box that fits the element. */
 function useFitWidth(ref: RefObject<HTMLDivElement>) {
@@ -78,6 +86,9 @@ export default function MatrixPanel({
   handleStep,
   drawerAttr,
   overlayOpen = false,
+  rating,
+  phase,
+  view = "raw",
 }: {
   runId: number;
   questionId: number;
@@ -91,8 +102,21 @@ export default function MatrixPanel({
   /** A presenter overlay (QR/join, AI or moderation panel) is open: its Esc
    *  comes first. */
   overlayOpen?: boolean;
+  /** Rating phase of the question (only with a rating mode). */
+  rating?: MatrixRating;
+  /** Run phase ("open", "closed", "results"). */
+  phase?: string;
+  /** Footer view: the board, or the ranking (only with scores). */
+  view?: "raw" | "ranking";
 }) {
   const { t, i18n } = useTranslation();
+  const rateStage = rating?.stage === "rate";
+  const scores = rating?.scores;
+  const shownRating = useMemo(
+    () => (rating && scores && Object.keys(scores).length > 0 ? { mode: rating.mode, scores } : undefined),
+    [rating, scores],
+  );
+  const showRanking = view === "ranking" && !!shownRating;
   const lang = i18n.language.startsWith("de") ? "de" : "en";
 
   // --- Board: server state, last response, optimistic placements ---------
@@ -368,6 +392,31 @@ export default function MatrixPanel({
 
   return (
     <>
+      {rating && rateStage && phase === "open" && (
+        <p className="mx-auto mt-1 text-center text-base leading-relaxed text-slate-600" data-testid="mx-rating-banner">
+          <span className="mr-2 inline-block rounded-full bg-brand-100 px-2.5 py-0.5 text-sm font-semibold text-brand-800">
+            {t("Rating")}
+          </span>
+          {rating.mode === "points"
+            ? t("Rate the cards on your device: {{count}} points per person", { count: rating.budget })
+            : t("Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person", {
+                count: rating.budget,
+              })}
+          {!scores && <span className="text-slate-500"> · {t("results follow at the end")}</span>}
+        </p>
+      )}
+      {rating && rateStage && phase === "closed" && (
+        <p className="mx-auto mt-1 text-center text-base leading-relaxed text-slate-600" data-testid="mx-rating-closed">
+          <span className="mr-2 inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-sm font-semibold text-slate-700">
+            {t("Rating closed")}
+          </span>
+          {scores ? null : (
+            <Trans i18nKey="mm_rating_reveal_hint">
+              Reveal the results with <kbd className="rounded border border-slate-300 bg-slate-50 px-1.5 font-mono text-sm">E</kbd>
+            </Trans>
+          )}
+        </p>
+      )}
       <div
         ref={fitRef}
         data-testid="matrix-viewport"
@@ -381,6 +430,8 @@ export default function MatrixPanel({
             data-matrix-world=""
             className="absolute left-0 top-0"
             style={{
+              // The ranking lies over the board; the board stays laid out.
+              visibility: showRanking ? "hidden" : undefined,
               width: fitWidth,
               transform: `translate(${bv.view.x}px, ${bv.view.y}px) scale(${bv.view.s})`,
               transformOrigin: "0 0",
@@ -398,13 +449,24 @@ export default function MatrixPanel({
               onToggleCategory={toggleCategory}
               legendHelp="mx.legend"
               showHidden={showHidden}
-              interactive={{ onMove, onStack, onOpen: onOpenCard }}
+              interactive={{ onMove, onStack, onOpen: onOpenCard, stackLocked: rateStage }}
+              rating={shownRating}
               onZoomQuadrant={bv.focusOn}
               quadrantFocused={bv.focus != null}
             />
           </div>
         )}
-        {bv.focus && (
+        {showRanking && rating && (
+          <div
+            className="absolute inset-0 z-20 overflow-y-auto bg-white px-4 py-4"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto w-full max-w-4xl">
+              <MatrixRanking entries={rating.ranking ?? []} mode={rating.mode} settings={settings} limit={8} />
+            </div>
+          </div>
+        )}
+        {bv.focus && !showRanking && (
           // Focused quadrant: previous / next field and back to the overview.
           <div
             data-matrix-focus-bar=""
@@ -467,6 +529,7 @@ export default function MatrixPanel({
           board={board}
           zoneName={zoneName}
           catText={catText}
+          stacksLocked={rateStage}
           onClose={closeDialog}
           onUnstack={(id) => void call(() => live.matrixUnstack(runId, questionId, id))}
           onHide={(id, hidden) => {
@@ -531,6 +594,7 @@ export default function MatrixPanel({
         onShowHidden={setShowHidden}
         cards={board.cards}
         catText={catText}
+        stacksLocked={rateStage}
         onRestore={(id) => call(() => live.matrixHide(runId, questionId, id, false))}
         onUnstack={(id) => call(() => live.matrixUnstack(runId, questionId, id))}
         onClose={(byKeyboard) => closeHandles(byKeyboard)}
@@ -625,6 +689,7 @@ function CardDialog({
   board,
   zoneName,
   catText,
+  stacksLocked,
   onClose,
   onUnstack,
   onHide,
@@ -635,6 +700,8 @@ function CardDialog({
   board: MatrixBoard;
   zoneName: (zone: string) => string;
   catText: (key: string) => string;
+  /** Rating stage: unstack and delete are locked. */
+  stacksLocked: boolean;
   onClose: (byKeyboard: boolean) => void;
   onUnstack: (id: number) => void;
   onHide: (id: number, hidden: boolean) => void;
@@ -651,7 +718,13 @@ function CardDialog({
   const actions = (c: MatrixCard, inStack: boolean) => (
     <div className="flex flex-wrap gap-2">
       {inStack && (
-        <button type="button" className={SMALL_BTN} onClick={() => onUnstack(c.id)} aria-label={t("Unstack {{title}}", { title: c.title })}>
+        <button
+          type="button"
+          className={SMALL_BTN}
+          disabled={stacksLocked}
+          onClick={() => onUnstack(c.id)}
+          aria-label={t("Unstack {{title}}", { title: c.title })}
+        >
           {t("Unstack")}
         </button>
       )}
@@ -667,6 +740,7 @@ function CardDialog({
         <button
           type="button"
           className={`${SMALL_BTN} border-red-200 text-red-700 hover:bg-red-50`}
+          disabled={stacksLocked}
           onClick={() => onDelete(c.id)}
           aria-label={inStack ? t("Delete {{title}}", { title: c.title }) : undefined}
         >
@@ -713,6 +787,12 @@ function CardDialog({
         {card.description && (
           <p className="mt-3 whitespace-pre-line text-lg [overflow-wrap:anywhere]">{card.description}</p>
         )}
+        {stacksLocked && (all.length > 0 || card.teacher) && (
+          <p data-testid="matrix-stacks-locked" className="mt-3 flex items-center gap-1.5 text-sm text-slate-600">
+            <Info aria-hidden className="h-4 w-4 shrink-0" />
+            {t("Stacking and deleting are locked while rating.")}
+          </p>
+        )}
         <div className="mt-4">{actions(card, false)}</div>
         {all.length > 0 && (
           <section className="mt-5 border-t border-slate-100 pt-4">
@@ -754,6 +834,7 @@ function AddDrawer({
   onShowHidden,
   cards,
   catText,
+  stacksLocked,
   onRestore,
   onUnstack,
   onClose,
@@ -768,6 +849,7 @@ function AddDrawer({
   onShowHidden: (v: boolean) => void;
   cards: MatrixCard[];
   catText: (key: string) => string;
+  stacksLocked: boolean;
   onRestore: (id: number) => Promise<unknown>;
   onUnstack: (id: number) => Promise<MatrixBoard | null>;
   onClose: (byKeyboard: boolean) => void;
@@ -905,6 +987,7 @@ function AddDrawer({
         <ModerateView
           cards={cards}
           catText={catText}
+          stacksLocked={stacksLocked}
           showHidden={showHidden}
           onShowHidden={onShowHidden}
           onRestore={onRestore}
@@ -923,6 +1006,7 @@ function AddDrawer({
 function ModerateView({
   cards,
   catText,
+  stacksLocked,
   showHidden,
   onShowHidden,
   onRestore,
@@ -930,6 +1014,8 @@ function ModerateView({
 }: {
   cards: MatrixCard[];
   catText: (key: string) => string;
+  /** Rating stage: releasing / dissolving is locked (hint shown). */
+  stacksLocked: boolean;
   showHidden: boolean;
   onShowHidden: (v: boolean) => void;
   onRestore: (id: number) => Promise<unknown>;
@@ -994,7 +1080,7 @@ function ModerateView({
       setDissolving(false);
     }
   };
-  const BTN = "ml-2 shrink-0 text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 aria-disabled:opacity-50";
+  const BTN = "ml-2 shrink-0 text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 aria-disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50";
   return (
     <div
       id="matrix-drawer-panel-moderate"
@@ -1004,6 +1090,15 @@ function ModerateView({
       className="flex min-h-0 flex-1 flex-col text-left text-sm"
     >
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {stacksLocked && (
+          <p
+            data-testid="matrix-stacks-locked"
+            className="mb-3 flex items-start gap-1.5 rounded-lg bg-slate-100 px-2.5 py-2 text-slate-700"
+          >
+            <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+            {t("Stacking and deleting are locked while rating.")}
+          </p>
+        )}
         {hidden.length === 0 && stacks.length === 0 && <p className="text-slate-500">{t("Nothing moderated yet.")}</p>}
         {hidden.length > 0 && (
           <section aria-labelledby="matrix-mod-hidden" data-testid="matrix-mod-hidden">
@@ -1050,6 +1145,7 @@ function ModerateView({
                     data-mod-group={`stack-${st.card.id}`}
                     className={BTN}
                     aria-disabled={dissolving || undefined}
+                    disabled={stacksLocked}
                     onClick={(e) => void act(e, `stack-${st.card.id}`, "matrix-mod-stacks", () => dissolve(st.card.id))}
                     aria-label={t("Dissolve stack {{title}}", { title: st.card.title })}
                   >
@@ -1066,6 +1162,7 @@ function ModerateView({
                         data-mod-group={st.members.length === 1 ? `stack-${st.card.id}` : undefined}
                         className={BTN}
                         aria-disabled={dissolving || undefined}
+                        disabled={stacksLocked}
                         onClick={(e) => void act(e, st.members.length === 1 ? `stack-${st.card.id}` : "", "matrix-mod-stacks", () => onUnstack(m.id))}
                         aria-label={t("Unstack {{title}}", { title: m.title })}
                       >

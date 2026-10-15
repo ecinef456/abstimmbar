@@ -44,6 +44,57 @@ async function login(page: Page) {
   await page.waitForURL('http://localhost:5174/**');
 }
 
+/** Seed a rated matrix: stack (Feedback-Tool on Chatbot), a hidden card, and
+ *  ratings. `points`: Chatbot 4, Altlast 2, Podcast 1; `updown`: Chatbot +3/−0,
+ *  Altlast +1/−2, Podcast +1/−0. `finish` false leaves the run in the rating
+ *  stage (scores secret unless `live`). */
+async function seedRated(
+  page: Page,
+  trackRoom: (id: number) => void,
+  mode: 'points' | 'updown',
+  opts: { finish?: boolean; live?: boolean } = {},
+) {
+  const finish = opts.finish ?? true;
+  const room = await createRoomWithQuestions(page.request, [], 'Matrix Bewertung', trackRoom, 'E2E Matrix Rating');
+  const api = apiClient(page.request);
+  const questionId = await createMatrixQuestion(api, room.setId, {
+    matrix_rating_mode: mode, matrix_rating_budget: 5, matrix_rating_multi: true, matrix_rating_live: opts.live ?? false,
+  });
+  const runId = await startRun(api, room.setId);
+  await control(api, runId, 'open', questionId);
+  const tokens = await joinParticipants(page.request, room.code, 3);
+  const csrf = (await page.request.storageState()).cookies.find((c) => c.name === 'abstimmbar_csrftoken')?.value ?? '';
+  const headers = { 'X-CSRFToken': csrf };
+  const post = async (path: string, data: object) => {
+    const response = await page.request.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/${path}/`, { data, headers });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    return response.json();
+  };
+  const add = async (token: string, zone: string, title: string, category: string) =>
+    (await post('add', { token, question: questionId, zone, title, category, description: '' })).card_id as number;
+  const chatbot = await add(tokens[0], 'q1', 'Chatbot', 'blue');
+  const feedback = await add(tokens[1], 'q1', 'Feedback-Tool', 'blue');
+  const altlast = await add(tokens[1], 'q3', 'Altlast', 'orange');
+  const podcast = await add(tokens[0], 'q2', 'Podcast', 'orange');
+  const secret = await add(tokens[2], 'q4', 'Versteckte Idee', 'orange');
+  await api.post(`/api/runs/${runId}/matrix/${questionId}/stack`, { card: feedback, onto: chatbot });
+  await api.post(`/api/runs/${runId}/matrix/${questionId}/hide`, { card: secret, hidden: true });
+  await api.post(`/api/runs/${runId}/matrix/${questionId}/stage`, { stage: 'rate' });
+  const rate = (token: string, card: number, body: object) => post('rate', { token, question: questionId, card, ...body });
+  if (mode === 'points') {
+    for (const [token, card, n] of [[0, chatbot, 3], [1, chatbot, 1], [1, altlast, 2], [2, podcast, 1]] as const)
+      for (let i = 0; i < n; i++) await rate(tokens[token], card, { delta: 1 });
+  } else {
+    for (const [token, card, value] of [
+      [0, chatbot, 1], [1, chatbot, 1], [2, chatbot, 1],
+      [0, altlast, 1], [1, altlast, -1], [2, altlast, -1],
+      [0, podcast, 1],
+    ] as const) await rate(tokens[token], card, { value });
+  }
+  if (finish) await control(api, runId, 'finished');
+  return { room, chatbot, altlast, podcast, secret, api };
+}
+
 async function seed(page: Page, trackRoom: (id: number) => void, opts: { tokens?: number; finish?: boolean } = {}) {
   const room = await createRoomWithQuestions(page.request, [], 'Matrix Ergebnisse', trackRoom, 'E2E Matrix');
   const api = apiClient(page.request);
@@ -251,4 +302,130 @@ test('results: axis labels without arrows, four distinct tints (q1 green, q3 ros
     Object.fromEntries(els.map((el) => [el.getAttribute('data-tint')!, getComputedStyle(el).backgroundColor])),
   );
   expect(new Set(Object.values(t)).size).toBe(4);
+});
+
+/** Ink colour of an element against the nearest opaque background behind it. */
+async function inkContrast(loc: ReturnType<Page['locator']>) {
+  return loc.evaluate((el) => {
+    const toRgb = (css: string) => {
+      const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d')!;
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data);
+    };
+    let bg = [255, 255, 255];
+    for (let n: HTMLElement | null = el as HTMLElement; n; n = n.parentElement) {
+      const c = toRgb(getComputedStyle(n).backgroundColor);
+      if (c[3] === 255) { bg = c.slice(0, 3); break; }
+    }
+    const f = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+    const lum = ([r, g, b]: number[]) => 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    const [hi, lo] = [lum(toRgb(getComputedStyle(el).color)), lum(bg)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  });
+}
+
+async function noAxe(page: Page, label: string) {
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  expect(
+    violations.map((v) => ({ rule: v.id, nodes: v.nodes.slice(0, 5).map((n) => `${n.target.join(' ')} — ${n.any[0]?.message ?? ''}`) })),
+    label,
+  ).toEqual([]);
+}
+
+const SHOTS = process.env.MATRIX_RESULTS_SHOTS ?? '';
+
+for (const scheme of ['light', 'dark'] as const) {
+  test.describe(`matrix rating results (${scheme})`, () => {
+    test.use({ colorScheme: scheme });
+
+    test('points: bars on cards, ranking order, score text, raters', async ({ page, trackRoom }) => {
+      test.setTimeout(120_000);
+      await login(page);
+      const { room, chatbot, altlast, podcast, secret } = await seedRated(page, trackRoom, 'points');
+      await page.goto(`/sets/${room.setId}/results`);
+      const board = page.locator('[data-matrix-board]');
+      await expect(board).toBeVisible();
+
+      // Bars on the rated visible top cards only (not on the hidden card).
+      for (const id of [chatbot, altlast, podcast]) await expect(board.locator(`[data-card-id="${id}"] [data-card-score]`)).toHaveCount(1);
+      await expect(board.locator(`[data-card-id="${secret}"] [data-card-score]`)).toHaveCount(0);
+      await expect(board.locator(`[data-card-id="${chatbot}"] [data-score-text]`)).toHaveText('4 Punkte');
+      const share = (id: number) =>
+        board.locator(`[data-card-id="${id}"]`).evaluate((el) => {
+          const track = el.querySelector('[data-score-track]') as HTMLElement;
+          const bar = el.querySelector('[data-score-bar]') as HTMLElement;
+          return bar.getBoundingClientRect().width / track.getBoundingClientRect().width;
+        });
+      expect(await share(chatbot)).toBeGreaterThan(0.95);
+      expect(await share(altlast)).toBeGreaterThan(0.4);
+      expect(await share(altlast)).toBeLessThan(0.6);
+
+      // Ranking list below, best first.
+      const ranking = page.getByTestId('matrix-ranking');
+      await expect(ranking).toBeVisible();
+      await expect(page.getByText('Punkte · bewertet von 3')).toBeVisible();
+      const rows = ranking.locator('[data-ranking-row]');
+      await expect(rows).toHaveCount(3);
+      await expect(rows.nth(0)).toContainText('Chatbot');
+      await expect(rows.nth(0)).toContainText('4 Punkte');
+      await expect(rows.nth(1)).toContainText('Altlast');
+      await expect(rows.nth(1)).toContainText('2 Punkte');
+      await expect(rows.nth(2)).toContainText('Podcast');
+      await expect(ranking.getByText('Versteckte Idee')).toHaveCount(0);
+      // Contrast of the score text on the card (dark variant needed).
+      expect(await inkContrast(board.locator(`[data-card-id="${chatbot}"] [data-score-text]`))).toBeGreaterThanOrEqual(4.5);
+      expect(await inkContrast(rows.nth(0).locator('span.tabular-nums').last())).toBeGreaterThanOrEqual(4.5);
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/results-points-${scheme}.png`, fullPage: true });
+      await noAxe(page, `axe matrix rating results points (${scheme})`);
+    });
+
+    test('updown: plus/minus bars, balance ranking, contrast', async ({ page, trackRoom }) => {
+      test.setTimeout(120_000);
+      await login(page);
+      const { room, chatbot, altlast } = await seedRated(page, trackRoom, 'updown');
+      await page.goto(`/sets/${room.setId}/results`);
+      const board = page.locator('[data-matrix-board]');
+      await expect(board).toBeVisible();
+      await expect(board.locator(`[data-card-id="${chatbot}"] [data-score-up]`)).toHaveCount(1);
+      await expect(board.locator(`[data-card-id="${altlast}"] [data-score-down]`)).toHaveCount(1);
+      await expect(board.locator(`[data-card-id="${altlast}"] [data-score-text]`)).toHaveText('+1 / −2');
+      await expect(page.getByText('Plus/Minus · bewertet von 3')).toBeVisible();
+      const ranking = page.getByTestId('matrix-ranking');
+      const rows = ranking.locator('[data-ranking-row]');
+      await expect(rows.nth(0)).toContainText('Chatbot');
+      await expect(rows.nth(0)).toContainText('+3');
+      await expect(rows.nth(2)).toContainText('Altlast');
+      await expect(rows.nth(2)).toContainText('−1');
+      for (const span of await board.locator(`[data-card-id="${altlast}"] [data-score-text] > span`).all())
+        expect(await inkContrast(span)).toBeGreaterThanOrEqual(4.5);
+      for (const span of await rows.nth(2).locator('[aria-hidden] > span').all())
+        expect(await inkContrast(span)).toBeGreaterThanOrEqual(4.5);
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/results-updown-${scheme}.png`, fullPage: true });
+      await noAxe(page, `axe matrix rating results updown (${scheme})`);
+    });
+  });
+}
+
+test('hidden scores while rating is in progress: no bars, no ranking, a note', async ({ page, trackRoom }) => {
+  test.setTimeout(120_000);
+  await login(page);
+  const { room, chatbot } = await seedRated(page, trackRoom, 'points', { finish: false, live: false });
+  await page.goto(`/sets/${room.setId}/results`);
+  await expect(page.locator('[data-matrix-board]')).toBeVisible();
+  await expect(page.getByTestId('mx-rating-in-progress')).toContainText('Bewertung läuft noch');
+  await expect(page.getByTestId('matrix-ranking')).toHaveCount(0);
+  await expect(page.locator(`[data-card-id="${chatbot}"] [data-card-score]`)).toHaveCount(0);
+  await expect(page.getByText('Punkte · bewertet von 3')).toBeVisible();
+});
+
+test('a matrix without rating mode shows no ranking section', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  await login(page);
+  const { room } = await seed(page, trackRoom);
+  await page.goto(`/sets/${room.setId}/results`);
+  await expect(page.locator('[data-matrix-board]')).toBeVisible();
+  await expect(page.getByTestId('matrix-ranking')).toHaveCount(0);
+  await expect(page.getByTestId('mx-rating-in-progress')).toHaveCount(0);
 });

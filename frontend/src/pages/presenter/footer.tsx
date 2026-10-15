@@ -26,6 +26,7 @@ import {
   QrCode,
   Quote,
   Square,
+  ThumbsUp,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -61,6 +62,12 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   "view.mm.raw": { name: "Mind map", text: "The collected terms as a map." },
   "view.mm.ranking": { name: "Ranking", text: "The rated terms, best first." },
   "view.mx.raw": { name: "Matrix", text: "The cards on the four-field board." },
+  "view.mx.ranking": { name: "Ranking", text: "The rated cards, best first." },
+  "mx.rate": { name: "Start rating", text: "Participants rate the collected cards." },
+  "mx.collect": {
+    name: "Back to collecting",
+    text: "Participants add cards again; the ratings are kept.",
+  },
   "mm.rate": { name: "Start rating", text: "Participants rate the collected terms." },
   "mm.collect": {
     name: "Back to collecting",
@@ -119,7 +126,7 @@ const RESULT_ICONS: Record<string, Record<string, LucideIcon>> = {
   wc: { raw: Cloud, consolidated: BrushCleaning, grouped: LayoutGrid },
   ft: { raw: List, results: Gauge, consolidated: Quote, grouped: LayoutGrid },
   mm: { raw: Network, ranking: ListOrdered },
-  mx: { raw: Grid2x2 },
+  mx: { raw: Grid2x2, ranking: ListOrdered },
 };
 
 /** The ordered view list of a question: Question · results view(s) ·
@@ -306,6 +313,8 @@ export function Footer(props: {
   helpShown?: boolean;
   /** Question-specific action icons left of Start/Stop (mind-map rating). */
   extra?: ReactNode;
+  /** Rating stage of a mind map / matrix: Start/Stop acts on the rating. */
+  rating?: boolean;
   /** Plain-text titles of all questions: makes "3/12" a jump menu. */
   questionTitles?: string[];
   onJump?: (index: number) => void;
@@ -323,6 +332,11 @@ export function Footer(props: {
       ? t("Question {{current}}/{{total}}", { current: props.index + 1, total: props.count })
       : position;
   const startLabel = props.phase === "open" ? t("Stop") : t("Start", { context: "action" });
+  const toggleName = props.rating
+    ? props.phase === "open"
+      ? t("Stop rating")
+      : t("Start rating")
+    : startLabel;
   // Colour guidance: the one next step is green — Start before voting, Stop
   // while it runs; once a question is closed/shown, "→" (next question).
   const done = props.phase === "closed" || props.phase === "results";
@@ -374,7 +388,9 @@ export function Footer(props: {
             data-help="toggle"
             data-next-step={!nextIsNext || undefined}
             aria-keyshortcuts="S"
-            title={`${startLabel} (S)`}
+            title={`${toggleName} (S)`}
+            aria-label={props.rating ? toggleName : undefined}
+            data-rating={props.rating ? "true" : undefined}
             onClick={(e) => {
               blurOnMouse(e);
               props.onToggle!();
@@ -390,6 +406,7 @@ export function Footer(props: {
             ) : (
               <Play aria-hidden className="h-4 w-4" fill="currentColor" />
             )}
+            {props.rating && <ThumbsUp aria-hidden data-testid="toggle-rating-icon" className="h-4 w-4" />}
             {startLabel}
           </button>
         )}
