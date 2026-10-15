@@ -531,7 +531,7 @@ export default function MatrixPanel({
         onShowHidden={setShowHidden}
         cards={board.cards}
         catText={catText}
-        onRestore={(id) => void call(() => live.matrixHide(runId, questionId, id, false))}
+        onRestore={(id) => call(() => live.matrixHide(runId, questionId, id, false))}
         onUnstack={(id) => call(() => live.matrixUnstack(runId, questionId, id))}
         onClose={(byKeyboard) => closeHandles(byKeyboard)}
         onAdd={(body) => call(() => live.matrixAdd(runId, questionId, body))}
@@ -768,8 +768,8 @@ function AddDrawer({
   onShowHidden: (v: boolean) => void;
   cards: MatrixCard[];
   catText: (key: string) => string;
-  onRestore: (id: number) => void;
-  onUnstack: (id: number) => Promise<unknown>;
+  onRestore: (id: number) => Promise<unknown>;
+  onUnstack: (id: number) => Promise<MatrixBoard | null>;
   onClose: (byKeyboard: boolean) => void;
   onAdd: (body: { zone: string; title: string; category: string; description: string }) => Promise<MatrixBoard | null>;
 }) {
@@ -826,9 +826,10 @@ function AddDrawer({
           data-help="mx.drawer-views"
           className="flex min-w-0 gap-1 rounded-lg bg-slate-100 p-0.5 text-sm font-semibold"
           onKeyDown={(e) => {
-            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
             e.preventDefault();
-            const next = view === "add" ? "moderate" : "add";
+            const next =
+              e.key === "Home" ? "add" : e.key === "End" ? "moderate" : view === "add" ? "moderate" : "add";
             setView(next);
             e.currentTarget.querySelector<HTMLElement>(`[data-view="${next}"]`)?.focus();
           }}
@@ -841,7 +842,7 @@ function AddDrawer({
               id={`matrix-drawer-tab-${v}`}
               data-view={v}
               aria-selected={view === v}
-              aria-controls={`matrix-drawer-panel-${v}`}
+              aria-controls={view === v ? `matrix-drawer-panel-${v}` : undefined}
               tabIndex={view === v ? 0 : -1}
               onClick={() => setView(v)}
               className={`truncate rounded-md px-2.5 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
@@ -916,7 +917,9 @@ function AddDrawer({
 
 /** Moderate view of the pencil drawer, laid out like the word cloud's
  *  moderation panel: "Hidden" with "Show again", "Stacks" with the members
- *  of each stack (release one, or dissolve the whole stack). */
+ *  of each stack (release one, or dissolve the whole stack). Focus never
+ *  drops to the page: after an action it moves to the next (else previous)
+ *  action button, else the section heading, else the "Moderate" tab. */
 function ModerateView({
   cards,
   catText,
@@ -929,23 +932,73 @@ function ModerateView({
   catText: (key: string) => string;
   showHidden: boolean;
   onShowHidden: (v: boolean) => void;
-  onRestore: (id: number) => void;
-  onUnstack: (id: number) => Promise<unknown>;
+  onRestore: (id: number) => Promise<unknown>;
+  onUnstack: (id: number) => Promise<MatrixBoard | null>;
 }) {
   const { t } = useTranslation();
   const hidden = cards.filter((c) => c.hidden);
   const stacks = matrixStacks(cards).filter((s) => s.members.length > 0);
   const [dissolving, setDissolving] = useState(false);
-  const dissolve = async (members: MatrixCard[]) => {
-    setDissolving(true);
-    // One after the other: each response carries the whole board.
-    for (const m of members) if ((await onUnstack(m.id)) == null) break;
-    setDissolving(false);
+  const running = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<{ key: string | null; heading: string } | null>(null);
+  const [tick, setTick] = useState(0);
+  // Pick the focus target before the action removes the clicked button.
+  const pickTarget = (from: HTMLElement, group: string, heading: string) => {
+    const all = [...(panelRef.current?.querySelectorAll<HTMLElement>("[data-mod-key]") ?? [])];
+    const at = all.indexOf(from);
+    const others = (el: HTMLElement) => el !== from && (!group || el.dataset.modGroup !== group);
+    const next = all.slice(at + 1).find(others) ?? all.slice(0, at).reverse().find(others);
+    return { key: next?.dataset.modKey ?? null, heading };
   };
-  const BTN = "ml-2 shrink-0 text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600";
+  const settle = (target: { key: string | null; heading: string }) => {
+    pendingFocus.current = target;
+    setTick((n) => n + 1);
+  };
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (!target) return;
+    pendingFocus.current = null;
+    const panel = panelRef.current;
+    const el =
+      (target.key && panel?.querySelector<HTMLElement>(`[data-mod-key="${target.key}"]`)) ||
+      panel?.querySelector<HTMLElement>(`#${target.heading}`) ||
+      document.getElementById("matrix-drawer-tab-moderate");
+    el?.focus({ preventScroll: true });
+  }, [tick, cards]);
+  const act = async (e: { currentTarget: HTMLElement }, group: string, heading: string, run: () => Promise<unknown>) => {
+    if (running.current) return;
+    running.current = true;
+    const target = pickTarget(e.currentTarget, group, heading);
+    try {
+      await run();
+    } finally {
+      running.current = false;
+      settle(target);
+    }
+  };
+  const dissolve = async (topId: number) => {
+    setDissolving(true);
+    try {
+      // One after the other: each response carries the whole board; the
+      // members are re-read from it so already-free cards are skipped.
+      let current = cards;
+      for (;;) {
+        const member = current.find((c) => c.stack === topId);
+        if (!member) break;
+        const board = await onUnstack(member.id);
+        if (!board) break;
+        current = board.cards;
+      }
+    } finally {
+      setDissolving(false);
+    }
+  };
+  const BTN = "ml-2 shrink-0 text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 aria-disabled:opacity-50";
   return (
     <div
       id="matrix-drawer-panel-moderate"
+      ref={panelRef}
       role="tabpanel"
       aria-labelledby="matrix-drawer-tab-moderate"
       className="flex min-h-0 flex-1 flex-col text-left text-sm"
@@ -954,7 +1007,7 @@ function ModerateView({
         {hidden.length === 0 && stacks.length === 0 && <p className="text-slate-500">{t("Nothing moderated yet.")}</p>}
         {hidden.length > 0 && (
           <section aria-labelledby="matrix-mod-hidden" data-testid="matrix-mod-hidden">
-            <h3 id="matrix-mod-hidden" className="mb-1 font-semibold text-slate-600">{t("Hidden")}</h3>
+            <h3 id="matrix-mod-hidden" tabIndex={-1} className="mb-1 font-semibold text-slate-600 focus:outline-none">{t("Hidden")}</h3>
             <ul>
               {hidden.map((c) => {
                 const category = catText(c.category);
@@ -966,8 +1019,9 @@ function ModerateView({
                     </span>
                     <button
                       type="button"
+                      data-mod-key={`show-${c.id}`}
                       className={BTN}
-                      onClick={() => onRestore(c.id)}
+                      onClick={(e) => void act(e, "", "matrix-mod-hidden", () => onRestore(c.id))}
                       aria-label={t("Show {{title}} on the beamer again", { title: c.title })}
                     >
                       {t("Show card again")}
@@ -980,7 +1034,7 @@ function ModerateView({
         )}
         {stacks.length > 0 && (
           <section aria-labelledby="matrix-mod-stacks" data-testid="matrix-mod-stacks" className={hidden.length > 0 ? "mt-3" : ""}>
-            <h3 id="matrix-mod-stacks" className="mb-1 font-semibold text-slate-600">{t("Stacks")}</h3>
+            <h3 id="matrix-mod-stacks" tabIndex={-1} className="mb-1 font-semibold text-slate-600 focus:outline-none">{t("Stacks")}</h3>
             {stacks.map((st) => (
               <div key={st.card.id} className="mb-2 rounded-lg border border-slate-200 p-2">
                 <div className="flex items-center justify-between">
@@ -992,9 +1046,11 @@ function ModerateView({
                   </span>
                   <button
                     type="button"
+                    data-mod-key={`dissolve-${st.card.id}`}
+                    data-mod-group={`stack-${st.card.id}`}
                     className={BTN}
-                    disabled={dissolving}
-                    onClick={() => void dissolve(st.members)}
+                    aria-disabled={dissolving || undefined}
+                    onClick={(e) => void act(e, `stack-${st.card.id}`, "matrix-mod-stacks", () => dissolve(st.card.id))}
                     aria-label={t("Dissolve stack {{title}}", { title: st.card.title })}
                   >
                     {t("Dissolve stack")}
@@ -1006,9 +1062,11 @@ function ModerateView({
                       <span className="min-w-0 truncate">{m.title}</span>
                       <button
                         type="button"
+                        data-mod-key={`unstack-${m.id}`}
+                        data-mod-group={st.members.length === 1 ? `stack-${st.card.id}` : undefined}
                         className={BTN}
-                        disabled={dissolving}
-                        onClick={() => void onUnstack(m.id)}
+                        aria-disabled={dissolving || undefined}
+                        onClick={(e) => void act(e, st.members.length === 1 ? `stack-${st.card.id}` : "", "matrix-mod-stacks", () => onUnstack(m.id))}
                         aria-label={t("Unstack {{title}}", { title: m.title })}
                       >
                         {t("Unstack")}
@@ -1029,7 +1087,7 @@ function ModerateView({
         <p className="mt-1 text-xs text-slate-500">
           {hidden.length === 0
             ? t("No hidden cards. Open a card to hide it.")
-            : t("Hidden: {{count}} — shown dashed; open one to show it again.", { count: hidden.length })}
+            : t("Hidden: {{count}}", { count: hidden.length })}
         </p>
       </div>
     </div>

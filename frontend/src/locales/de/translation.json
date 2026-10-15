@@ -1178,6 +1178,7 @@
   "Choose a field": "Feld wählen",
   "Choose a category": "Kategorie wählen",
   "Show hidden cards": "Ausgeblendete anzeigen",
+  "Hidden: {{count}}": "Ausgeblendet: {{count}}",
   "Card management": "Kartenverwaltung",
   "Show card again": "Wieder anzeigen",
   "Show {{title}} on the beamer again": "{{title}} wieder auf dem Beamer anzeigen",

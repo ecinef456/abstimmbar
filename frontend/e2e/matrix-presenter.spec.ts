@@ -944,12 +944,15 @@ test('moderation view: hidden cards restore, stacks release members / dissolve',
   await expect(stackSection).toContainText('2');
   await expect(stackSection.getByText('Feedback-Tool')).toBeVisible();
 
+  const focusInDrawer = () =>
+    expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="matrix-drawer"]') && document.activeElement !== document.body)).toBe(true);
   // Wieder anzeigen restores the hidden card.
   const show = page.waitForResponse(isMove('hide'));
   await hiddenSection.getByRole('button', { name: /Podcast.*anzeigen|Wieder anzeigen/ }).click();
   expect((await show).ok()).toBeTruthy();
   expect((await s.serverCard(s.ids.podcast)).hidden).toBe(false);
   await expect(drawer.getByRole('region', { name: 'Ausgeblendet' })).toHaveCount(0);
+  await focusInDrawer();
 
   // Herauslösen releases one member.
   const un = page.waitForResponse(isMove('unstack'));
@@ -957,6 +960,7 @@ test('moderation view: hidden cards restore, stacks release members / dissolve',
   expect((await un).ok()).toBeTruthy();
   expect((await s.serverCard(s.ids.feedback)).stack).toBeNull();
   await expect(drawer.getByRole('region', { name: 'Stapel' })).toHaveCount(0);
+  await focusInDrawer();
 
   // Stack again with two members, then "Stapel auflösen" releases all.
   await drawer.getByRole('button', { name: 'Schließen' }).click();
