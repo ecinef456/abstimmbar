@@ -346,3 +346,36 @@ test('plus/minus, hidden: raters only, Stop closes, E reveals bars and ranking',
   await expectNoAxe(page);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/beamer-ranking-updown.png` });
 });
+
+test('time limit, hidden scores: expiry only closes the rating, no reveal', async ({ page, trackRoom }) => {
+  const s = await seed(page, trackRoom, { matrix_rating_mode: 'points', matrix_rating_budget: 3, matrix_rating_live: false });
+  // A short limit, set after seeding (the cards came in without one); the
+  // rating opens now, so its deadline starts here.
+  const csrf = await csrfToken(page.request);
+  const patched = await page.request.fetch(`${API_BASE_URL}/api/questions/${s.questionId}/`, {
+    method: 'PATCH',
+    headers: csrf ? { 'X-CSRFToken': csrf } : undefined,
+    data: { time_limit: 4 },
+  });
+  expect(patched.ok(), await patched.text()).toBeTruthy();
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/stage`, { stage: 'rate', open: true });
+  await s.rate(s.tokens[0], s.ids.chatbot, { delta: 1 });
+  await s.rate(s.tokens[0], s.ids.chatbot, { delta: 1 });
+  await openPresenter(page, s.room.setId);
+  await expect(raters(page)).toHaveText('1');
+  await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+
+  // The presenter's timer fires like S/Stop: the vote closes, the scores
+  // stay hidden (no "results", which would reveal them).
+  const phase = async () =>
+    (await s.api.get(`/api/question-sets/${s.room.setId}/live-status/`)).active_run_phase as string;
+  await expect.poll(phase, { timeout: 15_000 }).toBe('closed');
+  await expect(page.getByTestId('mx-rating-closed')).toBeVisible();
+  await expect(board(page)).toBeVisible();
+  await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+  await expect(seg(page, 'view.mx.ranking')).toHaveCount(0);
+  // Stays closed (no later reveal).
+  await page.waitForTimeout(1500);
+  expect(await phase()).toBe('closed');
+  await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+});
