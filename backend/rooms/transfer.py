@@ -122,6 +122,10 @@ QUESTION_CONTENT_FIELDS = (
     "matrix_max_per_person",
     "matrix_category_mode",
     "matrix_categories",
+    "matrix_rating_mode",
+    "matrix_rating_budget",
+    "matrix_rating_multi",
+    "matrix_rating_live",
 )
 # Translatable Question fields copied column by column (never the bare
 # accessor): the question text and the mindmap root label.
@@ -320,6 +324,10 @@ def export_set(question_set):
                 "matrix_max_per_person": question.matrix_max_per_person,
                 "matrix_category_mode": question.matrix_category_mode,
                 "matrix_categories": question.matrix_categories,
+                "matrix_rating_mode": question.matrix_rating_mode,
+                "matrix_rating_budget": question.matrix_rating_budget,
+                "matrix_rating_multi": question.matrix_rating_multi,
+                "matrix_rating_live": question.matrix_rating_live,
                 "section": section_index.get(question.section_id),
                 "options": [
                     {
@@ -479,6 +487,20 @@ def import_set(room, data):
         except matrix.CategoryError:
             # Foreign file: drop an invalid list rather than reject the import.
             mx_mode, mx_categories = matrix.CATEGORY_OFF, []
+        # Matrix rating settings only make sense for matrix questions.
+        if item["kind"] == Question.Kind.MATRIX:
+            mx_rating = {
+                "matrix_rating_mode": mindmap.clamp_rating_mode(
+                    item.get("matrix_rating_mode")
+                ),
+                "matrix_rating_budget": mindmap.clamp_rating_budget(
+                    item.get("matrix_rating_budget")
+                ),
+                "matrix_rating_multi": bool(item.get("matrix_rating_multi", True)),
+                "matrix_rating_live": bool(item.get("matrix_rating_live", False)),
+            }
+        else:
+            mx_rating = {}
         question = Question.objects.create(
             question_set=question_set,
             kind=item["kind"],
@@ -492,6 +514,7 @@ def import_set(room, data):
             ),
             matrix_category_mode=mx_mode,
             matrix_categories=mx_categories,
+            **mx_rating,
             mindmap_depth=mm_depth,
             mindmap_max_per_person=mindmap.clamp_max_per_person(
                 item.get("mindmap_max_per_person")

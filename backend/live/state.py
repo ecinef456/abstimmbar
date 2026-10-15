@@ -15,7 +15,7 @@ from django.db.models import Count
 from common.i18n_fields import translated_map
 from rooms.models import Question
 
-from . import ai_wordcloud_live, matrix, mindmap, mindmap_rating
+from . import ai_wordcloud_live, matrix, matrix_rating, mindmap, mindmap_rating
 from .hub import hub
 from .models import Run, WordCloudModeration
 from .results import (
@@ -163,6 +163,9 @@ def build_payloads(room):
         # cards (fetched via matrix/mine), the board lives on the beamer.
         participant["question"] = question_payload(question, shuffle_seed=run.pk)
         participant["matrix_settings"] = matrix.settings_payload(question)
+        rating = matrix_rating.participant_payload(run, question)
+        if rating is not None:
+            participant["matrix_rating"] = rating
     # Results on participant devices (v2, per-set option): only while the
     # beamer shows results, correct flags only once revealed.
     if (
@@ -237,8 +240,15 @@ def build_payloads(room):
             presenter["question"]["mindmap_ai"] = mindmap.ai_settings(question)
         elif is_matrix:
             presenter["matrix"] = matrix.board_payload(run, question, presenter=True)
+            rating = matrix_rating.payload(run, question, presenter=True)
+            if rating is not None:
+                if "scores" in rating:
+                    rating["ranking"] = matrix_rating.ranking(
+                        question, presenter["matrix"]["cards"], rating["scores"]
+                    )
+                presenter["matrix"]["rating"] = rating
             presenter["matrix_settings"] = matrix.settings_payload(question)
-            presenter["votes"] = matrix.contributor_count(run, question)
+            presenter["votes"] = matrix_rating.votes(run, question)
         elif question.kind in Question.TEXT_KINDS:
             presenter["words"] = words_with_counts(run, question)
             mod = WordCloudModeration.objects.filter(run=run, question=question).first()

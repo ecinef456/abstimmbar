@@ -45,7 +45,7 @@ from rooms.matrix import (
 )
 from rooms.mindmap import normalize_text, seed_langs
 
-from .models import MatrixCard, Run
+from .models import MatrixCard, MatrixPhase, Run
 
 # Collapses bursts of participant writes into one SSE broadcast (as the mind map).
 BROADCAST_DEBOUNCE = 1.0
@@ -171,6 +171,29 @@ def _lock_run(run):
     Run.objects.select_for_update(no_key=True).filter(pk=run.pk).first()
 
 
+def is_rating(run, question):
+    """True while the question is in its rating stage in this run (see
+    ``live.matrix_rating``): a rating mode is set and the stored stage is
+    "rate". Collecting and stack surgery are then locked."""
+    return bool(question.matrix_rating_mode) and MatrixPhase.objects.filter(
+        run=run, question=question, stage=MatrixPhase.Stage.RATE
+    ).exists()
+
+
+COLLECTING_PAUSED = "Collecting is paused while rating."
+STACKS_LOCKED = "Stacks are locked while rating."
+
+
+def _lock_collecting(run, question):
+    if is_rating(run, question):
+        raise MatrixError(COLLECTING_PAUSED, 409)
+
+
+def _lock_stacks(run, question):
+    if is_rating(run, question):
+        raise MatrixError(STACKS_LOCKED, 409)
+
+
 def _cards(run, question):
     return MatrixCard.objects.filter(run=run, question=question)
 
@@ -232,6 +255,7 @@ def add_card(run, question, token, zone, title, category="", description=""):
     title, category, description = _validated(question, zone, title, category, description)
     with transaction.atomic():
         _lock_run(run)
+        _lock_collecting(run, question)
         _check_cap(run, question)
         if _cards(run, question).filter(token=token).count() >= question.matrix_max_per_person:
             raise MatrixError("Card limit reached.", 409)
@@ -274,6 +298,7 @@ def _detach(card):
 def remove_card(run, question, token, card_id):
     with transaction.atomic():
         _lock_run(run)
+        _lock_collecting(run, question)
         card = _get(run, question, card_id)
         if card.token_id is None or card.token_id != token.pk:
             raise MatrixError("Card not found.", 404)
@@ -284,6 +309,7 @@ def remove_card(run, question, token, card_id):
 def delete_teacher_card(run, question, card_id):
     with transaction.atomic():
         _lock_run(run)
+        _lock_stacks(run, question)
         card = _get(run, question, card_id)
         if not card.teacher:
             raise MatrixError("Card not found.", 404)
@@ -315,6 +341,7 @@ def move_card(run, question, card_id, x, y):
 def stack_card(run, question, card_id, onto_id):
     with transaction.atomic():
         _lock_run(run)
+        _lock_stacks(run, question)
         moving = _top(_get(run, question, card_id))
         target = _top(_get(run, question, onto_id))
         if moving.pk == target.pk:
@@ -336,6 +363,7 @@ def stack_card(run, question, card_id, onto_id):
 def unstack_card(run, question, card_id):
     with transaction.atomic():
         _lock_run(run)
+        _lock_stacks(run, question)
         card = _get(run, question, card_id)
         if card.stack_id:
             card.zone = card.stack.zone
@@ -416,7 +444,7 @@ def board_payload(run, question, presenter):
 def csv_rows(run, question):
     """One dict per VISIBLE card for the results CSV (hidden cards and the
     members of a hidden top are left out, like the participant board):
-    ``title, description, category, zone, x, y, stack`` (``stack`` = title of
+    ``id, title, description, category, zone, x, y, stack`` (``stack`` = title of
     the stack's top card for members, else empty)."""
     canonical = seed_langs()[0]
     names = {
@@ -437,7 +465,7 @@ def csv_rows(run, question):
         else:
             category = c.category
         result.append({
-            "title": c.title, "description": c.description, "category": category,
+            "id": c.pk, "title": c.title, "description": c.description, "category": category,
             "zone": c.zone, "x": f"{c.x:.2f}", "y": f"{c.y:.2f}",
             "stack": titles.get(c.stack_id, "") if c.stack_id else "",
         })

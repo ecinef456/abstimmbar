@@ -5631,6 +5631,189 @@ class MindmapRatingSettingsTests(ApiTestCase):
         self.assertEqual(response.status_code, 200, response.content)
 
 
+class MatrixRatingSettingsTests(ApiTestCase):
+    """Matrix rating phase (Task 1): the four authoring settings."""
+
+    AXES: ClassVar = MatrixAuthoringTests.AXES
+
+    def setUp(self):
+        super().setUp()
+        self.question_set = QuestionSet.objects.create(room=self.room, title_de="Live")
+
+    def _create(self, **overrides):
+        payload = {
+            "question_set": self.question_set.pk,
+            "kind": "matrix",
+            "text": {"de": "<p>Q?</p>", "en": ""},
+            "options": [],
+            **self.AXES,
+        }
+        payload.update(overrides)
+        return self.client.post("/api/questions/", payload, content_type="application/json")
+
+    def test_defaults(self):
+        data = self._create().json()
+        self.assertEqual(data["matrix_rating_mode"], "")
+        self.assertEqual(data["matrix_rating_budget"], 5)
+        self.assertTrue(data["matrix_rating_multi"])
+        self.assertFalse(data["matrix_rating_live"])
+
+    def test_settings_saved(self):
+        response = self._create(
+            matrix_rating_mode="updown", matrix_rating_budget=12,
+            matrix_rating_multi=False, matrix_rating_live=True,
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        question = Question.objects.get(pk=response.json()["id"])
+        self.assertEqual(question.matrix_rating_mode, "updown")
+        self.assertEqual(question.matrix_rating_budget, 12)
+        self.assertFalse(question.matrix_rating_multi)
+        self.assertTrue(question.matrix_rating_live)
+
+    def test_mode_choices_and_budget_range(self):
+        for ok in ("", "points", "updown"):
+            self.assertEqual(self._create(matrix_rating_mode=ok).status_code, 201, ok)
+        response = self._create(matrix_rating_mode="stars")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("matrix_rating_mode", response.json())
+        for bad in (0, 51, -1):
+            response = self._create(matrix_rating_budget=bad)
+            self.assertEqual(response.status_code, 400, bad)
+            self.assertIn("matrix_rating_budget", response.json())
+        for ok in (1, 50):
+            self.assertEqual(self._create(matrix_rating_budget=ok).status_code, 201, ok)
+
+    def test_other_kinds_normalise_to_defaults(self):
+        response = self.client.post("/api/questions/", {
+            "question_set": self.question_set.pk, "kind": "mindmap",
+            "text": {"de": "<p>Q?</p>", "en": ""}, "options": [],
+            "matrix_rating_mode": "points", "matrix_rating_budget": 9,
+            "matrix_rating_multi": False, "matrix_rating_live": True,
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, 201, response.content)
+        question = Question.objects.get(pk=response.json()["id"])
+        self.assertEqual(question.matrix_rating_mode, "")
+        self.assertEqual(question.matrix_rating_budget, 5)
+        self.assertTrue(question.matrix_rating_multi)
+        self.assertFalse(question.matrix_rating_live)
+
+    def _rated_question(self):
+        return Question.objects.create(
+            question_set=self.question_set, kind="matrix", text_de="<p>Q</p>",
+            matrix_x_from_de="a", matrix_x_to_de="b", matrix_y_from_de="c", matrix_y_to_de="d",
+            matrix_rating_mode="points", matrix_rating_budget=7,
+            matrix_rating_multi=False, matrix_rating_live=True,
+        )
+
+    def _assert_rating(self, question):
+        self.assertEqual(question.matrix_rating_mode, "points")
+        self.assertEqual(question.matrix_rating_budget, 7)
+        self.assertFalse(question.matrix_rating_multi)
+        self.assertTrue(question.matrix_rating_live)
+
+    def test_duplicate_copies_rating_settings(self):
+        from .transfer import duplicate_set
+
+        self._rated_question()
+        clone = duplicate_set(self.question_set, self.room)
+        self._assert_rating(clone.questions.get())
+
+    def test_export_import_roundtrip(self):
+        from .transfer import export_set, import_set
+
+        self._rated_question()
+        data = export_set(self.question_set)
+        self.assertEqual(data["questions"][0]["matrix_rating_mode"], "points")
+        self._assert_rating(import_set(self.room, data).questions.get())
+
+    def test_import_sanitises_foreign_rating_settings(self):
+        from .transfer import import_set
+
+        imported = import_set(self.room, {
+            "format": "abstimmbar-set-v2",
+            "title": {"de": "Fremd", "en": ""},
+            "questions": [{
+                "kind": "matrix",
+                "text": {"de": "<p>Q</p>", "en": ""},
+                "matrix_rating_mode": "stars",
+                "matrix_rating_budget": 999,
+            }],
+        })
+        question = imported.questions.get()
+        self.assertEqual(question.matrix_rating_mode, "")
+        self.assertEqual(question.matrix_rating_budget, 5)
+        self.assertTrue(question.matrix_rating_multi)
+        self.assertFalse(question.matrix_rating_live)
+
+    def test_import_resets_matrix_rating_for_other_kinds(self):
+        from .transfer import import_set
+
+        imported = import_set(self.room, {
+            "format": "abstimmbar-set-v2",
+            "title": {"de": "Fremd", "en": ""},
+            "questions": [{
+                "kind": "mindmap",
+                "text": {"de": "<p>Q</p>", "en": ""},
+                "matrix_rating_mode": "points",
+                "matrix_rating_budget": 9,
+                "matrix_rating_multi": False,
+                "matrix_rating_live": True,
+            }],
+        })
+        question = imported.questions.get()
+        self.assertEqual(question.matrix_rating_mode, "")
+        self.assertEqual(question.matrix_rating_budget, 5)
+        self.assertTrue(question.matrix_rating_multi)
+        self.assertFalse(question.matrix_rating_live)
+
+    def _with_run(self, phase, stage=None, rating=False):
+        from live.models import MatrixCard, MatrixPhase, MatrixRating
+
+        question = self._rated_question()
+        run = Run.objects.create(question_set=self.question_set, phase=phase,
+                                 active_question=question)
+        if stage:
+            MatrixPhase.objects.create(run=run, question=question, stage=stage)
+        if rating:
+            card = MatrixCard.objects.create(
+                run=run, question=question, title="A", zone="q1", x=0.5, y=0.5, teacher=True
+            )
+            MatrixRating.objects.create(
+                card=card, token=ParticipantToken.objects.create(room=self.room), value=1
+            )
+        return question
+
+    def _patch_mode(self, question, mode):
+        return self.client.patch(
+            f"/api/questions/{question.pk}/", {"matrix_rating_mode": mode},
+            content_type="application/json",
+        )
+
+    def test_mode_locked_while_running_run_is_rating(self):
+        question = self._with_run(Run.Phase.OPEN, stage="rate")
+        response = self._patch_mode(question, "updown")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("matrix_rating_mode", response.json())
+        question.refresh_from_db()
+        self.assertEqual(question.matrix_rating_mode, "points")
+        response = self.client.patch(
+            f"/api/questions/{question.pk}/",
+            {"matrix_rating_mode": "points", "matrix_rating_budget": 9},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_mode_locked_while_running_run_has_ratings(self):
+        question = self._with_run(Run.Phase.OPEN, rating=True)
+        self.assertEqual(self._patch_mode(question, "").status_code, 400)
+
+    def test_mode_editable_when_only_finished_runs_or_collecting(self):
+        question = self._with_run(Run.Phase.FINISHED, stage="rate", rating=True)
+        self.assertEqual(self._patch_mode(question, "").status_code, 200)
+        question = self._with_run(Run.Phase.OPEN, stage="collect")
+        self.assertEqual(self._patch_mode(question, "").status_code, 200)
+
+
 class MindmapSeedHelperTests(SimpleTestCase):
     def test_normalisation_nfkc_and_control_characters(self):
         from .mindmap import normalize_text, text_key

@@ -475,6 +475,22 @@ class Question(TimeStampedModel):
     )
     # [{"key": palette key, "name": {lang: text}}], ≤ 6 (mx.clean_categories).
     matrix_categories = models.JSONField(default=list, blank=True)
+    # Optional rating phase after collecting (live.matrix_rating) — same
+    # semantics as the mind map's: "" = off, "points" = dot voting, "updown" =
+    # at most one plus OR minus per card; budget, multi (points only) and
+    # live (show scores while rating).
+    matrix_rating_mode = models.CharField(
+        max_length=10, choices=mm.RATING_MODE_CHOICES, blank=True, default=""
+    )
+    matrix_rating_budget = models.PositiveSmallIntegerField(
+        default=mm.RATING_DEFAULT_BUDGET,
+        validators=[
+            MinValueValidator(mm.RATING_MIN_BUDGET),
+            MaxValueValidator(mm.RATING_MAX_BUDGET),
+        ],
+    )
+    matrix_rating_multi = models.BooleanField(default=True)
+    matrix_rating_live = models.BooleanField(default=False)
 
     class RevealAnswers(models.TextChoices):
         # Per-question override of when correct answers are highlighted (#28).

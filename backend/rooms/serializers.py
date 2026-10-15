@@ -433,6 +433,8 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
             "matrix_x_from", "matrix_x_to", "matrix_y_from", "matrix_y_to",
             "matrix_edges", "matrix_descriptions", "matrix_max_per_person",
             "matrix_category_mode", "matrix_categories",
+            "matrix_rating_mode", "matrix_rating_budget", "matrix_rating_multi",
+            "matrix_rating_live",
             "reveal_answers", "before_question", "after_question", "is_after",
             "created_at", "updated_at",
         ]
@@ -534,6 +536,29 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                         "session already has ratings."
                     )
                 })
+        # Matrix rating phase: same lock — only while a running session is
+        # in the rating stage or already has ratings.
+        if (
+            self.instance is not None
+            and "matrix_rating_mode" in attrs
+            and attrs["matrix_rating_mode"] != self.instance.matrix_rating_mode
+        ):
+            from live.models import MatrixPhase, MatrixRating, Run
+
+            if (
+                MatrixRating.objects.filter(card__question=self.instance)
+                .exclude(card__run__phase=Run.Phase.FINISHED)
+                .exists()
+                or MatrixPhase.objects.filter(
+                    question=self.instance, stage=MatrixPhase.Stage.RATE
+                ).exclude(run__phase=Run.Phase.FINISHED).exists()
+            ):
+                raise serializers.ValidationError({
+                    "matrix_rating_mode": (
+                        "The rating mode cannot be changed while a running "
+                        "session is rating."
+                    )
+                })
         # Mindmap: the predefined branches must fit the (possibly changed)
         # depth — re-checked whenever either is written.
         if kind == Question.Kind.MINDMAP and (
@@ -583,11 +608,20 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                     raise serializers.ValidationError(
                         {"matrix_categories": str(exc)}
                     ) from exc
-        elif "kind" in attrs or "matrix_category_mode" in attrs or "matrix_categories" in attrs:
+        elif (
+            "kind" in attrs
+            or "matrix_category_mode" in attrs
+            or "matrix_categories" in attrs
+            or any(k.startswith("matrix_rating_") for k in attrs)
+        ):
             # Other kinds carry no matrix settings: never keep junk that a
             # later kind change to matrix (or the SSE payloads) would trip on.
             attrs["matrix_category_mode"] = matrix.CATEGORY_OFF
             attrs["matrix_categories"] = []
+            attrs["matrix_rating_mode"] = ""
+            attrs["matrix_rating_budget"] = mindmap.RATING_DEFAULT_BUDGET
+            attrs["matrix_rating_multi"] = True
+            attrs["matrix_rating_live"] = False
         # A section must belong to the same set as the question.
         section = attrs.get("section")
         if section is not None:

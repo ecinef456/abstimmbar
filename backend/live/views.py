@@ -37,6 +37,7 @@ from rooms.models import AnswerOption, Question, QuestionSet, Room
 from . import (
     ai_evaluation,
     matrix,
+    matrix_rating,
     mindmap,
     ai_freetext,
     ai_freetext_summary,
@@ -927,6 +928,102 @@ def matrix_mine(request, code):
     if question is None:
         return Response({"detail": "Unknown question."}, status=404)
     return Response({"mine": matrix.mine_payload(run, question, token)})
+
+
+@api_view(["POST"])
+def matrix_rate(request, code):
+    """Rating stage: one rating step on a card. ``{token, question, card,
+    delta: 1|-1}`` (points) or ``{…, value: 1|-1|0}`` (plus/minus) → 200
+    ``{card, value, remaining}``. Needs the open phase AND the rating stage;
+    hidden cards and stack members cannot be rated (404)."""
+    context = _matrix_context(request, code)
+    if isinstance(context, Response):
+        return context
+    room, token, run, question = context
+    data = request.data
+    try:
+        card = _strict_id(data, "card")
+        if question.matrix_rating_mode == "points":
+            delta = data.get("delta")
+            if isinstance(delta, bool) or not isinstance(delta, int) or delta not in (1, -1):
+                raise _BadField("delta must be 1 or -1.")
+            kwargs = {"delta": delta}
+        elif question.matrix_rating_mode == "updown":
+            value = data.get("value")
+            if isinstance(value, bool) or not isinstance(value, int) or value not in (1, -1, 0):
+                raise _BadField("value must be 1, -1 or 0.")
+            kwargs = {"value": value}
+        else:
+            return Response(
+                {"detail": "Rating has not started."}, status=status.HTTP_409_CONFLICT
+            )
+        value, remaining = matrix_rating.rate(run, question, token, card, **kwargs)
+    except _BadField as error:
+        return Response({"detail": str(error)}, status=400)
+    except matrix.MatrixError as error:
+        return Response(error.body(), status=error.status)
+    broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
+    return Response({"card": card, "value": value, "remaining": remaining})
+
+
+@api_view(["POST"])
+def matrix_my_ratings(request, code):
+    """The CALLER's ratings in the active run: ``{token, question}`` →
+    ``{ratings: {"<card id>": value}, remaining, budget, mode}`` (visible
+    top cards only)."""
+    room = _room_by_code(code)
+    token = ParticipantToken.objects.filter(
+        room=room, key=request.data.get("token", "")
+    ).first()
+    if token is None:
+        return Response({"detail": "Unknown participant token."}, status=403)
+    run = active_run(room)
+    if run is None:
+        return Response({"ratings": {}, "remaining": 0})
+    question = Question.objects.filter(
+        question_set=run.question_set, kind=Question.Kind.MATRIX,
+        pk=mindmap._parse_id(request.data.get("question")),
+    ).first()
+    if question is None:
+        return Response({"detail": "Unknown question."}, status=404)
+    return Response(matrix_rating.my_ratings(run, question, token))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_stage(request, run_id, question_id):
+    """Presenter: ``{stage: "collect"|"rate", open?: bool}`` → 200
+    ``{stage, phase}`` — like ``mindmap_stage``. "rate" needs a rating mode
+    (409 otherwise); 409 for a finished run."""
+
+    def action(run, question, data):
+        stage = data.get("stage")
+        if not isinstance(stage, str):
+            raise _BadField("stage must be \"collect\" or \"rate\".")
+        open_vote = data.get("open", False)
+        if not isinstance(open_vote, bool):
+            raise _BadField("open must be true or false.")
+        stage = matrix_rating.set_stage(run, question, stage, open_vote=open_vote)
+        return {"stage": stage, "phase": run.phase}
+
+    run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
+    room = run.question_set.room
+    if not _require_owner(request.user, room):
+        raise Http404
+    question = get_object_or_404(
+        Question, pk=question_id, question_set=run.question_set,
+        kind=Question.Kind.MATRIX,
+    )
+    if not isinstance(request.data, dict):
+        return Response({"detail": "Invalid request."}, status=400)
+    try:
+        body = action(run, question, request.data)
+    except _BadField as error:
+        return Response({"detail": str(error)}, status=400)
+    except matrix.MatrixError as error:
+        return Response(error.body(), status=error.status)
+    broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
+    return Response(body)
 
 
 def _matrix_moderate(request, run_id, question_id, action, http_status=200):
@@ -2703,10 +2800,20 @@ def results_csv(request, set_id):
             elif question.kind == Question.Kind.MATRIX:
                 # One row per visible card: title in "antwort", one vote each,
                 # the card's details in the trailing matrix columns.
+                hidden = matrix_rating.scores_hidden(run, question)
+                scores = (
+                    matrix_rating.aggregate(run, question)[0]
+                    if question.matrix_rating_mode and not hidden
+                    else {}
+                )
                 for card in matrix.csv_rows(run, question):
+                    cell = (
+                        "" if hidden or card["stack"]
+                        else matrix_rating.csv_cell(question, scores, card["id"])
+                    )
                     writer.writerow(
                         base
-                        + [csv_safe(card["title"]), "", 1, "", "", "", ""]
+                        + [csv_safe(card["title"]), "", 1, "", "", "", csv_safe(cell)]
                         + [csv_safe(card[key]) for key in ("description", "category", "zone")]
                         + [card["x"], card["y"], csv_safe(card["stack"])]
                     )
