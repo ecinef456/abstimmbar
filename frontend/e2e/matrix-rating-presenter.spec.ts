@@ -155,8 +155,14 @@ test('points, live: start via footer, bars + texts, ranking, stack lock, help, b
   const { ids } = s;
   await openPresenter(page, s.room.setId);
 
-  // Open and collecting: "Bewertung starten" is the suggested next step.
+  // Open and collecting: no "Bewertung starten" yet (like the mind map).
   const start = page.getByTestId('mx-start-rating');
+  await expect(start).toHaveCount(0);
+  // Stop (collecting) goes to the results; the board stays, and starting
+  // the rating is the suggested next step.
+  await page.keyboard.press('s');
+  await expect(seg(page, 'view.question')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(board(page)).toBeVisible();
   await expect(start).toBeVisible();
   await expect(start).toHaveAccessibleName('Bewertung starten');
   await expect(start).toHaveAttribute('data-next-step', 'true');
@@ -258,11 +264,23 @@ test('points, live: start via footer, bars + texts, ranking, stack lock, help, b
   await expect(page.getByTestId('presenter-help')).toHaveCount(0);
   await expectNoAxe(page);
 
-  // Back to collecting: scores off the board, start button back.
+  // Back to collecting (vote open again): scores off the board; the start
+  // button only returns once collecting is stopped.
   await back.click();
-  await expect(page.getByTestId('mx-start-rating')).toBeVisible();
+  await expect(back).toHaveCount(0);
+  await expect(page.getByTestId('mx-start-rating')).toHaveCount(0);
   await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
   await expect(seg(page, 'view.mx.ranking')).toHaveCount(0);
+
+  // A server refusal (409, e.g. the rating started meanwhile) shows as a
+  // German toast.
+  await page.route(/\/matrix\/\d+\/unstack$/, (route) =>
+    route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ detail: 'Stacks are locked while rating.' }) }),
+  );
+  await page.locator('[data-help="handle.mx-edit"]').click();
+  await drawer.getByRole('tab', { name: 'Moderieren' }).click();
+  await drawer.getByRole('button', { name: /Mitglied herauslösen/ }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Stapel sind während der Bewertung gesperrt.' })).toBeVisible();
 });
 
 test('plus/minus, hidden: raters only, Stop closes, E reveals bars and ranking', async ({ page, trackRoom }) => {
@@ -290,6 +308,8 @@ test('plus/minus, hidden: raters only, Stop closes, E reveals bars and ranking',
   await page.keyboard.press('s');
   await expect(page.getByTestId('mx-rating-closed')).toBeVisible();
   await expect(board(page)).toBeVisible();
+  // The rating has its own "closed" line: no generic "voting closed" below.
+  await expect(page.getByText('Beantwortung geschlossen', { exact: true })).toHaveCount(0);
   await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
   await page.keyboard.press('a');
   await page.waitForTimeout(1000);

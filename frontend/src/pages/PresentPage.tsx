@@ -1885,7 +1885,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   disabled={mxStageBusy}
                   onClick={() => void setMatrixStage("collect")}
                 />
-              ) : phase === "open" || phase === "results" || phase === "closed" ? (
+              ) : phase === "results" || phase === "closed" ? (
                 <FooterIconButton
                   help="mx.rate"
                   testId="mx-start-rating"
@@ -2936,7 +2936,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               </span>
             )}
             {/* A closed rating has its own "Rating closed" line above the map. */}
-            {phase === "closed" && !(mmShown && mmRate) && (
+            {phase === "closed" && !((mmShown && mmRate) || (mxShown && mxRate)) && (
               <p className="text-xl">{t("Voting closed")}</p>
             )}
           </div>
