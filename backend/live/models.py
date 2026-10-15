@@ -424,3 +424,47 @@ class MatrixCard(models.Model):
 
     def __str__(self):
         return f"{self.title} (run {self.run_id})"
+
+
+class MatrixPhase(models.Model):
+    """The stage of a matrix question within one run (rating phase) — the
+    counterpart of ``MindmapPhase``: "collect" (participants add cards) or
+    "rate" (participants rate the visible top cards). No row = "collect"."""
+
+    class Stage(models.TextChoices):
+        COLLECT = "collect", "Collecting cards"
+        RATE = "rate", "Rating the cards"
+
+    run = models.ForeignKey(Run, on_delete=models.CASCADE, related_name="matrix_phases")
+    question = models.ForeignKey(
+        "rooms.Question", on_delete=models.CASCADE, related_name="+"
+    )
+    stage = models.CharField(max_length=10, choices=Stage.choices, default=Stage.COLLECT)
+    # Last time the rating stage was (re)started.
+    rating_started_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints: ClassVar = [
+            models.UniqueConstraint(
+                fields=["run", "question"], name="one_matrix_phase_per_run_question"
+            )
+        ]
+
+
+class MatrixRating(models.Model):
+    """One participant's rating of one matrix card (anonymous: only the opaque
+    token). ``points`` mode: ``value`` = number of points (>= 1); ``updown``
+    mode: +1 or -1. A rating at 0 is no row. Kept (but not counted) while the
+    card is hidden or a stack member. The unique (card, token) constraint also
+    indexes ``card``."""
+
+    card = models.ForeignKey(MatrixCard, on_delete=models.CASCADE, related_name="ratings")
+    token = models.ForeignKey(
+        ParticipantToken, on_delete=models.CASCADE, related_name="matrix_ratings"
+    )
+    value = models.SmallIntegerField()
+
+    class Meta:
+        constraints: ClassVar = [
+            models.UniqueConstraint(fields=["card", "token"], name="one_matrix_rating_per_token")
+        ]

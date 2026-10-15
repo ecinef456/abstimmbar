@@ -8418,3 +8418,232 @@ class MatrixResultsTests(MatrixTestCase):
     def test_vote_endpoint_refuses_matrix(self):
         r = self.vote(self.tok.key, question=self.xq.pk, text="x")
         self.assertEqual(r.status_code, 400)
+
+
+class MatrixRatingServiceTests(MatrixTestCase):
+    """Rating stage of the matrix (Task 1): budgets, locks, counting rules."""
+
+    def setUp(self):
+        super().setUp()
+        from . import matrix_rating as mr
+
+        self.mr = mr
+        self.configure(matrix_rating_mode="points", matrix_rating_budget=3)
+        self.a = self.add(title="A")
+        self.b = self.add(title="B", zone="q2")
+        self.c = self.add(title="C", zone="q3")
+
+    def rate_stage(self):
+        self.mr.set_stage(self.run, self.xq, "rate")
+
+    def refused(self, status, fn, *args, **kwargs):
+        with self.assertRaises(MatrixError) as cm:
+            fn(*args, **kwargs)
+        self.assertEqual(cm.exception.status, status)
+        return cm.exception
+
+    def rate(self, card, token=None, **kw):
+        return self.mr.rate(self.run, self.xq, token or self.tok, card.pk, **kw)
+
+    # -- stage
+    def test_stage_default_collect_and_switch(self):
+        self.assertEqual(self.mr.stage_of(self.run, self.xq), "collect")
+        self.assertFalse(mxs.is_rating(self.run, self.xq))
+        self.rate_stage()
+        self.assertEqual(self.mr.stage_of(self.run, self.xq), "rate")
+        self.assertTrue(mxs.is_rating(self.run, self.xq))
+        self.mr.set_stage(self.run, self.xq, "collect")
+        self.assertEqual(self.mr.stage_of(self.run, self.xq), "collect")
+        self.refused(400, self.mr.set_stage, self.run, self.xq, "bogus")
+
+    def test_stage_needs_mode_and_active_run(self):
+        self.configure(matrix_rating_mode="")
+        self.refused(409, self.mr.set_stage, self.run, self.xq, "rate")
+        self.assertEqual(self.mr.stage_of(self.run, self.xq), "collect")
+        self.configure(matrix_rating_mode="points")
+        self.run.phase = Run.Phase.FINISHED
+        self.run.save()
+        self.refused(409, self.mr.set_stage, self.run, self.xq, "rate")
+
+    def test_open_vote_opens_question(self):
+        self.run.phase = Run.Phase.CLOSED
+        self.run.save()
+        self.mr.set_stage(self.run, self.xq, "rate", open_vote=True)
+        self.run.refresh_from_db()
+        self.assertEqual(self.run.phase, Run.Phase.OPEN)
+        self.assertEqual(self.run.active_question_id, self.xq.pk)
+
+    # -- points
+    def test_rating_needs_rate_stage(self):
+        self.refused(409, self.rate, self.a, delta=1)
+
+    def test_points_budget_multi(self):
+        self.rate_stage()
+        self.assertEqual(self.rate(self.a, delta=1), (1, 2))
+        self.assertEqual(self.rate(self.a, delta=1), (2, 1))
+        self.assertEqual(self.rate(self.b, delta=1), (1, 0))
+        self.refused(409, self.rate, self.c, delta=1)
+        self.assertEqual(self.rate(self.a, delta=-1), (1, 1))
+        self.refused(409, self.rate, self.c, delta=-1)  # nothing to take back
+        # Another participant has their own budget.
+        self.assertEqual(self.rate(self.a, self.tok2, delta=1), (1, 2))
+
+    def test_points_multi_off_one_per_card(self):
+        self.configure(matrix_rating_multi=False)
+        self.rate_stage()
+        self.assertEqual(self.rate(self.a, delta=1), (1, 2))
+        self.refused(409, self.rate, self.a, delta=1)
+        self.assertEqual(self.rate(self.a, delta=-1), (0, 3))
+        self.assertEqual(self.mr.my_ratings(self.run, self.xq, self.tok)["ratings"], {})
+
+    # -- updown
+    def test_updown_budget_counts_rated_cards(self):
+        self.configure(matrix_rating_mode="updown", matrix_rating_budget=2)
+        self.rate_stage()
+        self.assertEqual(self.rate(self.a, value=1), (1, 1))
+        self.assertEqual(self.rate(self.a, value=-1), (-1, 1))  # switching is free
+        self.assertEqual(self.rate(self.b, value=-1), (-1, 0))
+        self.refused(409, self.rate, self.c, value=1)
+        self.assertEqual(self.rate(self.b, value=0), (0, 1))
+        self.assertEqual(self.rate(self.c, value=1), (1, 0))
+
+    # -- which cards are rateable
+    def test_member_and_hidden_cards_refused(self):
+        self.stacked(self.a, self.b)
+        self.rate_stage()
+        self.refused(404, self.rate, self.b, delta=1)
+        mxs.set_hidden(self.run, self.xq, self.c.pk, True)
+        self.refused(404, self.rate, self.c, delta=1)
+        self.refused(404, self.mr.rate, self.run, self.xq, self.tok, 999999, delta=1)
+        self.assertEqual(self.rate(self.a, delta=1), (1, 2))
+
+    def test_hiding_returns_points(self):
+        self.rate_stage()
+        self.rate(self.a, delta=1)
+        self.rate(self.a, delta=1)
+        self.assertEqual(self.mr.my_ratings(self.run, self.xq, self.tok)["remaining"], 1)
+        mxs.set_hidden(self.run, self.xq, self.a.pk, True)
+        mine = self.mr.my_ratings(self.run, self.xq, self.tok)
+        self.assertEqual(mine["remaining"], 3)
+        self.assertEqual(mine["ratings"], {})
+        self.assertEqual(self.mr.aggregate(self.run, self.xq), ({}, 0))
+        mxs.set_hidden(self.run, self.xq, self.a.pk, False)
+        self.assertEqual(self.mr.my_ratings(self.run, self.xq, self.tok)["remaining"], 1)
+
+    def test_members_not_counted_and_counted_again_after_unstack(self):
+        self.rate_stage()
+        self.rate(self.b, delta=1)
+        self.rate(self.b, self.tok2, delta=1)
+        self.mr.set_stage(self.run, self.xq, "collect")
+        self.stacked(self.a, self.b)
+        self.rate_stage()
+        self.assertEqual(self.mr.aggregate(self.run, self.xq), ({}, 0))
+        self.assertEqual(self.mr.my_ratings(self.run, self.xq, self.tok)["remaining"], 3)
+        self.mr.set_stage(self.run, self.xq, "collect")
+        mxs.unstack_card(self.run, self.xq, self.b.pk)
+        scores, raters = self.mr.aggregate(self.run, self.xq)
+        self.assertEqual(scores, {str(self.b.pk): {"points": 2}})
+        self.assertEqual(raters, 2)
+
+    def test_back_to_collect_keeps_ratings(self):
+        self.rate_stage()
+        self.rate(self.a, delta=1)
+        self.mr.set_stage(self.run, self.xq, "collect")
+        self.rate_stage()
+        self.assertEqual(
+            self.mr.my_ratings(self.run, self.xq, self.tok),
+            {"ratings": {str(self.a.pk): 1}, "remaining": 2, "budget": 3, "mode": "points"},
+        )
+
+    # -- locks
+    def test_locks_while_rating(self):
+        teacher = mxs.add_teacher_card(self.run, self.xq, "q4", "T")
+        self.rate_stage()
+        e = self.refused(409, mxs.add_card, self.run, self.xq, self.tok2, "q1", "New")
+        self.assertEqual(e.detail, "Collecting is paused while rating.")
+        self.refused(409, mxs.remove_card, self.run, self.xq, self.tok, self.a.pk)
+        e = self.refused(409, mxs.stack_card, self.run, self.xq, self.b.pk, self.a.pk)
+        self.assertEqual(e.detail, "Stacks are locked while rating.")
+        self.refused(409, mxs.unstack_card, self.run, self.xq, self.a.pk)
+        self.refused(409, mxs.delete_teacher_card, self.run, self.xq, teacher.pk)
+        # Moving and hiding stay possible.
+        mxs.move_card(self.run, self.xq, self.a.pk, 0.5, 0.5)
+        mxs.set_hidden(self.run, self.xq, self.a.pk, True)
+        # Back in collect everything works again.
+        self.mr.set_stage(self.run, self.xq, "collect")
+        mxs.delete_teacher_card(self.run, self.xq, teacher.pk)
+        mxs.add_card(self.run, self.xq, self.tok2, "q1", "New")
+
+    # -- visibility of scores
+    def test_scores_hidden_vs_live_vs_results(self):
+        self.rate_stage()
+        self.rate(self.a, delta=2)
+        self.assertTrue(self.mr.scores_hidden(self.run, self.xq))
+        pres = self.mr.payload(self.run, self.xq, presenter=True)
+        self.assertEqual((pres["stage"], pres["raters"]), ("rate", 1))
+        self.assertNotIn("scores", pres)
+        self.assertNotIn("totals", self.mr.payload(self.run, self.xq, presenter=False))
+        res = self.mr.results(self.run, self.xq, mxs.board_payload(self.run, self.xq, False))
+        self.assertTrue(res["rating_in_progress"])
+        self.assertNotIn("ranking", res)
+        # live
+        self.configure(matrix_rating_live=True)
+        self.assertFalse(self.mr.scores_hidden(self.run, self.xq))
+        self.assertEqual(
+            self.mr.payload(self.run, self.xq, presenter=True)["scores"],
+            {str(self.a.pk): {"points": 2}},
+        )
+        self.assertIn("totals", self.mr.payload(self.run, self.xq, presenter=False))
+        # results phase reveals (participants only if the set shows results)
+        self.configure(matrix_rating_live=False)
+        self.run.phase = Run.Phase.RESULTS
+        self.run.save()
+        self.assertFalse(self.mr.scores_hidden(self.run, self.xq))
+        self.assertIn("scores", self.mr.payload(self.run, self.xq, presenter=True))
+        self.question_set.show_results_to_participants = False
+        self.question_set.save()
+        self.run.refresh_from_db()
+        self.assertNotIn("totals", self.mr.payload(self.run, self.xq, presenter=False))
+        self.question_set.show_results_to_participants = True
+        self.question_set.save()
+        self.run.refresh_from_db()
+        self.assertIn("totals", self.mr.payload(self.run, self.xq, presenter=False))
+
+    def test_no_mode_no_payload(self):
+        self.configure(matrix_rating_mode="")
+        self.assertIsNone(self.mr.payload(self.run, self.xq, presenter=True))
+        self.assertIsNone(self.mr.results(self.run, self.xq, mxs.board_payload(self.run, self.xq, False)))
+        self.assertEqual(self.mr.csv_cell(self.xq, {}, self.a.pk), "")
+
+    # -- ranking & csv
+    def test_ranking_points_and_csv_cell(self):
+        self.configure(matrix_rating_live=True)
+        self.rate_stage()
+        self.rate(self.a, delta=1)
+        self.rate(self.b, delta=1)
+        self.rate(self.b, delta=1)
+        self.rate(self.b, self.tok2, delta=1)
+        scores, raters = self.mr.aggregate(self.run, self.xq)
+        self.assertEqual(raters, 2)
+        res = self.mr.results(self.run, self.xq, mxs.board_payload(self.run, self.xq, False))
+        self.assertEqual([r["title"] for r in res["ranking"]], ["B", "A"])
+        self.assertEqual(res["ranking"][0]["points"], 3)
+        self.assertEqual(res["ranking"][0]["zone"], "q2")
+        self.assertEqual(res["raters"], 2)
+        self.assertEqual(self.mr.csv_cell(self.xq, scores, self.b.pk), 3)
+        self.assertEqual(self.mr.csv_cell(self.xq, scores, self.c.pk), 0)
+
+    def test_ranking_updown_and_csv_cell(self):
+        self.configure(matrix_rating_mode="updown", matrix_rating_budget=3,
+                       matrix_rating_live=True)
+        self.rate_stage()
+        self.rate(self.a, value=1)
+        self.rate(self.a, self.tok2, value=-1)
+        self.rate(self.b, value=1)
+        self.rate(self.c, value=-1)
+        scores, _ = self.mr.aggregate(self.run, self.xq)
+        res = self.mr.results(self.run, self.xq, mxs.board_payload(self.run, self.xq, False))
+        self.assertEqual([r["title"] for r in res["ranking"]], ["B", "A", "C"])
+        self.assertEqual(self.mr.csv_cell(self.xq, scores, self.a.pk), "+1/−1")
+        self.assertEqual(self.mr.csv_cell(self.xq, scores, self.b.pk), "+1/−0")
+        self.assertEqual(self.mr.csv_cell(self.xq, scores, 0), "+0/−0")
