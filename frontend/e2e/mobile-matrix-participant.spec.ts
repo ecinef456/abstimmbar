@@ -19,6 +19,30 @@ const ZONE = {
   e_left: 'zwischen nicht nützlich & modern und nicht nützlich & altbacken',
 } as const;
 
+/** The language (globe) button does not intersect any zone button — at the
+ *  current scroll position and when the picker is scrolled to the top. */
+async function expectGlobeClear(page: Page) {
+  const check = async (label: string) => {
+    const globe = (await page.locator('#lang-btn').boundingBox())!;
+    for (const button of await page.locator('#mx-zones button').all()) {
+      const b = (await button.boundingBox())!;
+      const hit = globe.x < b.x + b.width && b.x < globe.x + globe.width && globe.y < b.y + b.height && b.y < globe.y + globe.height;
+      expect(hit, `${label}: ${JSON.stringify({ globe, b })}`).toBe(false);
+    }
+  };
+  await check('as is');
+  const y = await page.evaluate(() => window.scrollY);
+  for (const top of [0.1, 0.3, 0.5]) {
+    await page.evaluate((f) => {
+      const grid = document.getElementById('mx-grid')!;
+      const r = grid.getBoundingClientRect();
+      window.scrollTo(0, window.scrollY + r.top + r.height * f - 20);
+    }, top);
+    await check(`picker scrolled ${top}`);
+  }
+  await page.evaluate((v) => window.scrollTo(0, v), y);
+}
+
 async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
   await page.evaluate(() =>
@@ -67,6 +91,9 @@ for (const scheme of ['light', 'dark'] as const) {
           await expect(button.locator('.mx-plus svg')).toBeVisible();
           await expect(button.locator('.mx-tick')).toBeHidden();
         }
+        // The floating language button never covers the picker.
+        await expectGlobeClear(page);
+
         // Touch targets.
         for (const button of await zones.all()) {
           const box = await button.boundingBox();
@@ -132,6 +159,8 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(cards.first()).toHaveClass(/\bmx-new\b/);
         await expect(cards.first()).toBeInViewport();
         await expect(title).toBeFocused();
+        await page.waitForTimeout(600); // smooth scroll
+        await expectGlobeClear(page);
 
         // Card 2 on the top edge with the other category → at the limit.
         const top = view.getByRole('button', { name: ZONE.e_top, exact: true });
