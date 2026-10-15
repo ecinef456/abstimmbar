@@ -22,6 +22,8 @@ api_urlpatterns = [
     path("live/rooms/<str:code>/matrix/add/", views.matrix_add),
     path("live/rooms/<str:code>/matrix/remove/", views.matrix_remove),
     path("live/rooms/<str:code>/matrix/mine/", views.matrix_mine),
+    path("live/rooms/<str:code>/matrix/rate/", views.matrix_rate),
+    path("live/rooms/<str:code>/matrix/my-ratings/", views.matrix_my_ratings),
     # Mind map rating phase: token-scoped.
     path("live/rooms/<str:code>/mindmap/rate/", views.mindmap_rate),
     path("live/rooms/<str:code>/mindmap/my-ratings/", views.mindmap_my_ratings),
@@ -56,6 +58,10 @@ api_urlpatterns = [
     path(
         "runs/<int:run_id>/matrix/<int:question_id>/unstack",
         views.matrix_unstack,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/stage",
+        views.matrix_stage,
     ),
     path(
         "runs/<int:run_id>/matrix/<int:question_id>/hide",

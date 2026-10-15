@@ -8555,6 +8555,33 @@ class MatrixRatingServiceTests(MatrixTestCase):
             {"ratings": {str(self.a.pk): 1}, "remaining": 2, "budget": 3, "mode": "points"},
         )
 
+    def test_over_budget_after_unhide(self):
+        self.rate_stage()
+        self.rate(self.a, delta=1)
+        self.rate(self.b, delta=1)
+        mxs.set_hidden(self.run, self.xq, self.a.pk, True)
+        self.rate(self.c, delta=1)
+        self.rate(self.c, delta=1)
+        mxs.set_hidden(self.run, self.xq, self.a.pk, False)
+        mine = self.mr.my_ratings(self.run, self.xq, self.tok)
+        self.assertEqual(mine["remaining"], 0)
+        self.refused(409, self.rate, self.b, delta=1)
+        self.assertEqual(self.rate(self.a, delta=-1), (0, 0))  # still over budget
+
+    def test_over_budget_updown_sign_switch_allowed(self):
+        d = self.add(title="D", zone="q4")
+        self.configure(matrix_rating_mode="updown", matrix_rating_budget=2)
+        self.rate_stage()
+        self.rate(self.a, value=1)
+        self.rate(self.b, value=1)
+        mxs.set_hidden(self.run, self.xq, self.a.pk, True)
+        self.rate(self.c, value=1)
+        mxs.set_hidden(self.run, self.xq, self.a.pk, False)
+        self.assertEqual(self.mr.my_ratings(self.run, self.xq, self.tok)["remaining"], 0)
+        # a new rating is refused, a sign switch is not
+        self.refused(409, self.rate, d, value=1)
+        self.assertEqual(self.rate(self.b, value=-1), (-1, 0))
+
     # -- locks
     def test_locks_while_rating(self):
         teacher = mxs.add_teacher_card(self.run, self.xq, "q4", "T")
@@ -8566,7 +8593,8 @@ class MatrixRatingServiceTests(MatrixTestCase):
         self.assertEqual(e.detail, "Stacks are locked while rating.")
         self.refused(409, mxs.unstack_card, self.run, self.xq, self.a.pk)
         self.refused(409, mxs.delete_teacher_card, self.run, self.xq, teacher.pk)
-        # Moving and hiding stay possible.
+        # Moving, hiding and the teacher's own new cards stay possible.
+        mxs.add_teacher_card(self.run, self.xq, "q2", "T2")
         mxs.move_card(self.run, self.xq, self.a.pk, 0.5, 0.5)
         mxs.set_hidden(self.run, self.xq, self.a.pk, True)
         # Back in collect everything works again.
@@ -8644,6 +8672,317 @@ class MatrixRatingServiceTests(MatrixTestCase):
         scores, _ = self.mr.aggregate(self.run, self.xq)
         res = self.mr.results(self.run, self.xq, mxs.board_payload(self.run, self.xq, False))
         self.assertEqual([r["title"] for r in res["ranking"]], ["B", "A", "C"])
-        self.assertEqual(self.mr.csv_cell(self.xq, scores, self.a.pk), "+1/−1")
-        self.assertEqual(self.mr.csv_cell(self.xq, scores, self.b.pk), "+1/−0")
-        self.assertEqual(self.mr.csv_cell(self.xq, scores, 0), "+0/−0")
+        self.assertEqual(self.mr.csv_cell(self.xq, scores, self.a.pk), "+1/−1 (0)")
+        self.assertEqual(self.mr.csv_cell(self.xq, scores, self.b.pk), "+1/−0 (1)")
+        self.assertEqual(self.mr.csv_cell(self.xq, scores, 0), "+0/−0 (0)")
+
+
+class MatrixRatingApiTests(MatrixTestCase):
+    def setUp(self):
+        super().setUp()
+        from . import matrix_rating as mr
+
+        self.mr = mr
+        self.configure(matrix_rating_mode="points", matrix_rating_budget=3)
+        self.a = self.add(title="A", description="da", zone="q1")
+        self.b = self.add(title="B", zone="q2", token=self.tok2)
+        self.hid = self.add(title="Hid", zone="q3")
+        mxs.set_hidden(self.run, self.xq, self.hid.pk, True)
+
+    def base(self):
+        return f"/api/live/rooms/{self.room.code}/matrix"
+
+    def post(self, path, **body):
+        return self.client.post(
+            f"{self.base()}/{path}/", body, content_type="application/json"
+        )
+
+    def p_rate(self, card, token=None, **kw):
+        return self.post(
+            "rate", token=(token or self.tok).key, question=self.xq.pk, card=card.pk, **kw
+        )
+
+    def stage(self, stage, **kw):
+        self.client.force_login(self.owner)
+        return self.client.post(
+            f"/api/runs/{self.run.pk}/matrix/{self.xq.pk}/stage",
+            {"stage": stage, **kw}, content_type="application/json",
+        )
+
+    def payloads(self):
+        return build_payloads(self.room)
+
+    # -- stage endpoint
+    def test_stage_endpoint(self):
+        r = self.stage("rate")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json(), {"stage": "rate", "phase": "open"})
+        self.assertTrue(mxs.is_rating(self.run, self.xq))
+        self.assertEqual(self.stage("collect").json()["stage"], "collect")
+
+    def test_stage_open_flag_opens_vote(self):
+        self.run.phase = Run.Phase.CLOSED
+        self.run.save()
+        r = self.stage("rate", open=True)
+        self.assertEqual(r.json(), {"stage": "rate", "phase": "open"})
+
+    def test_stage_refusals(self):
+        self.assertEqual(self.stage("bogus").status_code, 400)
+        self.assertEqual(self.stage("rate", open="yes").status_code, 400)
+        self.assertEqual(self.stage(3).status_code, 400)
+        self.configure(matrix_rating_mode="")
+        self.assertEqual(self.stage("rate").status_code, 409)
+
+    def test_stage_permissions(self):
+        url = f"/api/runs/{self.run.pk}/matrix/{self.xq.pk}/stage"
+        body = {"stage": "rate"}
+        self.assertIn(
+            self.client.post(url, body, content_type="application/json").status_code,
+            (401, 403),
+        )
+        self.client.force_login(User.objects.create_user(username="eve"))
+        self.assertEqual(
+            self.client.post(url, body, content_type="application/json").status_code, 404
+        )
+        self.assertFalse(mxs.is_rating(self.run, self.xq))
+        self.client.force_login(self.owner)
+        r = self.client.post(
+            f"/api/runs/{self.run.pk}/matrix/{self.question.pk}/stage",
+            body, content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 404)
+
+    # -- rate endpoint
+    def test_rate_points(self):
+        self.stage("rate")
+        r = self.p_rate(self.a, delta=1)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json(), {"card": self.a.pk, "value": 1, "remaining": 2})
+        self.assertEqual(self.p_rate(self.a, delta=1).json()["value"], 2)
+        self.assertEqual(self.p_rate(self.a, delta=-1).json()["remaining"], 2)
+
+    def test_rate_updown(self):
+        self.configure(matrix_rating_mode="updown", matrix_rating_budget=2)
+        self.stage("rate")
+        r = self.p_rate(self.a, value=-1)
+        self.assertEqual(r.json(), {"card": self.a.pk, "value": -1, "remaining": 1})
+        self.assertEqual(self.p_rate(self.a, value=0).json()["remaining"], 2)
+
+    def test_rate_409_when_not_rating_or_closed(self):
+        self.assertEqual(self.p_rate(self.a, delta=1).status_code, 409)
+        self.stage("rate")
+        self.run.phase = Run.Phase.CLOSED
+        self.run.save()
+        self.assertEqual(self.p_rate(self.a, delta=1).status_code, 409)
+        self.run.phase = Run.Phase.OPEN
+        self.run.save()
+        self.assertEqual(self.p_rate(self.a, delta=1).status_code, 200)
+
+    def test_rate_refusals(self):
+        self.stage("rate")
+        self.assertEqual(self.p_rate(self.a, delta=2).status_code, 400)
+        self.assertEqual(self.p_rate(self.a, delta=True).status_code, 400)
+        self.assertEqual(self.p_rate(self.a).status_code, 400)
+        self.assertEqual(self.p_rate(self.a, token=ParticipantToken(key="nope"), delta=1).status_code, 403)
+        self.assertEqual(self.p_rate(self.hid, delta=1).status_code, 404)
+        r = self.post("rate", token=self.tok.key, question=self.xq.pk, card="x", delta=1)
+        self.assertEqual(r.status_code, 400)
+        r = self.post("rate", token=self.tok.key, question=self.question.pk, card=self.a.pk, delta=1)
+        self.assertEqual(r.status_code, 409)
+
+    def test_rate_budget_errors(self):
+        self.configure(matrix_rating_budget=1)
+        self.stage("rate")
+        self.assertEqual(self.p_rate(self.a, delta=1).status_code, 200)
+        r = self.p_rate(self.b, delta=1)
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(r.json()["detail"], "No points left.")
+        self.assertEqual(self.p_rate(self.b, delta=-1).status_code, 409)
+
+    def test_updown_refuses_delta(self):
+        self.configure(matrix_rating_mode="updown")
+        self.stage("rate")
+        self.assertEqual(self.p_rate(self.a, delta=1).status_code, 400)
+
+    def test_participant_add_409_while_rating(self):
+        self.stage("rate")
+        r = self.post("add", token=self.tok.key, question=self.xq.pk, zone="q1", title="X")
+        self.assertEqual(r.status_code, 409)
+
+    # -- my-ratings
+    def test_my_ratings_token_scoped(self):
+        self.stage("rate")
+        self.p_rate(self.a, delta=1)
+        self.p_rate(self.a, token=self.tok2, delta=1)
+        self.p_rate(self.b, token=self.tok2, delta=1)
+        r = self.post("my-ratings", token=self.tok.key, question=self.xq.pk)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            r.json(),
+            {"ratings": {str(self.a.pk): 1}, "remaining": 2, "budget": 3, "mode": "points"},
+        )
+        self.assertEqual(
+            self.post("my-ratings", token="nope", question=self.xq.pk).status_code, 403
+        )
+        self.assertEqual(
+            self.post("my-ratings", token=self.tok.key, question=self.question.pk).status_code, 404
+        )
+
+
+class MatrixRatingPayloadTests(MatrixTestCase):
+    def setUp(self):
+        super().setUp()
+        from . import matrix_rating as mr
+
+        self.mr = mr
+        self.configure(matrix_rating_mode="points", matrix_rating_budget=3)
+        self.a = self.add(title="A", zone="q2")
+        self.b = self.add(title="B", zone="q1", description="desc B")
+        self.c = self.add(title="C", zone="q1", token=self.tok2)
+        mxs.move_card(self.run, self.xq, self.c.pk, 0.9, 0.9)
+        self.hid = self.add(title="Hid", zone="q3")
+        mxs.set_hidden(self.run, self.xq, self.hid.pk, True)
+        self.mem = self.add(title="Member", zone="q2")
+        self.stacked(self.a, self.mem)
+
+    def rate_stage(self):
+        self.mr.set_stage(self.run, self.xq, "rate")
+
+    def part(self):
+        return build_payloads(self.room)["participant"].get("matrix_rating")
+
+    def pres(self):
+        return build_payloads(self.room)["presenter"]["matrix"].get("rating")
+
+    def test_no_mode_no_keys(self):
+        self.configure(matrix_rating_mode="")
+        self.assertIsNone(self.part())
+        self.assertIsNone(self.pres())
+
+    def test_collect_stage_minimal(self):
+        self.assertEqual(self.part(), {"stage": "collect"})
+        self.assertEqual(self.pres()["stage"], "collect")
+
+    def test_participant_cards_privacy_and_order(self):
+        self.rate_stage()
+        rating = self.part()
+        self.assertEqual(
+            (rating["stage"], rating["mode"], rating["budget"], rating["multi"]),
+            ("rate", "points", 3, True),
+        )
+        # q1 before q2; inside a zone y desc (C was moved up), then x asc.
+        self.assertEqual([c["title"] for c in rating["cards"]], ["C", "B", "A"])
+        for card in rating["cards"]:
+            self.assertEqual(
+                set(card), {"id", "title", "description", "category", "zone"}
+            )
+        text = json.dumps(build_payloads(self.room)["participant"])
+        self.assertNotIn("Hid", text)
+        self.assertNotIn("Member", text)
+        self.assertNotIn('"x"', text)
+        self.assertNotIn("scores", rating)
+
+    def test_participant_no_foreign_ratings_unless_revealed(self):
+        self.rate_stage()
+        self.mr.rate(self.run, self.xq, self.tok2, self.b.pk, delta=2)
+        self.assertNotIn("scores", self.part())
+        self.assertNotIn("balance", json.dumps(self.part()))
+        # live display on -> scores appear
+        self.configure(matrix_rating_live=True)
+        self.assertEqual(self.part()["scores"], {str(self.b.pk): {"points": 2}})
+        # results phase: only when the set shows results
+        self.configure(matrix_rating_live=False)
+        self.run.phase = Run.Phase.RESULTS
+        self.run.save()
+        self.assertIn("scores", self.part())
+        self.question_set.show_results_to_participants = False
+        self.question_set.save()
+        self.assertNotIn("scores", self.part())
+
+    def test_presenter_hidden_vs_live(self):
+        self.rate_stage()
+        self.mr.rate(self.run, self.xq, self.tok, self.b.pk, delta=1)
+        self.mr.rate(self.run, self.xq, self.tok2, self.b.pk, delta=1)
+        pres = self.pres()
+        self.assertEqual((pres["stage"], pres["raters"]), ("rate", 2))
+        self.assertNotIn("scores", pres)
+        self.assertNotIn("ranking", pres)
+        self.configure(matrix_rating_live=True)
+        pres = self.pres()
+        self.assertEqual(pres["scores"], {str(self.b.pk): {"points": 2}})
+        self.assertEqual([r["title"] for r in pres["ranking"]], ["B"])
+        self.assertEqual(pres["ranking"][0]["points"], 2)
+
+
+class MatrixRatingResultsTests(MatrixTestCase):
+    def setUp(self):
+        super().setUp()
+        from . import matrix_rating as mr
+
+        self.mr = mr
+        self.configure(matrix_rating_mode="points", matrix_rating_budget=5)
+        self.a = self.add(title="A", zone="q1")
+        self.b = self.add(title="B", zone="q2")
+        self.mr.set_stage(self.run, self.xq, "rate")
+        self.mr.rate(self.run, self.xq, self.tok, self.b.pk, delta=1)
+        self.mr.rate(self.run, self.xq, self.tok, self.b.pk, delta=1)
+        self.mr.rate(self.run, self.xq, self.tok2, self.a.pk, delta=1)
+
+    def item(self):
+        self.client.force_login(self.owner)
+        data = self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/results/"
+        ).json()["results"]
+        run = next(r for r in data if any(q["kind"] == "matrix" for q in r["questions"]))
+        return next(q for q in run["questions"] if q["kind"] == "matrix")
+
+    def csv_cards(self):
+        import csv
+        import io
+
+        self.client.force_login(self.owner)
+        body = self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/results.csv"
+        ).content.decode("utf-8-sig")
+        rows = list(csv.reader(io.StringIO(body), delimiter=";"))
+        header = rows[0]
+        for row in rows[1:]:
+            self.assertEqual(len(row), len(header), row)
+        return {
+            r[header.index("antwort")]: r[header.index("bewertung")]
+            for r in rows[1:] if r[3] == "Where?"
+        }
+
+    def test_hidden_while_rating(self):
+        rating = self.item()["matrix"]["rating"]
+        self.assertTrue(rating["rating_in_progress"])
+        self.assertEqual(rating["raters"], 2)
+        self.assertNotIn("scores", rating)
+        self.assertNotIn("ranking", rating)
+        self.assertEqual(self.csv_cards(), {"A": "", "B": ""})
+
+    def test_revealed_scores_ranking_csv(self):
+        self.run.phase = Run.Phase.RESULTS
+        self.run.save()
+        rating = self.item()["matrix"]["rating"]
+        self.assertNotIn("rating_in_progress", rating)
+        self.assertEqual([r["title"] for r in rating["ranking"]], ["B", "A"])
+        self.assertEqual(rating["scores"][str(self.b.pk)], {"points": 2})
+        self.assertEqual(self.csv_cards(), {"A": "1", "B": "2"})
+
+    def test_finished_run_reveals_and_updown_csv(self):
+        self.configure(matrix_rating_mode="updown", matrix_rating_budget=3)
+        from .models import MatrixRating
+
+        MatrixRating.objects.all().delete()
+        self.mr.rate(self.run, self.xq, self.tok, self.a.pk, value=1)
+        self.mr.rate(self.run, self.xq, self.tok2, self.a.pk, value=-1)
+        self.mr.rate(self.run, self.xq, self.tok, self.b.pk, value=1)
+        self.run.phase = Run.Phase.FINISHED
+        self.run.save()
+        self.assertEqual(self.csv_cards(), {"A": "'+1/−1 (0)", "B": "'+1/−0 (1)"})
+
+    def test_no_mode_no_rating_key_and_empty_column(self):
+        self.configure(matrix_rating_mode="")
+        self.assertNotIn("rating", self.item()["matrix"])
+        self.assertEqual(self.csv_cards(), {"A": "", "B": ""})

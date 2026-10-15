@@ -444,7 +444,7 @@ def board_payload(run, question, presenter):
 def csv_rows(run, question):
     """One dict per VISIBLE card for the results CSV (hidden cards and the
     members of a hidden top are left out, like the participant board):
-    ``title, description, category, zone, x, y, stack`` (``stack`` = title of
+    ``id, title, description, category, zone, x, y, stack`` (``stack`` = title of
     the stack's top card for members, else empty)."""
     canonical = seed_langs()[0]
     names = {
@@ -465,7 +465,7 @@ def csv_rows(run, question):
         else:
             category = c.category
         result.append({
-            "title": c.title, "description": c.description, "category": category,
+            "id": c.pk, "title": c.title, "description": c.description, "category": category,
             "zone": c.zone, "x": f"{c.x:.2f}", "y": f"{c.y:.2f}",
             "stack": titles.get(c.stack_id, "") if c.stack_id else "",
         })

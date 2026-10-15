@@ -22,7 +22,7 @@ from django.utils import timezone
 
 from rooms.mindmap import RATING_POINTS, RATING_UPDOWN
 
-from .matrix import MatrixError, _lock_run, is_rating
+from .matrix import ZONES, MatrixError, _lock_run, is_rating
 from .models import MatrixCard, MatrixPhase, MatrixRating, Run
 
 STAGES = (MatrixPhase.Stage.COLLECT, MatrixPhase.Stage.RATE)
@@ -211,6 +211,43 @@ def payload(run, question, *, presenter):
     return data
 
 
+_ZONE_ORDER = {zone: i for i, zone in enumerate(ZONES)}
+
+
+def participant_payload(run, question):
+    """``matrix_rating`` of the participant snapshot, or None without a rating
+    mode. Collecting: ``{stage}``. Rating: ``{stage, mode, budget, multi,
+    cards, scores?}`` — ``cards`` are the visible top cards WITHOUT positions
+    (zone order, then y descending, x ascending); ``scores`` only once
+    revealed (see :func:`payload`). Never anyone's individual ratings."""
+    if not question.matrix_rating_mode:
+        return None
+    stage = stage_of(run, question)
+    if stage != MatrixPhase.Stage.RATE:
+        return {"stage": stage}
+    tops = sorted(
+        MatrixCard.objects.filter(
+            run=run, question=question, stack__isnull=True, hidden=False
+        ),
+        key=lambda c: (_ZONE_ORDER.get(c.zone, len(ZONES)), -c.y, c.x, c.pk),
+    )
+    data = {
+        "stage": stage,
+        "mode": question.matrix_rating_mode,
+        "budget": question.matrix_rating_budget,
+        "multi": question.matrix_rating_multi,
+        "cards": [
+            {"id": c.pk, "title": c.title, "description": c.description,
+             "category": c.category, "zone": c.zone}
+            for c in tops
+        ],
+    }
+    shared = payload(run, question, presenter=False)
+    if "totals" in shared:
+        data["scores"] = shared["totals"]
+    return data
+
+
 def ranking(question, cards, scores):
     """Rated visible top cards, best first: by points (points) or balance
     (plus/minus); ties by title, then id. ``cards`` = board card dicts (only
@@ -264,11 +301,12 @@ def results(run, question, board):
 
 
 def csv_cell(question, scores, card_id):
-    """The "bewertung" CSV cell: points, or "+up/−down"."""
+    """The "bewertung" CSV cell: points, or "+up/−down (balance)" (same format
+    as the mind map)."""
     if not question.matrix_rating_mode:
         return ""
     score = scores.get(str(card_id))
     if question.matrix_rating_mode == RATING_UPDOWN:
-        score = score or {"up": 0, "down": 0}
-        return f"+{score['up']}/−{score['down']}"
+        score = score or {"up": 0, "down": 0, "balance": 0}
+        return f"+{score['up']}/−{score['down']} ({score['balance']})"
     return (score or {"points": 0})["points"]
