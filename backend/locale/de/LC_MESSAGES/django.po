@@ -606,5 +606,13 @@ msgid "Card added."
 msgstr "Karte hinzugefügt."
 
 #: live/templates/live/participant.html
+msgid "Field and category stay selected."
+msgstr "Feld und Kategorie bleiben ausgewählt."
+
+#: live/templates/live/participant.html
+msgid "The field stays selected."
+msgstr "Das Feld bleibt ausgewählt."
+
+#: live/templates/live/participant.html
 msgid "You have not added any cards yet."
 msgstr "Sie haben noch keine Karten hinzugefügt."

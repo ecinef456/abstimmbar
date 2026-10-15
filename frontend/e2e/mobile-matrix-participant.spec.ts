@@ -119,6 +119,19 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(q1).toHaveAttribute('aria-pressed', 'true');
         await expect(idea).toHaveAttribute('aria-checked', 'true');
         await expect(add).toBeDisabled(); // title is empty again
+        // Noticeable: a success message (live region) with the hint that field
+        // and category stay, the new card highlighted and scrolled into view,
+        // the focus back in the title for the next card.
+        const msg = view.locator('#mx-msg');
+        await expect(msg).toBeVisible();
+        await expect(msg).toContainText('Karte hinzugefügt.');
+        await expect(msg).toHaveAttribute('aria-live', 'polite');
+        await expect(msg).toHaveClass(/\bok\b/);
+        await expect(view.locator('#mx-keep')).toBeVisible();
+        await expect(view.locator('#mx-keep')).toHaveText('Feld und Kategorie bleiben ausgewählt.');
+        await expect(cards.first()).toHaveClass(/\bmx-new\b/);
+        await expect(cards.first()).toBeInViewport();
+        await expect(title).toBeFocused();
 
         // Card 2 on the top edge with the other category → at the limit.
         const top = view.getByRole('button', { name: ZONE.e_top, exact: true });
