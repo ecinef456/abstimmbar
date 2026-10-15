@@ -1846,6 +1846,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         <Footer
           phase={phase}
           index={indexRef.current}
+          rating={(mmRate || mxRate) && phase !== "lobby"}
           extra={
             activeKind === "mindmap" && mmRating && phase !== "lobby" ? (
               mmRate ? (

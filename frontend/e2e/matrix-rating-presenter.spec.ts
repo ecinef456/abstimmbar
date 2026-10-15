@@ -168,9 +168,14 @@ test('points, live: start via footer, bars + texts, ranking, stack lock, help, b
   await expect(start).toHaveAttribute('data-next-step', 'true');
   await expect(start).toHaveAttribute('title', /Punkte auf die Karten/);
   await expect(seg(page, 'view.mx.ranking')).toHaveCount(0);
+  const toggle = page.locator('[data-help="toggle"]');
+  await expect(toggle.getByTestId('toggle-rating-icon')).toHaveCount(0);
   const stage = page.waitForResponse((r) => r.request().method() === 'POST' && /\/matrix\/\d+\/stage$/.test(r.url()));
   await start.click();
   expect((await stage).ok()).toBeTruthy();
+  // Rating stage: Start/Stop shows the thumbs icon and names the rating.
+  await expect(toggle.getByTestId('toggle-rating-icon')).toBeVisible();
+  await expect(toggle).toHaveAccessibleName(/^Bewertung (starten|stoppen)$/);
   const back = page.getByTestId('mx-back-to-collecting');
   await expect(back).toBeVisible();
   await expect(back).toHaveAccessibleName('Zurück zum Sammeln');
