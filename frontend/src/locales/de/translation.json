@@ -1202,6 +1202,7 @@
   "The rating mode cannot be changed while a running session is rating.": "Die Bewertungsart kann nicht geändert werden, solange eine laufende Durchführung bewertet.",
   "Collecting is paused while rating.": "Das Sammeln ist während der Bewertung pausiert.",
   "Stacks are locked while rating.": "Stapel sind während der Bewertung gesperrt.",
+  "Stacking and deleting are locked while rating.": "Stapeln und Löschen sind während der Bewertung gesperrt.",
   "The rated cards, best first.": "Die bewerteten Karten, die besten zuerst.",
   "Participants rate the collected cards.": "Teilnehmende bewerten die gesammelten Karten.",
   "Participants add cards again; the ratings are kept.": "Teilnehmende ergänzen wieder Karten; die Bewertungen bleiben erhalten.",

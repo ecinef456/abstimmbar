@@ -240,7 +240,7 @@ test('points, live: start via footer, bars + texts, ranking, stack lock, help, b
   await page.locator('[data-help="handle.mx-edit"]').click();
   const drawer = page.getByTestId('matrix-drawer');
   await drawer.getByRole('tab', { name: 'Moderieren' }).click();
-  await expect(drawer.getByTestId('matrix-stacks-locked')).toHaveText('Stapel sind während der Bewertung gesperrt.');
+  await expect(drawer.getByTestId('matrix-stacks-locked')).toHaveText('Stapeln und Löschen sind während der Bewertung gesperrt.');
   await expect(drawer.getByRole('button', { name: /Mitglied herauslösen/ })).toBeDisabled();
   await expect(drawer.getByRole('button', { name: /Stapel Podcast auflösen/ })).toBeDisabled();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/beamer-moderation-locked.png` });

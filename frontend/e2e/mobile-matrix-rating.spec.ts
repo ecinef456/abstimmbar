@@ -87,9 +87,9 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(minus('Chatbot')).toBeDisabled();
         await plus('Chatbot').click();
         await expect(status).toHaveText('Noch 2 Punkte');
-        await expect(row(page, 'Chatbot').locator('.mx-rval')).toHaveText('1');
+        await expect(row(page, 'Chatbot').locator('.mx-rval [aria-hidden]')).toHaveText('1');
         await plus('Chatbot').click();
-        await expect(row(page, 'Chatbot').locator('.mx-rval')).toHaveText('2');
+        await expect(row(page, 'Chatbot').locator('.mx-rval [aria-hidden]')).toHaveText('2');
         await plus('Feedback-Tool').click();
         await expect(status).toHaveText('Keine Punkte mehr übrig');
         await expect(plus('Randfall')).toBeDisabled();
@@ -116,8 +116,8 @@ for (const scheme of ['light', 'dark'] as const) {
         await page.reload();
         await expect(list.locator('li')).toHaveCount(4);
         await expect(status).toHaveText('Noch 1 Punkt');
-        await expect(row(page, 'Chatbot').locator('.mx-rval')).toHaveText('1');
-        await expect(row(page, 'Feedback-Tool').locator('.mx-rval')).toHaveText('1');
+        await expect(row(page, 'Chatbot').locator('.mx-rval [aria-hidden]')).toHaveText('1');
+        await expect(row(page, 'Feedback-Tool').locator('.mx-rval [aria-hidden]')).toHaveText('1');
 
         // Closed: read-only (no buttons), own values stay visible.
         await control(api, runId, 'closed', questionId);
@@ -161,12 +161,54 @@ for (const scheme of ['light', 'dark'] as const) {
           headers: { 'X-CSRFToken': csrf },
         });
         expect(r.ok(), await r.text()).toBeTruthy();
-        await expect(row(page, 'Chatbot').locator('.mx-rtotal')).toHaveText('Σ 1');
-        await expect(row(page, 'Feedback-Tool').locator('.mx-rtotal')).toHaveCount(0);
+        await expect(row(page, 'Chatbot').locator('.mx-rtotal')).toHaveText(/^Σ 1/);
+        await expect(row(page, 'Chatbot').locator('.mx-rtotal .mx-sr')).toHaveText('Insgesamt 1');
+        await expect(row(page, 'Feedback-Tool').locator('.mx-rtotal')).toBeHidden();
+        await expect(row(page, 'Chatbot').locator('.mx-rval .mx-sr')).toHaveText('Ihre Punkte: 0');
         await expectNoHorizontalOverflow(page, `matrix rating scores (${scheme})`);
         if (SHOTS) {
           await page.screenshot({ path: `${SHOTS}/participant-scores-${scheme}.png`, fullPage: true });
         }
+      } finally {
+        await page.close();
+        await deleteRooms(demoApi, created);
+        await demoApi.dispose();
+      }
+    });
+
+    test('live scores: taps survive other participants rating; error note is one live region', async ({ page, playwright }) => {
+      test.setTimeout(90_000);
+      const demoApi = await playwright.request.newContext({ storageState: AUTH.demo });
+      const created: number[] = [];
+      try {
+        const { room, questionId, tokens, csrf, a } = await seed(page, demoApi, created, {
+          matrix_rating_mode: 'points', matrix_rating_budget: 3, matrix_rating_live: true,
+        });
+        const plus = row(page, 'Chatbot').getByRole('button', { name: /Punkt vergeben/ });
+        await expect(plus).toBeVisible();
+        // Let the initial own-card / own-rating fetches settle (they rebuild once).
+        await expect(row(page, 'Meine Idee')).toContainText('Ihre Karte');
+        await expect(page.locator('#mx-rate-status')).toHaveText('Noch 3 Punkte');
+        await page.waitForTimeout(500);
+        await plus.evaluate((el) => { (el as HTMLElement).dataset.mark = 'same'; el.focus(); });
+        const total = row(page, 'Chatbot').locator('.mx-rtotal');
+        for (let i = 1; i <= 2; i++) {
+          const r = await demoApi.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/rate/`, {
+            data: { token: tokens[1], question: questionId, card: a, delta: 1 },
+            headers: { 'X-CSRFToken': csrf },
+          });
+          expect(r.ok(), await r.text()).toBeTruthy();
+          await expect(total).toHaveText(new RegExp(`^Σ ${i}`));
+          // The pressed control is still the very same node, still focused.
+          await expect(plus).toHaveAttribute('data-mark', 'same');
+          expect(await plus.evaluate((el) => el === document.activeElement)).toBe(true);
+        }
+        await plus.click();
+        await expect(row(page, 'Chatbot').locator('.mx-rval [aria-hidden]')).toHaveText('1');
+        await expect(total).toHaveText(/^Σ 3/);
+        // The error note is a persistent live region, not recreated per rebuild.
+        expect(await page.locator('#mx-rate-note').getAttribute('aria-live')).toBe('polite');
+        expect(await page.locator('#mx-rate-list [role=alert]').count()).toBe(0);
       } finally {
         await page.close();
         await deleteRooms(demoApi, created);

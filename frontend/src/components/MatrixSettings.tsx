@@ -402,17 +402,12 @@ export default function MatrixSettings({
         )}
         {value.ratingMode !== "" && (
           <>
-            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-              {value.ratingMode === "points" ? t("Points per person") : t("Ratings per person")}
-              <input
-                type="number"
-                min={1}
+            <div className="flex items-center gap-2">
+              <MaxPerPerson
+                value={value.ratingBudget}
                 max={50}
-                value={String(value.ratingBudget)}
-                onChange={(event) =>
-                  patch({ ratingBudget: Math.min(50, Math.max(1, Number(event.target.value) || 1)) })
-                }
-                className="w-16 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
+                onCommit={(ratingBudget) => patch({ ratingBudget })}
+                label={value.ratingMode === "points" ? t("Points per person") : t("Ratings per person")}
               />
               <InfoHint
                 text={
@@ -421,7 +416,7 @@ export default function MatrixSettings({
                     : t("Each participant may rate this many cards with 👍 or 👎 (1–50).")
                 }
               />
-            </label>
+            </div>
             <div className="grid gap-2">
               {value.ratingMode === "points" && (
                 <ToggleSwitch
@@ -447,12 +442,12 @@ const numberInput =
   "w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none";
 
 /** Number input with a local string draft: clearing it with backspace must not
- *  snap to 1 while typing; the value is clamped to 1–100 on blur. */
-function MaxPerPerson({ value, onCommit, label }: { value: number; onCommit: (n: number) => void; label: string }) {
+ *  snap to 1 while typing; the value is clamped to 1–max (default 100) on blur. */
+function MaxPerPerson({ value, onCommit, label, max = 100 }: { value: number; onCommit: (n: number) => void; label: string; max?: number }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   const commit = () => {
-    const n = Math.min(100, Math.max(1, Math.round(Number(draft)) || 1));
+    const n = Math.min(max, Math.max(1, Math.round(Number(draft)) || 1));
     setDraft(String(n));
     onCommit(n);
   };
@@ -462,12 +457,12 @@ function MaxPerPerson({ value, onCommit, label }: { value: number; onCommit: (n:
       <input
         type="number"
         min={1}
-        max={100}
+        max={max}
         value={draft}
         onChange={(event) => {
           setDraft(event.target.value);
           const n = Number(event.target.value);
-          if (event.target.value !== "" && n >= 1 && n <= 100) onCommit(Math.round(n));
+          if (event.target.value !== "" && n >= 1 && n <= max) onCommit(Math.round(n));
         }}
         onBlur={commit}
         className={numberInput}

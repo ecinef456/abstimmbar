@@ -339,7 +339,8 @@ test('rating section: mode, budget, switches persist; plus/minus hides the multi
   await group.getByRole('radio', { name: 'Punkte', exact: true }).click();
   const budget = page.getByRole('spinbutton', { name: /Punkte pro Person/ });
   await expect(budget).toHaveValue('5');
-  await budget.fill('99'); // clamped to 50
+  await budget.fill('99');
+  await budget.blur(); // clamped to 50 on blur
   await expect(budget).toHaveValue('50');
   await budget.fill('7');
   const multi = page.getByRole('switch', { name: 'Mehrere Punkte pro Karte erlauben' });

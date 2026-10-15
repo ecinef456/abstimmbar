@@ -208,6 +208,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   <div id="mx-rating" hidden>
     <p class="soft" id="mx-rate-intro" style="margin-top:4px"></p>
     <p id="mx-rate-status" aria-live="polite" style="margin-top:6px;font-weight:600;font-size:14px"></p>
+    <p id="mx-rate-note" class="mx-rnote" role="status" aria-live="polite" hidden></p>
     <div id="mx-rate-list"></div>
   </div>
   <div id="mx-own">
@@ -3403,7 +3404,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   let mxRatings = new Map();
   let mxRateRemaining = null;  // null until the server told us
   let mxRateStage = null, mxRateIds = null, mxRateFetchSeq = 0, mxRateFetchTimer = null;
-  let mxRateBusy = false, mxRateNote = null, mxRateSig = "";
+  let mxRateBusy = false, mxRateNoteTimer = 0, mxRateSig = "";
   const mxEl = (id) => document.getElementById(id);
 
   const mxIsMatrix = () => !!(state && state.question && state.question.kind === "matrix" &&
@@ -3701,7 +3702,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       if (mxKey !== key || !mxIsMatrix()) return;
       if (response.ok && typeof data.value === "number") {
         mxRateFetchSeq++; // a late my-ratings answer must not undo this
-        mxRateNote = null;
+        mxClearNote();
         if (data.value) mxRatings.set(id, data.value); else mxRatings.delete(id);
         if (typeof data.remaining === "number") mxRateRemaining = data.remaining;
         renderMatrix();
@@ -3713,9 +3714,57 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       mxRateBusy = false;
     }
   }
+  // One persistent live region (never rebuilt, so it is announced once);
+  // clears itself after 5 s like the mind-map notes.
   function mxNote(id, text) {
-    mxRateNote = { id, text };
-    renderMatrix();
+    const el = mxEl("mx-rate-note");
+    const card = mxRateCards().find((c) => c.id === id);
+    window.clearTimeout(mxRateNoteTimer);
+    el.textContent = card ? card.title + ": " + text : text;
+    el.hidden = !text;
+    if (text) mxRateNoteTimer = window.setTimeout(() => { el.hidden = true; el.textContent = ""; }, 5000);
+  }
+  function mxClearNote() {
+    window.clearTimeout(mxRateNoteTimer);
+    const el = mxEl("mx-rate-note");
+    el.hidden = true; el.textContent = "";
+  }
+  function mxRateCards() {
+    const r = mxRating();
+    return r ? r.cards : [];
+  }
+  // Live score pills are patched in place (a rebuild on every SSE would drop taps).
+  function mxUpdateScores(r) {
+    const points = r.mode === "points";
+    for (const li of mxEl("mx-rate-list").querySelectorAll("li[data-card]")) {
+      const raw = r.scores && r.scores[li.dataset.card];
+      let total = li.querySelector(".mx-rtotal");
+      if (!total) {
+        if (!raw) continue;
+        total = document.createElement("span");
+        total.className = "mx-rtotal";
+        let ctl = li.querySelector(".mx-rctl");
+        if (!ctl) { ctl = document.createElement("div"); ctl.className = "mx-rctl"; li.append(ctl); }
+        ctl.append(total);
+      }
+      total.hidden = !raw;
+      const score = raw || {};
+      const vis = document.createElement("span");
+      vis.setAttribute("aria-hidden", "true");
+      const sr = document.createElement("span");
+      sr.className = "mx-sr";
+      if (points) {
+        vis.textContent = "Σ " + (score.points || 0);
+        sr.textContent = I18N.mmTotal.replace("{n}", String(score.points || 0));
+      } else {
+        vis.textContent = "+" + (score.up || 0) + " / −" + (score.down || 0);
+        sr.textContent = I18N.mmTotalUpdown.replace("{up}", String(score.up || 0)).replace("{down}", String(score.down || 0));
+      }
+      const key = vis.textContent;
+      if (total.dataset.key === key) continue;
+      total.dataset.key = key;
+      total.replaceChildren(vis, sr);
+    }
   }
 
   function mxRenderRating(r) {
@@ -3734,9 +3783,9 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     const mine = new Set(mxMine.map((c) => c.id));
     // Rebuild only when something changed: this runs on every SSE render, and
     // replacing the buttons would drop keyboard/screen-reader focus and taps.
-    const sig = JSON.stringify([mxSig, canRate, r.cards, [...mxRatings], left, r.scores || null,
-      [...mine], mxRateNote]);
-    if (sig === mxRateSig) return;
+    const sig = JSON.stringify([mxSig, canRate, r.cards, [...mxRatings], left,
+      [...mine]]);
+    if (sig === mxRateSig) { mxUpdateScores(r); return; }
     mxRateSig = sig;
     const list = mxEl("mx-rate-list");
     const active = document.activeElement;
@@ -3805,7 +3854,12 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
           minus.disabled = value <= 0;
           const val = document.createElement("span");
           val.className = "mx-rval"; val.textContent = String(value);
-          val.setAttribute("aria-label", I18N.mmYourPoints.replace("{n}", String(value)));
+          val.textContent = "";
+          const vv = document.createElement("span");
+          vv.setAttribute("aria-hidden", "true"); vv.textContent = String(value);
+          const vs = document.createElement("span");
+          vs.className = "mx-sr"; vs.textContent = I18N.mmYourPoints.replace("{n}", String(value));
+          val.append(vv, vs);
           const plus = btn("", "plus", I18N.mmGivePoint + " — " + card.title, "+");
           plus.disabled = left <= 0 || (!r.multi && value >= 1);
           ctl.append(minus, val, plus);
@@ -3823,32 +3877,16 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
           // Read-only own rating (closed / results).
           const val = document.createElement("span");
           val.className = "mx-rval";
-          val.textContent = points ? String(value) : (value > 0 ? "👍" : "👎");
           const text = points ? I18N.mmYourPoints.replace("{n}", String(value)) : (value > 0 ? I18N.mmLike : I18N.mmDislike);
-          val.title = text; val.setAttribute("aria-label", text);
+          const vv = document.createElement("span");
+          vv.setAttribute("aria-hidden", "true"); vv.textContent = points ? String(value) : (value > 0 ? "👍" : "👎");
+          const vs = document.createElement("span");
+          vs.className = "mx-sr"; vs.textContent = text;
+          val.title = text;
+          val.append(vv, vs);
           ctl.append(val);
         }
-        const score = r.scores ? r.scores[String(card.id)] : null;
-        if (score) {
-          const total = document.createElement("span");
-          total.className = "mx-rtotal";
-          if (points) {
-            total.textContent = "Σ " + (score.points || 0);
-            total.setAttribute("aria-label", I18N.mmTotal.replace("{n}", String(score.points || 0)));
-          } else {
-            total.textContent = "+" + (score.up || 0) + " / −" + (score.down || 0);
-            total.setAttribute("aria-label",
-              I18N.mmTotalUpdown.replace("{up}", String(score.up || 0)).replace("{down}", String(score.down || 0)));
-          }
-          ctl.append(total);
-        }
         if (ctl.children.length) li.append(ctl);
-        if (mxRateNote && mxRateNote.id === card.id) {
-          const note = document.createElement("p");
-          note.className = "mx-rnote"; note.setAttribute("role", "alert");
-          note.textContent = mxRateNote.text;
-          li.append(note);
-        }
         for (const b of ctl.querySelectorAll("button")) {
           const act = b.dataset.act;
           b.addEventListener("click", () => void mxRate(card.id, act));
@@ -3864,6 +3902,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
         row.querySelector("button:not(:disabled)"));
       if (target) target.focus({ preventScroll: true });
     }
+    mxUpdateScores(r);
   }
 
   function renderMatrix() {
@@ -3883,7 +3922,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       mxRateRemaining = null;
       mxRateStage = null;
       mxRateIds = null;
-      mxRateNote = null;
+      mxClearNote();
       mxRateSig = "";
       mxRateFetchSeq++;
       window.clearTimeout(mxRateFetchTimer);
@@ -3917,7 +3956,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     if (!PREVIEW && token && state.matrix_rating) {
       const ids = rating ? rating.cards.map((c) => c.id).join(",") : "";
       if (stage !== mxRateStage) {
-        if (stage === "rate" || mxRateStage === null) { mxRateIds = ids; mxScheduleRatings(true); }
+        if (stage === "rate") { mxRateIds = ids; mxScheduleRatings(true); }
       } else if (stage === "rate" && ids !== mxRateIds) {
         mxRateIds = ids;
         mxScheduleRatings(false);

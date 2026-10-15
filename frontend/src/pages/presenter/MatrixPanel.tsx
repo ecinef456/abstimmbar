@@ -790,7 +790,7 @@ function CardDialog({
         {stacksLocked && (all.length > 0 || card.teacher) && (
           <p data-testid="matrix-stacks-locked" className="mt-3 flex items-center gap-1.5 text-sm text-slate-600">
             <Info aria-hidden className="h-4 w-4 shrink-0" />
-            {t("Stacks are locked while rating.")}
+            {t("Stacking and deleting are locked while rating.")}
           </p>
         )}
         <div className="mt-4">{actions(card, false)}</div>
@@ -1096,7 +1096,7 @@ function ModerateView({
             className="mb-3 flex items-start gap-1.5 rounded-lg bg-slate-100 px-2.5 py-2 text-slate-700"
           >
             <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
-            {t("Stacks are locked while rating.")}
+            {t("Stacking and deleting are locked while rating.")}
           </p>
         )}
         {hidden.length === 0 && stacks.length === 0 && <p className="text-slate-500">{t("Nothing moderated yet.")}</p>}

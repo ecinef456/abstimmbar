@@ -427,9 +427,7 @@ Fragenset über **„Ergebnisse"**. Dort können Sie:
   nach Feldern gruppiert; ausgeblendete Karten sind markiert; mit
   Bewertung zusätzlich Balken an den Karten und eine Rangliste – solange die
   Bewertung noch verborgen läuft, erscheint stattdessen ein Hinweis);
-  richtige
-  Antworten sind hier immer grün mit „Richtig“
-  markiert,
+  richtige Antworten sind hier immer grün mit „Richtig“ markiert,
 - über das Auswahlfeld oben **frühere Durchführungen** wählen — jede
   Präsentation wird als eigene Durchführung gespeichert,
 - die Ergebnisse als **CSV-Datei exportieren** (nur diese oder alle

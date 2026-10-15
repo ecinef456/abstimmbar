@@ -845,15 +845,16 @@ export default function Matrix({
                 } ${
                   isHidden
                     ? `border border-dashed border-slate-400 text-slate-600 ${dk("dark:border-slate-500 dark:text-slate-300")}`
-                    : `text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,.25)] ${dk("dark:text-slate-100")}`
+                    : `text-slate-900 ${dk("dark:text-slate-100")} ${
+                        n > 1
+                          ? `shadow-[3px_3px_0_#ddd,6px_6px_0_#ccc,0_1px_3px_rgba(0,0,0,.25)] ${dk("dark:shadow-[3px_3px_0_#334155,6px_6px_0_#1e293b,0_1px_3px_rgba(0,0,0,.5)]")}`
+                          : "shadow-[0_1px_3px_rgba(0,0,0,.25)]"
+                      }`
                 }`}
                 style={{
                   fontSize: `${cardFont}px`,
                   maxWidth: narrow ? "34%" : `min(${results ? 26 : 28}%, 11em)`,
                   transition: reduced || dragging ? "none" : "left .25s ease, top .25s ease, outline-color .3s ease",
-                  ...(n > 1
-                    ? { boxShadow: "3px 3px 0 #ddd, 6px 6px 0 #ccc, 0 1px 3px rgba(0,0,0,.25)" }
-                    : null),
                 }}
               >
                 {/* Category tab: the full colour, the letter (colours mode) in
@@ -903,7 +904,7 @@ export default function Matrix({
                       <span
                         aria-hidden
                         data-score-track=""
-                        className="relative block h-[0.5em] min-w-[2.5em] flex-1 overflow-hidden rounded-full bg-white/80 ring-1 ring-inset ring-slate-400/60"
+                        className={`relative block h-[0.5em] min-w-[2.5em] flex-1 overflow-hidden rounded-full bg-white/80 ring-1 ring-inset ring-slate-400/60 ${dk("dark:bg-slate-800/80 dark:ring-slate-500/60")}`}
                       >
                         {score.counts ? (
                           <>
