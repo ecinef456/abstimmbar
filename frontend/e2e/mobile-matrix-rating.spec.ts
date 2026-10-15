@@ -75,6 +75,19 @@ for (const scheme of ['light', 'dark'] as const) {
           'nützlich & altbacken',
           'zwischen nützlich & modern und nützlich & altbacken',
         ]);
+        // Each field group is a tinted block with a decorative icon.
+        const tints = scheme === 'light'
+          ? { q1: 'rgb(235, 246, 238)', q2: 'rgb(252, 245, 222)', q4: 'rgb(237, 240, 245)' }
+          : { q1: 'rgba(52, 211, 153, 0.09)', q2: 'rgba(252, 211, 77, 0.08)', q4: 'rgba(148, 163, 184, 0.1)' };
+        for (const [zone, colour] of Object.entries(tints)) {
+          const block = list.locator(`.mx-rgroup[data-zone="${zone}"]`);
+          await expect(block).toHaveCSS('background-color', colour);
+          await expect(block.locator('h3 svg.mx-zico')).toHaveAttribute('aria-hidden', 'true');
+        }
+        const edge = list.locator('.mx-rgroup[data-zone="e_right"]');
+        await expect(edge).toHaveCSS('background-image', /linear-gradient/);
+        await expect(edge.locator('h3 svg.mx-zico')).toHaveAttribute('aria-hidden', 'true');
+        await expect(edge.locator('h3 svg.mx-zico line')).toHaveCount(1);
         await expect(row(page, 'Meine Idee')).toContainText('Ihre Karte');
         await expect(row(page, 'Chatbot')).not.toContainText('Ihre Karte');
         await expect(row(page, 'Chatbot')).toContainText('Beantwortet Fragen');

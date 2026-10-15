@@ -159,6 +159,22 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   @keyframes mx-new{0%,35%{box-shadow:0 0 0 6px var(--brand-soft),0 0 0 9px var(--brand-strong)}100%{box-shadow:0 0 0 6px var(--brand-soft),0 0 0 9px transparent}}
   @media (prefers-reduced-motion: reduce){ #mx-mine li.mx-new{animation:none} }
   /* Rating stage: the cards grouped by field, with own points / thumbs. */
+  #mx-rate-list{--t1:#ebf6ee;--t2:#fcf5de;--t3:#fbebec;--t4:#edf0f5;--s1:#b7dec0;--s2:#f1d98f;--s3:#f0b9bd;--s4:#bcc5d6;--mx-ico:#3d4348}
+  #mx-rate-list .mx-rgroup{--ink-soft:#545a5f}
+  :root[data-theme="dark"] #mx-rate-list .mx-rgroup{--ink-soft:#a9b1b7}
+  :root[data-theme="dark"] #mx-rate-list{--t1:rgba(52,211,153,.09);--t2:rgba(252,211,77,.08);--t3:rgba(251,113,133,.09);--t4:rgba(148,163,184,.1);--s1:rgba(52,211,153,.4);--s2:rgba(252,211,77,.38);--s3:rgba(251,113,133,.4);--s4:rgba(148,163,184,.4);--mx-ico:#c5ccd2}
+  .mx-rgroup{margin:14px 0 0;padding:4px 12px 6px;border-radius:12px;border:1px solid var(--line)}
+  .mx-rgroup[data-zone="q1"]{background:var(--t1)}
+  .mx-rgroup[data-zone="q2"]{background:var(--t2)}
+  .mx-rgroup[data-zone="q3"]{background:var(--t3)}
+  .mx-rgroup[data-zone="q4"]{background:var(--t4)}
+  .mx-rgroup[data-zone="e_top"]{background:linear-gradient(to right,var(--t2) 50%,var(--t1) 50%)}
+  .mx-rgroup[data-zone="e_bottom"]{background:linear-gradient(to right,var(--t3) 50%,var(--t4) 50%)}
+  .mx-rgroup[data-zone="e_right"]{background:linear-gradient(to bottom,var(--t1) 50%,var(--t4) 50%)}
+  .mx-rgroup[data-zone="e_left"]{background:linear-gradient(to bottom,var(--t2) 50%,var(--t3) 50%)}
+  #mx-rate-list .mx-rgroup h3{margin:8px 0 2px;display:flex;align-items:flex-start;gap:8px}
+  .mx-zico{flex:none;width:20px;height:20px;margin-top:1px}
+  #mx-rate-list .mx-rgroup li:first-child{border-top:0}
   #mx-rate-list h3{margin:18px 0 4px;font-size:15px;font-weight:700;line-height:1.3}
   #mx-rate-list ul{list-style:none;padding:0;margin:0}
   #mx-rate-list li{padding:10px 0;border-top:1px solid var(--line)}
@@ -3427,6 +3443,44 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       default: return q[zone] || zone;
     }
   }
+  // Decorative 2x2 mini grid: the field's quadrant filled, or for an edge the
+  // axis segment between its two quadrants highlighted. Static markup only.
+  function mxZoneIcon(zone) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 20 20"); svg.setAttribute("class", "mx-zico");
+    svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+    const pos = { q2: [2, 2], q1: [11, 2], q3: [2, 11], q4: [11, 11] };
+    const edge = { e_top: ["q2", "q1", [10, 2, 10, 10]], e_bottom: ["q3", "q4", [10, 10, 10, 18]],
+      e_right: ["q1", "q4", [11, 10, 18, 10]], e_left: ["q2", "q3", [2, 10, 9, 10]] };
+    const rect = (q, fill, strong) => {
+      const r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", pos[q][0]); r.setAttribute("y", pos[q][1]);
+      r.setAttribute("width", 7); r.setAttribute("height", 7); r.setAttribute("rx", 1.5);
+      r.setAttribute("fill", fill);
+      r.setAttribute("stroke", strong ? "var(--mx-ico)" : "var(--ink-soft)");
+      r.setAttribute("stroke-width", strong ? 1.6 : 1); r.setAttribute("stroke-opacity", strong ? 1 : .5);
+      svg.append(r);
+    };
+    const e = edge[zone];
+    const hot = e ? [e[0], e[1]] : [zone];
+    for (const q of ["q2", "q1", "q3", "q4"]) {
+      if (hot.includes(q)) rect(q, "var(--s" + q.slice(1) + ")", !e);
+      else rect(q, "none", false);
+    }
+    if (e) {
+      // Edges: segment through the gap between the two filled quadrants.
+      const ln = document.createElementNS(NS, "line");
+      const horizontalGap = zone === "e_top" || zone === "e_bottom";
+      const c = e[2];
+      ln.setAttribute("x1", horizontalGap ? 10 : c[0]); ln.setAttribute("x2", horizontalGap ? 10 : c[2]);
+      ln.setAttribute("y1", horizontalGap ? c[1] : 10); ln.setAttribute("y2", horizontalGap ? c[3] : 10);
+      ln.setAttribute("stroke", "var(--mx-ico)"); ln.setAttribute("stroke-width", 3);
+      ln.setAttribute("stroke-linecap", "round");
+      svg.append(ln);
+    }
+    return svg;
+  }
   function mxCategoryInfo(key) {
     const s = mxSettings();
     const i = s.categories.findIndex((c) => c.key === key);
@@ -3806,8 +3860,13 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     };
     for (const [zone, cards] of groups) {
       const h = document.createElement("h3");
-      h.textContent = mxZoneName(zone);
+      h.append(mxZoneIcon(zone));
+      const name = document.createElement("span");
+      name.textContent = mxZoneName(zone);
+      h.append(name);
       const ul = document.createElement("ul");
+      const group = document.createElement("div");
+      group.className = "mx-rgroup"; group.dataset.zone = zone;
       for (const card of cards) {
         const li = document.createElement("li");
         li.dataset.card = String(card.id);
@@ -3893,7 +3952,8 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
         }
         ul.append(li);
       }
-      list.append(h, ul);
+      group.append(h, ul);
+      list.append(group);
     }
     // Keep keyboard focus on the pressed control (or its enabled sibling).
     if (focus && focus.card) {
