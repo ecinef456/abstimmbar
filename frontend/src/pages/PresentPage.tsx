@@ -901,7 +901,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       autoClosedRef.current !== deadline
     ) {
       autoClosedRef.current = deadline;
-      if (activeKind === "word_cloud" || activeKind === "matrix") {
+      // A rating with hidden scores (matrix / mind map) only closes, like
+      // S/Stop (`stopCloses`) — the timer must not reveal the scores.
+      if (!stopCloses && (activeKind === "word_cloud" || activeKind === "matrix")) {
         // Keep the cloud / matrix board on the beamer after the timer expires (and surface
         // #30's deferred cloud) — the same "results" landing as the Stop
         // button, instead of a bare closed slide that would hide it.
@@ -911,7 +913,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         void live.control(runId, { phase: "closed" });
       }
     }
-  }, [selfPaced, remaining, phase, runId, activeKind, state?.ends_at]);
+  }, [selfPaced, remaining, phase, runId, activeKind, stopCloses, state?.ends_at]);
 
   // Self-paced overall countdown (#75, Quiz-Block): the deadline for the
   // whole quiz lives in the same `state.ends_at` field the live per-question
