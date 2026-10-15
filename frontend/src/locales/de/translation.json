@@ -1178,11 +1178,20 @@
   "Choose a field": "Feld wählen",
   "Choose a category": "Kategorie wählen",
   "Show hidden cards": "Ausgeblendete anzeigen",
+  "Card management": "Kartenverwaltung",
+  "Show card again": "Wieder anzeigen",
+  "Show {{title}} on the beamer again": "{{title}} wieder auf dem Beamer anzeigen",
+  "Stacks": "Stapel",
+  "{{count}} cards": "{{count}} Karten",
+  "Dissolve stack": "Stapel auflösen",
+  "Dissolve stack {{title}}": "Stapel {{title}} auflösen",
   "No hidden cards. Open a card to hide it.": "Keine ausgeblendeten Karten. Öffnen Sie eine Karte, um sie auszublenden.",
   "Hidden: {{count}} — shown dashed; open one to show it again.": "Ausgeblendet: {{count}} – gestrichelt dargestellt; öffnen Sie eine Karte, um sie wieder einzublenden.",
   "Matrix": "Matrix",
   "The cards on the four-field board.": "Die Karten auf der Vier-Felder-Matrix.",
   "Add your own card; show hidden cards again.": "Eigene Karte hinzufügen; ausgeblendete Karten wieder anzeigen.",
   "Compact or detailed; zoom the whole board (wheel, drag to pan, Shift+arrows) or fit it.": "Kompakt oder ausführlich; das ganze Brett vergrößern (Mausrad, Ziehen verschiebt, Umschalt+Pfeile) oder einpassen.",
-  "Click a category to hide or show its cards.": "Klick auf eine Kategorie blendet ihre Karten aus oder ein."
+  "Click a category to hide or show its cards.": "Klick auf eine Kategorie blendet ihre Karten aus oder ein.",
+  "Add or moderate": "Hinzufügen oder moderieren",
+  "Switch between adding a card and moderating: restore hidden cards, release cards from a stack or dissolve it.": "Wechselt zwischen Karte hinzufügen und Moderieren: ausgeblendete Karten wieder anzeigen, Karten aus einem Stapel herauslösen oder den Stapel auflösen."
 }

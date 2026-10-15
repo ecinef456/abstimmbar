@@ -248,6 +248,7 @@ test('live cards, dragging with hysteresis, stacking, dialog, hiding, teacher ca
   // … visible again (dimmed) with "Ausgeblendete anzeigen", and re-shown.
   await page.locator('[data-help="handle.mx-edit"]').click();
   const drawer = page.getByTestId('matrix-drawer');
+  await drawer.getByRole('tab', { name: 'Moderieren' }).click();
   await drawer.getByRole('checkbox', { name: 'Ausgeblendete anzeigen' }).check();
   await expect(card(page, ids.podcast)).toHaveAttribute('data-hidden', 'true');
   await drawer.getByRole('button', { name: 'Schließen' }).click();
@@ -480,6 +481,7 @@ test('dropping onto a hidden card does not stack (and the server refuses it)', a
   await openPresenter(page, s.room.setId);
   await page.locator('[data-help="handle.mx-edit"]').click();
   const drawer = page.getByTestId('matrix-drawer');
+  await drawer.getByRole('tab', { name: 'Moderieren' }).click();
   await drawer.getByRole('checkbox', { name: 'Ausgeblendete anzeigen' }).check();
   await drawer.getByRole('button', { name: 'Schließen' }).click();
   await expect(card(page, ids.altlast)).toHaveAttribute('data-hidden', 'true');
@@ -862,4 +864,117 @@ test('crowded board: drawn cards never overlap (collision avoidance within the z
   // The stored positions are untouched (only the drawing is nudged).
   const stored = await s.serverCard(extra[0]);
   expect(stored.zone).toBe('q1');
+});
+
+/** Four field tints as computed sRGB, keyed by quadrant. */
+async function fieldTints(page: Page) {
+  return page.locator('[data-matrix-board] [data-tint]').evaluateAll((els) =>
+    Object.fromEntries(
+      els.map((el) => [el.getAttribute('data-tint')!, getComputedStyle(el).backgroundColor.match(/\d+(\.\d+)?/g)!.slice(0, 3).map(Number)]),
+    ),
+  ) as Promise<Record<string, [number, number, number]>>;
+}
+
+test('axis labels carry no arrow glyphs; four distinct semantic field tints', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  const s = await seed(page, trackRoom);
+  await openPresenter(page, s.room.setId);
+  for (const name of ['y_to', 'y_from', 'x_to', 'x_from']) {
+    const text = (await page.locator(`[data-axis="${name}"] [data-axis-label]`).textContent()) ?? '';
+    expect(text, name).not.toMatch(/[↑↓←→⬆⬇]/);
+    expect(text.trim().length, name).toBeGreaterThan(0);
+  }
+  const t = await fieldTints(page);
+  expect(Object.keys(t).sort()).toEqual(['q1', 'q2', 'q3', 'q4']);
+  const key = (c: number[]) => c.join(',');
+  expect(new Set(Object.values(t).map(key)).size).toBe(4);
+  // q1 greenish, q3 reddish, q2 warm yellow (red & green over blue), q4 bluish grey.
+  expect(t.q1[1]).toBeGreaterThan(t.q1[0]);
+  expect(t.q1[1]).toBeGreaterThan(t.q1[2]);
+  expect(t.q3[0]).toBeGreaterThan(t.q3[1]);
+  expect(t.q3[0]).toBeGreaterThan(t.q3[2]);
+  expect(Math.min(t.q2[0], t.q2[1]) - t.q2[2]).toBeGreaterThanOrEqual(10);
+  expect(t.q4[2]).toBeGreaterThan(t.q4[0]);
+  // Light enough for the cards and their text (contrast of near-black text).
+  for (const c of Object.values(t)) expect(contrast('rgb(15, 23, 42)', `rgb(${c.join(', ')})`)).toBeGreaterThanOrEqual(12);
+});
+
+test('card font is one step smaller than before', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  const s = await seed(page, trackRoom);
+  await openPresenter(page, s.room.setId);
+  await page.waitForTimeout(400);
+  const w = (await board(page).boundingBox())!.width;
+  const size = await card(page, s.ids.chatbot).locator('[data-card-title]').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  // Previously 0.02 × plot width (clamped 14–30); now about 0.017.
+  expect(size).toBeLessThanOrEqual(Math.max(13, w * 0.0175));
+  expect(size).toBeGreaterThanOrEqual(13);
+});
+
+test('moderation view: hidden cards restore, stacks release members / dissolve', async ({ page, trackRoom }) => {
+  test.setTimeout(120_000);
+  const s = await seed(page, trackRoom);
+  await openPresenter(page, s.room.setId);
+  await page.locator('[data-help="handle.mx-edit"]').click();
+  const drawer = page.getByTestId('matrix-drawer');
+  // Two views behind a labelled switch; "Karte hinzufügen" is the default.
+  const views = drawer.getByRole('tablist');
+  await expect(views.getByRole('tab', { name: 'Karte hinzufügen' })).toHaveAttribute('aria-selected', 'true');
+  await expect(drawer.getByRole('textbox', { name: 'Titel' })).toBeVisible();
+  await views.getByRole('tab', { name: 'Moderieren' }).click();
+  await expect(drawer.getByText('Noch nichts moderiert.')).toBeVisible();
+  await expect(drawer.getByRole('checkbox', { name: 'Ausgeblendete anzeigen' })).toBeVisible();
+  await expect(drawer.getByRole('textbox', { name: 'Titel' })).toHaveCount(0);
+  await drawer.getByRole('button', { name: 'Schließen' }).click();
+
+  // Hide Podcast via the dialog, stack Feedback-Tool onto Altlast? (Altlast is q3, Feedback q1: stacking is zone-free.)
+  await card(page, s.ids.podcast).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Ausblenden' }).click();
+  await expect(card(page, s.ids.podcast)).toHaveCount(0);
+  await drag(page, s.ids.feedback, await centre(page, s.ids.altlast), 'stack');
+  await page.locator('[data-help="handle.mx-edit"]').click();
+  await drawer.getByRole('tab', { name: 'Moderieren' }).click();
+  await expect(drawer.getByText('Noch nichts moderiert.')).toHaveCount(0);
+  await drawer.getByRole('tab', { name: 'Karte hinzufügen' }).click();
+  await drawer.getByRole('tab', { name: 'Moderieren' }).click();
+  const hiddenSection = drawer.getByRole('region', { name: 'Ausgeblendet' });
+  await expect(hiddenSection.getByText('Podcast')).toBeVisible();
+  const stackSection = drawer.getByRole('region', { name: 'Stapel' });
+  await expect(stackSection).toContainText('Altlast');
+  await expect(stackSection).toContainText('2');
+  await expect(stackSection.getByText('Feedback-Tool')).toBeVisible();
+
+  // Wieder anzeigen restores the hidden card.
+  const show = page.waitForResponse(isMove('hide'));
+  await hiddenSection.getByRole('button', { name: /Podcast.*anzeigen|Wieder anzeigen/ }).click();
+  expect((await show).ok()).toBeTruthy();
+  expect((await s.serverCard(s.ids.podcast)).hidden).toBe(false);
+  await expect(drawer.getByRole('region', { name: 'Ausgeblendet' })).toHaveCount(0);
+
+  // Herauslösen releases one member.
+  const un = page.waitForResponse(isMove('unstack'));
+  await stackSection.getByRole('button', { name: /Feedback-Tool herauslösen/ }).click();
+  expect((await un).ok()).toBeTruthy();
+  expect((await s.serverCard(s.ids.feedback)).stack).toBeNull();
+  await expect(drawer.getByRole('region', { name: 'Stapel' })).toHaveCount(0);
+
+  // Stack again with two members, then "Stapel auflösen" releases all.
+  await drawer.getByRole('button', { name: 'Schließen' }).click();
+  await drag(page, s.ids.feedback, await centre(page, s.ids.altlast), 'stack');
+  await drag(page, s.ids.podcast, await centre(page, s.ids.altlast), 'stack');
+  await page.locator('[data-help="handle.mx-edit"]').click();
+  await drawer.getByRole('tab', { name: 'Moderieren' }).click();
+  await expect(drawer.getByRole('region', { name: 'Stapel' }).locator('li')).toHaveCount(2);
+  await drawer.getByRole('button', { name: /Stapel Altlast auflösen/ }).click();
+  await expect.poll(async () => (await s.serverCard(s.ids.feedback)).stack).toBeNull();
+  await expect.poll(async () => (await s.serverCard(s.ids.podcast)).stack).toBeNull();
+  await expect(drawer.getByRole('region', { name: 'Stapel' })).toHaveCount(0);
+
+  // "?" labels the drawer's view switch.
+  await page.keyboard.press('?');
+  const helpFor = await page.getByTestId('help-card').evaluateAll((els) =>
+    els.flatMap((e) => (e.getAttribute('data-help-for') ?? '').split(' ')),
+  );
+  expect(helpFor).toContain('mx.drawer-views');
+  await page.keyboard.press('Escape');
 });

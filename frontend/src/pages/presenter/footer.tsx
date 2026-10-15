@@ -96,6 +96,10 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   "mx.prev-field": { name: "Previous field", text: "Shows the field before this one (reading order).", keys: ", / [" },
   "mx.next-field": { name: "Next field", text: "Shows the next field (reading order).", keys: ". / ]" },
   "mx.overview": { name: "Overview", text: "Back to the whole board.", keys: "Esc / 0" },
+  "mx.drawer-views": {
+    name: "Add or moderate",
+    text: "Switch between adding a card and moderating: restore hidden cards, release cards from a stack or dissolve it.",
+  },
   "mx.legend": { name: "Categories", text: "Click a category to hide or show its cards." },
 };
 

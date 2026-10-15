@@ -115,7 +115,7 @@ const SLATE_800 = "#1e293b";
 /** Card type size (px) from the plot width: beamer-sized on the board,
  *  smaller in the management results view; phones stay compact. */
 const CARD_FONT = {
-  present: { perWidth: 0.02, min: 14, max: 30 },
+  present: { perWidth: 0.017, min: 13, max: 26 },
   results: { perWidth: 0.017, min: 13, max: 18 },
   narrow: 12,
 };
@@ -585,11 +585,15 @@ export default function Matrix({
   }, [stacksKey, sizes, box, settings.edges, magnifiers, dragId]);
   lastPlacements.current = placements;
 
+  // Semantic field tints: most positive (top right) green, least (bottom
+  // left) rose, the two mixed fields amber (top left) and slate (bottom
+  // right). Light and low in saturation so the category colours of the cards
+  // stay dominant; dark (results page only) is a subtle wash of the same hue.
   const tint = {
-    q1: "bg-[#f5fbf6]",
-    q2: "bg-[#f6f8ff]",
-    q3: "bg-[#fbf7f3]",
-    q4: "bg-[#f8f6fb]",
+    q1: `bg-[#ebf6ee] ${dk("dark:bg-emerald-400/[0.07]")}`,
+    q2: `bg-[#fcf5de] ${dk("dark:bg-amber-300/[0.06]")}`,
+    q3: `bg-[#fbebec] ${dk("dark:bg-rose-400/[0.07]")}`,
+    q4: `bg-[#edf0f5] ${dk("dark:bg-slate-400/[0.08]")}`,
   };
   const axisLine = `bg-slate-500 ${dk("dark:bg-slate-400")}`;
   // Axis labels live in the margin OUTSIDE the plot (the plot box stays the
@@ -619,12 +623,12 @@ export default function Matrix({
       }`}
     >
       <span className={`${axisLabel} col-start-2 row-start-1 px-1.5 pb-1 text-center`} data-axis="y_to">
-        <span data-axis-label>↑ {localizedText(settings.axes.y_to)}</span>
+        <span data-axis-label>{localizedText(settings.axes.y_to)}</span>
       </span>
       {xLabel("x_from")}
       {xLabel("x_to")}
       <span className={`${axisLabel} col-start-2 row-start-3 px-1.5 pt-1 text-center`} data-axis="y_from">
-        <span data-axis-label>↓ {localizedText(settings.axes.y_from)}</span>
+        <span data-axis-label>{localizedText(settings.axes.y_from)}</span>
       </span>
       <div
         ref={plotRef}
@@ -640,7 +644,8 @@ export default function Matrix({
           {(["q2", "q1", "q3", "q4"] as const).map((q) => (
             <div
               key={q}
-              className={`absolute h-1/2 w-1/2 ${tint[q]} ${dk("dark:bg-white/[0.04]")}`}
+              data-tint={q}
+              className={`absolute h-1/2 w-1/2 ${tint[q]}`}
               style={{ left: q === "q2" || q === "q3" ? 0 : "50%", top: q === "q2" || q === "q1" ? 0 : "50%" }}
             />
           ))}

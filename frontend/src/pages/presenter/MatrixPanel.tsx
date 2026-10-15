@@ -529,7 +529,10 @@ export default function MatrixPanel({
         zoneName={zoneName}
         showHidden={showHidden}
         onShowHidden={setShowHidden}
-        hiddenCount={board.cards.filter((c) => c.hidden).length}
+        cards={board.cards}
+        catText={catText}
+        onRestore={(id) => void call(() => live.matrixHide(runId, questionId, id, false))}
+        onUnstack={(id) => call(() => live.matrixUnstack(runId, questionId, id))}
         onClose={(byKeyboard) => closeHandles(byKeyboard)}
         onAdd={(body) => call(() => live.matrixAdd(runId, questionId, body))}
       />
@@ -749,7 +752,10 @@ function AddDrawer({
   zoneName,
   showHidden,
   onShowHidden,
-  hiddenCount,
+  cards,
+  catText,
+  onRestore,
+  onUnstack,
   onClose,
   onAdd,
 }: {
@@ -760,7 +766,10 @@ function AddDrawer({
   zoneName: (zone: string) => string;
   showHidden: boolean;
   onShowHidden: (v: boolean) => void;
-  hiddenCount: number;
+  cards: MatrixCard[];
+  catText: (key: string) => string;
+  onRestore: (id: number) => void;
+  onUnstack: (id: number) => Promise<unknown>;
   onClose: (byKeyboard: boolean) => void;
   onAdd: (body: { zone: string; title: string; category: string; description: string }) => Promise<MatrixBoard | null>;
 }) {
@@ -771,9 +780,12 @@ function AddDrawer({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<"add" | "moderate">("add");
   // Closed (off-screen): out of the tab order and the accessibility tree.
   useEffect(() => {
     if (drawerRef.current) drawerRef.current.inert = !open;
+    // Each opening starts at "Add card".
+    if (!open) setView("add");
   }, [open]);
   // Settings may change while presenting (edges / categories switched off).
   useEffect(() => {
@@ -807,18 +819,56 @@ function AddDrawer({
         open ? "translate-x-0 shadow-2xl" : "translate-x-full"
       }`}
     >
-      <div className="flex items-center justify-between border-b border-slate-100 p-3">
-        <h2 className="text-sm font-semibold text-slate-600">{t("Add card")}</h2>
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 p-3">
+        <div
+          role="tablist"
+          aria-label={t("Card management")}
+          data-help="mx.drawer-views"
+          className="flex min-w-0 gap-1 rounded-lg bg-slate-100 p-0.5 text-sm font-semibold"
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+            e.preventDefault();
+            const next = view === "add" ? "moderate" : "add";
+            setView(next);
+            e.currentTarget.querySelector<HTMLElement>(`[data-view="${next}"]`)?.focus();
+          }}
+        >
+          {(["add", "moderate"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              id={`matrix-drawer-tab-${v}`}
+              data-view={v}
+              aria-selected={view === v}
+              aria-controls={`matrix-drawer-panel-${v}`}
+              tabIndex={view === v ? 0 : -1}
+              onClick={() => setView(v)}
+              className={`truncate rounded-md px-2.5 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
+                view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {v === "add" ? t("Add card") : t("Moderate")}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={(e) => onClose(e.detail === 0)}
           aria-label={t("Close")}
-          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+          className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
-      <form onSubmit={(e) => void submit(e)} className="space-y-3 overflow-y-auto p-3 text-left text-sm">
+      {view === "add" ? (
+      <form
+        id="matrix-drawer-panel-add"
+        role="tabpanel"
+        aria-labelledby="matrix-drawer-tab-add"
+        onSubmit={(e) => void submit(e)}
+        className="space-y-3 overflow-y-auto p-3 text-left text-sm"
+      >
         <MatrixZonePicker settings={settings} value={zone} onChange={setZone} zoneName={zoneName} />
         {withCategory && <MatrixCategoryChips settings={settings} value={category} onChange={setCategory} />}
         <label className="block font-medium text-slate-700">
@@ -850,15 +900,136 @@ function AddDrawer({
           {t("Add card")}
         </button>
       </form>
-      <div className="mt-auto border-t border-slate-100 p-3 text-sm">
+      ) : (
+        <ModerateView
+          cards={cards}
+          catText={catText}
+          showHidden={showHidden}
+          onShowHidden={onShowHidden}
+          onRestore={onRestore}
+          onUnstack={onUnstack}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Moderate view of the pencil drawer, laid out like the word cloud's
+ *  moderation panel: "Hidden" with "Show again", "Stacks" with the members
+ *  of each stack (release one, or dissolve the whole stack). */
+function ModerateView({
+  cards,
+  catText,
+  showHidden,
+  onShowHidden,
+  onRestore,
+  onUnstack,
+}: {
+  cards: MatrixCard[];
+  catText: (key: string) => string;
+  showHidden: boolean;
+  onShowHidden: (v: boolean) => void;
+  onRestore: (id: number) => void;
+  onUnstack: (id: number) => Promise<unknown>;
+}) {
+  const { t } = useTranslation();
+  const hidden = cards.filter((c) => c.hidden);
+  const stacks = matrixStacks(cards).filter((s) => s.members.length > 0);
+  const [dissolving, setDissolving] = useState(false);
+  const dissolve = async (members: MatrixCard[]) => {
+    setDissolving(true);
+    // One after the other: each response carries the whole board.
+    for (const m of members) if ((await onUnstack(m.id)) == null) break;
+    setDissolving(false);
+  };
+  const BTN = "ml-2 shrink-0 text-brand-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600";
+  return (
+    <div
+      id="matrix-drawer-panel-moderate"
+      role="tabpanel"
+      aria-labelledby="matrix-drawer-tab-moderate"
+      className="flex min-h-0 flex-1 flex-col text-left text-sm"
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {hidden.length === 0 && stacks.length === 0 && <p className="text-slate-500">{t("Nothing moderated yet.")}</p>}
+        {hidden.length > 0 && (
+          <section aria-labelledby="matrix-mod-hidden" data-testid="matrix-mod-hidden">
+            <h3 id="matrix-mod-hidden" className="mb-1 font-semibold text-slate-600">{t("Hidden")}</h3>
+            <ul>
+              {hidden.map((c) => {
+                const category = catText(c.category);
+                return (
+                  <li key={c.id} className="flex items-center justify-between py-0.5">
+                    <span className="min-w-0 truncate">
+                      {c.title}
+                      {category && <span className="ml-1 text-xs text-slate-500">({category})</span>}
+                    </span>
+                    <button
+                      type="button"
+                      className={BTN}
+                      onClick={() => onRestore(c.id)}
+                      aria-label={t("Show {{title}} on the beamer again", { title: c.title })}
+                    >
+                      {t("Show card again")}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        {stacks.length > 0 && (
+          <section aria-labelledby="matrix-mod-stacks" data-testid="matrix-mod-stacks" className={hidden.length > 0 ? "mt-3" : ""}>
+            <h3 id="matrix-mod-stacks" className="mb-1 font-semibold text-slate-600">{t("Stacks")}</h3>
+            {stacks.map((st) => (
+              <div key={st.card.id} className="mb-2 rounded-lg border border-slate-200 p-2">
+                <div className="flex items-center justify-between">
+                  <span className="min-w-0 truncate font-medium">
+                    {st.card.title}
+                    <span className="ml-1 text-xs font-normal text-slate-500">
+                      {t("{{count}} cards", { count: st.members.length + 1 })}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className={BTN}
+                    disabled={dissolving}
+                    onClick={() => void dissolve(st.members)}
+                    aria-label={t("Dissolve stack {{title}}", { title: st.card.title })}
+                  >
+                    {t("Dissolve stack")}
+                  </button>
+                </div>
+                <ul className="mt-1">
+                  {st.members.map((m) => (
+                    <li key={m.id} className="flex items-center justify-between py-0.5 text-slate-700">
+                      <span className="min-w-0 truncate">{m.title}</span>
+                      <button
+                        type="button"
+                        className={BTN}
+                        disabled={dissolving}
+                        onClick={() => void onUnstack(m.id)}
+                        aria-label={t("Unstack {{title}}", { title: m.title })}
+                      >
+                        {t("Unstack")}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </section>
+        )}
+      </div>
+      <div className="border-t border-slate-100 p-3">
         <label className="flex items-center gap-2 font-medium text-slate-700">
           <input type="checkbox" checked={showHidden} onChange={(e) => onShowHidden(e.target.checked)} />
           {t("Show hidden cards")}
         </label>
         <p className="mt-1 text-xs text-slate-500">
-          {hiddenCount === 0
+          {hidden.length === 0
             ? t("No hidden cards. Open a card to hide it.")
-            : t("Hidden: {{count}} — shown dashed; open one to show it again.", { count: hiddenCount })}
+            : t("Hidden: {{count}} — shown dashed; open one to show it again.", { count: hidden.length })}
         </p>
       </div>
     </div>

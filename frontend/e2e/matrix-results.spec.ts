@@ -237,3 +237,18 @@ test('axis labels and legend never overlap cards (extreme auto-place slots)', as
     a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
   for (const o of outside) for (const c of cards) expect(hit(o, c), JSON.stringify({ o, c })).toBe(false);
 });
+
+test('results: axis labels without arrows, four distinct tints (q1 green, q3 rose)', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  await login(page);
+  const { room } = await seed(page, trackRoom);
+  await page.goto(`/sets/${room.setId}/results`);
+  await expect(page.locator('[data-matrix-board]')).toBeVisible();
+  for (const name of ['y_to', 'y_from', 'x_to', 'x_from']) {
+    expect((await page.locator(`[data-axis="${name}"] [data-axis-label]`).textContent()) ?? '').not.toMatch(/[↑↓←→]/);
+  }
+  const t = await page.locator('[data-matrix-board] [data-tint]').evaluateAll((els) =>
+    Object.fromEntries(els.map((el) => [el.getAttribute('data-tint')!, getComputedStyle(el).backgroundColor])),
+  );
+  expect(new Set(Object.values(t)).size).toBe(4);
+});
