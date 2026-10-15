@@ -13,7 +13,7 @@
 import { useTranslation } from "react-i18next";
 import type { MatrixRankingEntry, MatrixRating, MatrixSettingsPayload } from "../api";
 import { categoryLabel, paletteEntry, readableOn } from "../matrixPalette";
-import { MATRIX_DOWN_INK as DOWN_INK, MATRIX_UP_INK as UP_INK, matrixZoneName } from "./Matrix";
+import { matrixDownInkClass, matrixUpInkClass, matrixZoneName } from "./Matrix";
 import { CORRECT as UP, MINUS as DOWN } from "./palette";
 
 const NO_CATEGORY_GREY = "#94a3b8";
@@ -119,9 +119,9 @@ export default function MatrixRanking({
                     aria-hidden
                     className={`shrink-0 whitespace-nowrap font-bold tabular-nums ${present ? "text-2xl" : "text-sm"}`}
                   >
-                    <span style={{ color: UP_INK }}>+{c.up}</span>
-                    <span className="text-slate-500"> / </span>
-                    <span style={{ color: DOWN_INK }}>−{c.down}</span>
+                    <span className={matrixUpInkClass(!present)}>+{c.up}</span>
+                    <span className={`text-slate-500 ${dk("dark:text-slate-400")}`}> / </span>
+                    <span className={matrixDownInkClass(!present)}>−{c.down}</span>
                     <span
                       className={`ml-2 inline-block rounded-full px-2 text-slate-900 ${present ? "" : "text-xs"}`}
                       style={{ background: c.balance > 0 ? UP : c.balance < 0 ? DOWN : "#e2e8f0" }}

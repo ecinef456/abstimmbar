@@ -160,8 +160,10 @@ Folgende Fragetypen stehen zur Verfügung:
   „Digital“). Mindestens zwei Kategorien sind nötig. Teilnehmende wählen auf dem
   Smartphone ein Feld (die „+“-Flächen), geben Titel (und ggf. Beschreibung und
   Kategorie) ein und sehen unter „Ihre Karten“, wie viele sie noch
-  setzen dürfen; eigene Karten lassen sich dort löschen. Nur in Live-Umfragen
-  möglich.
+  setzen dürfen; eigene Karten lassen sich dort löschen. Optional folgt wie
+  bei der Mindmap eine **Bewertungsphase** (Punkte oder Plus/Minus mit
+  Budget pro Person, auf Wunsch mehrere Punkte pro Karte und Anzeige der
+  Zwischenstände während der Bewertung). Nur in Live-Umfragen möglich.
 - **Prioritäten** — Ihre Teilnehmenden verteilen bis zu **100 Punkte** auf die
   Antworten: je wichtiger, desto mehr Punkte. Die Auswertung zeigt je Antwort
   den Durchschnitt (mit Minimum und Maximum), absteigend sortiert — so sehen
@@ -373,6 +375,22 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     die Pfeiltasten verschieben sie (Umschalt für größere Schritte). Ein
     Mausklick beendet die Tastatursteuerung wieder. **?** beschriftet alle
     Bedienelemente.
+  - **Bewertung:** Haben Sie im Editor eine Bewertungsphase eingestellt,
+    stoppen Sie zunächst das Sammeln (S); danach erscheint unten
+    **Bewertung starten**. Die Teilnehmenden bewerten nun auf dem Smartphone
+    eine Liste der Karten, gruppiert nach Feld – bei einem Stapel nur die
+    oberste Karte, ohne Hinweis auf die darunterliegenden – entweder mit
+    **Punkten** (Budget pro Person) oder mit **👍/👎**. Der Zähler links unten
+    zeigt, wie viele bereits bewertet haben. Die Ergebnisse bleiben
+    verborgen, bis Sie mit **Ergebnis** (E) auflösen (es sei denn, die
+    Zwischenstände sind eingeschaltet). Danach füllt sich jede Karte wie ein
+    Balken (Punkte im Verhältnis zum Spitzenreiter, bei Plus/Minus grün von
+    links und rosé von rechts) mit der Zahl daneben, und die Ansicht
+    **Rangliste** listet die bestbewerteten Karten. Karten werden dadurch
+    nicht größer. Während der Bewertung sind **Stapel gesperrt** (ein Ziehen
+    verschiebt nur die Karte; Teilnehmende können keine Karten ergänzen oder
+    zurücknehmen); Verschieben und Ausblenden bleiben möglich. **Zurück zum
+    Sammeln** öffnet das Brett wieder; die Bewertungen bleiben erhalten.
 - **Wortwolken bearbeiten (Experten-Modus):** Ziehen Sie einen Begriff auf
   einen anderen, um beide zusammenzuführen; mit × blenden Sie einen Begriff aus.
   Der Stift am rechten Rand öffnet die Liste zum Wiederherstellen, Trennen und
@@ -406,7 +424,10 @@ Fragenset über **„Ergebnisse"**. Dort können Sie:
 
 - die Auswertung je Frage einsehen (inkl. Wortwolke, Likert-Balken, Prioritäten,
   Sortierung und Vier-Felder-Matrix – dort als Brett und als Liste der Karten
-  nach Feldern gruppiert; ausgeblendete Karten sind markiert); richtige
+  nach Feldern gruppiert; ausgeblendete Karten sind markiert; mit
+  Bewertung zusätzlich Balken an den Karten und eine Rangliste – solange die
+  Bewertung noch verborgen läuft, erscheint stattdessen ein Hinweis);
+  richtige
   Antworten sind hier immer grün mit „Richtig“
   markiert,
 - über das Auswahlfeld oben **frühere Durchführungen** wählen — jede
@@ -418,6 +439,9 @@ Fragenset über **„Ergebnisse"**. Dort können Sie:
 Im CSV-Export hat jede sichtbare Karte einer Vier-Felder-Matrix eine Zeile mit
 den Spalten **beschreibung**, **kategorie**, **zone**, **x**, **y** und
 **stapel** (x und y liegen zwischen −1 und 1; ausgeblendete Karten fehlen).
+Mit Bewertung kommt die Spalte **bewertung** hinzu: bei Punkten die Summe, bei
+Plus/Minus im Format „+3/−1 (2)“ (Zustimmung/Ablehnung und Saldo) – wie bei
+der Mindmap.
 
 **Archivieren oder löschen?** Im Raum archiviert das Archiv-Symbol an einem
 Fragenset nur dessen **Ergebnisse**: Die nächste Präsentation startet leer, die

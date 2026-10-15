@@ -67,9 +67,13 @@ import { useReducedMotion } from "./motion";
 import { CORRECT as UP, MINUS as DOWN } from "./palette";
 
 /** Plus / minus counts as text on a tinted card body (≥ 4.5:1 on every
- *  category tint; the palette's CORRECT_STRONG / MINUS_INK are too light). */
-export const MATRIX_UP_INK = "oklch(0.45 0.13 150)";
-export const MATRIX_DOWN_INK = "oklch(0.45 0.15 20)";
+ *  category tint; the palette's CORRECT_STRONG / MINUS_INK are too light), as
+ *  Tailwind classes with a light variant for dark surfaces (management UI
+ *  only: pass `dark` false on the beamer, which stays light). */
+export const matrixUpInkClass = (dark: boolean) =>
+  `text-[oklch(0.45_0.13_150)] ${dark ? "dark:text-[oklch(0.82_0.15_150)]" : ""}`;
+export const matrixDownInkClass = (dark: boolean) =>
+  `text-[oklch(0.45_0.15_20)] ${dark ? "dark:text-[oklch(0.82_0.13_20)]" : ""}`;
 
 export interface MatrixInteraction {
   /** Drop / arrow key at board point (x, y) — unclamped; the server resolves
@@ -929,12 +933,13 @@ export default function Matrix({
                       <span aria-hidden data-score-text="" className="flex-none whitespace-nowrap text-[0.8em] font-bold tabular-nums">
                         {score.counts ? (
                           <>
-                            <span style={{ color: MATRIX_UP_INK }}>+{score.counts.up}</span>
+                            <span className={matrixUpInkClass(results)}>+{score.counts.up}</span>
                             {" / "}
-                            <span style={{ color: MATRIX_DOWN_INK }}>−{score.counts.down}</span>
+                            <span className={matrixDownInkClass(results)}>−{score.counts.down}</span>
                           </>
                         ) : (
-                          scoreText(score)
+                          // Phone board: the bare number fits the small card.
+                          narrow ? score.points : scoreText(score)
                         )}
                       </span>
                     </span>
