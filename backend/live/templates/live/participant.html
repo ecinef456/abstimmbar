@@ -158,6 +158,23 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   #mx-mine li.mx-new{background:var(--brand-soft);border-radius:6px;box-shadow:0 0 0 6px var(--brand-soft),0 0 0 9px var(--brand-strong);animation:mx-new 2.6s ease-out forwards}
   @keyframes mx-new{0%,35%{box-shadow:0 0 0 6px var(--brand-soft),0 0 0 9px var(--brand-strong)}100%{box-shadow:0 0 0 6px var(--brand-soft),0 0 0 9px transparent}}
   @media (prefers-reduced-motion: reduce){ #mx-mine li.mx-new{animation:none} }
+  /* Rating stage: the cards grouped by field, with own points / thumbs. */
+  #mx-rate-list h3{margin:18px 0 4px;font-size:15px;font-weight:700;line-height:1.3}
+  #mx-rate-list ul{list-style:none;padding:0;margin:0}
+  #mx-rate-list li{padding:10px 0;border-top:1px solid var(--line)}
+  .mx-rcat{display:inline-flex;align-items:center;gap:6px;margin:0 0 4px;font-size:12px;font-weight:700;color:var(--ink-soft)}
+  .mx-rdesc{margin:2px 0 0;font-size:13px;line-height:1.35;color:var(--ink-soft);overflow-wrap:anywhere}
+  .mx-rmine{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand-strong);font-size:12px;font-weight:700;vertical-align:middle}
+  .mx-rctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+  .mx-rbtn{flex:none;width:auto;min-width:44px;height:44px;min-height:44px;margin:0;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--brand-strong);font-size:18px;font-weight:700;line-height:1}
+  .mx-rbtn:disabled{opacity:.4}
+  .mx-rval{min-width:28px;text-align:center;font-weight:700;font-size:16px}
+  .mx-thumb{font-size:20px;font-weight:400;filter:grayscale(1);opacity:.75}
+  .mx-thumb[aria-pressed="true"]{filter:none;opacity:1;border-width:2px}
+  .mx-thumb.mx-up[aria-pressed="true"]{border-color:var(--brand-strong);background:var(--brand-soft)}
+  .mx-thumb.mx-down[aria-pressed="true"]{border-color:var(--danger);background:var(--danger-soft)}
+  .mx-rtotal{margin-left:auto;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap}
+  .mx-rnote{margin:6px 0 0;font-size:13px;font-weight:600;color:var(--danger-strong)}
 </style>
 <section id="matrix" hidden>
   <p class="soft" id="mx-countdown" aria-live="polite" hidden></p>
@@ -188,9 +205,16 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     <p class="mx-msg" id="mx-msg" aria-live="polite"></p>
     <p class="mx-msg" id="mx-limit" aria-live="polite" hidden>{% trans "You have reached the maximum number of cards." %}</p>
   </div>
-  <h2 class="mx-cap" id="mx-mine-head" tabindex="-1" style="font-size:16px;margin-top:22px"></h2>
-  <p class="soft" id="mx-empty" hidden>{% trans "You have not added any cards yet." %}</p>
-  <ul id="mx-mine"></ul>
+  <div id="mx-rating" hidden>
+    <p class="soft" id="mx-rate-intro" style="margin-top:4px"></p>
+    <p id="mx-rate-status" aria-live="polite" style="margin-top:6px;font-weight:600;font-size:14px"></p>
+    <div id="mx-rate-list"></div>
+  </div>
+  <div id="mx-own">
+    <h2 class="mx-cap" id="mx-mine-head" tabindex="-1" style="font-size:16px;margin-top:22px"></h2>
+    <p class="soft" id="mx-empty" hidden>{% trans "You have not added any cards yet." %}</p>
+    <ul id="mx-mine"></ul>
+  </div>
 </section>
 
 <section id="resultsview" hidden>
@@ -540,6 +564,12 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     mxKeepBoth: "{% trans 'Field and category stay selected.' %}",
     mxKeepField: "{% trans 'The field stays selected.' %}",
     mxLimit: "{% trans 'You have reached the maximum number of cards.' %}",
+    mxRateIntroPoints: "{% trans 'Give your points to the cards you find most important.' %}",
+    mxRateIntroUpdown: "{% trans 'Rate the cards: thumbs up or thumbs down.' %}",
+    mxYourCard: "{% trans 'Your card' %}",
+    mxCardGone: "{% trans 'This card is no longer available.' %}",
+    mxRatingRunning: "{% trans 'The rating is in progress — cards cannot be added or removed now.' %}",
+    mxOnePoint: "{% trans 'Only one point per card.' %}",
     // Mind map (stage 1).
     mmAddRoot: "{% trans 'Add a term' %}",
     mmAddChild: "{% trans 'Add a subterm to “{term}”' %}",
@@ -3367,6 +3397,13 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   let mxQuestionHtml = null, mxPreviewId = -1000;
   let mxNewId = null, mxNewTimer = null; // the just-added card (highlighted briefly)
   const mxMineFetched = new Set();
+  // Rating stage: own ratings (card id → value) come only from the server
+  // (my-ratings on entering the stage / reload / when the visible cards
+  // change) and from each rate response — no optimistic counting.
+  let mxRatings = new Map();
+  let mxRateRemaining = null;  // null until the server told us
+  let mxRateStage = null, mxRateIds = null, mxRateFetchSeq = 0, mxRateFetchTimer = null;
+  let mxRateBusy = false, mxRateNote = null, mxRateSig = "";
   const mxEl = (id) => document.getElementById(id);
 
   const mxIsMatrix = () => !!(state && state.question && state.question.kind === "matrix" &&
@@ -3582,9 +3619,250 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   function mxErrorText(detail) {
     switch (detail) {
       case "Card limit reached.": return I18N.mxLimit;
+      case "Collecting is paused while rating.": case "Stacks are locked while rating.": return I18N.mxRatingRunning;
       case "Time is up.": return I18N.timeUp;
       case "Voting is closed.": case "Question is not open.": return I18N.mxVotingClosed;
       default: return I18N.mmFailed;
+    }
+  }
+
+  // --- rating stage -------------------------------------------------------------
+  // Only while the beamer runs the rating stage the server sends the visible
+  // top cards (no positions) as state.matrix_rating.
+  const mxRating = () => {
+    const r = state && state.matrix_rating;
+    return r && r.stage === "rate" ? r : null;
+  };
+  const mxCanRate = () => state.phase === "open" && !mxExpired && !!mxRating();
+  const mxRateLeft = () => {
+    if (mxRateRemaining != null) return mxRateRemaining;
+    const r = mxRating();
+    return r ? r.budget : 0;
+  };
+  async function mxFetchRatings() {
+    if (PREVIEW || !token || !mxKey) return;
+    const key = mxKey, seq = ++mxRateFetchSeq;
+    let data = null;
+    try {
+      const response = await post(`/api/live/rooms/${CODE}/matrix/my-ratings/`,
+        { token, question: Number(key.split(":")[1]) });
+      if (response.ok) data = await response.json();
+    } catch { /* keep what we have */ }
+    if (!data || typeof data.ratings !== "object" || mxKey !== key || seq !== mxRateFetchSeq) return;
+    mxRatings = new Map(Object.entries(data.ratings || {}).map(([k, v]) => [Number(k), Number(v)]));
+    mxRateRemaining = typeof data.remaining === "number" ? data.remaining : null;
+    if (mxIsMatrix()) renderMatrix();
+  }
+  // Many participants see the same change at once — spread the re-fetches.
+  function mxScheduleRatings(soon) {
+    window.clearTimeout(mxRateFetchTimer);
+    mxRateFetchTimer = window.setTimeout(() => void mxFetchRatings(), soon ? 0 : 200 + Math.random() * 1300);
+  }
+  function mxRateErrorText(detail) {
+    switch (detail) {
+      case "No points left.": return I18N.mmPointsNone;
+      case "No ratings left.": return I18N.mmRatingsNone;
+      case "Only one point per card.": return I18N.mxOnePoint;
+      case "Rating has not started.": return I18N.mmRatingNotStarted;
+      case "Card not found.": return I18N.mxCardGone;
+      case "Time is up.": return I18N.timeUp;
+      case "Voting is closed.": case "Question is not open.": return I18N.mxVotingClosed;
+      default: return I18N.mmFailed;
+    }
+  }
+
+  async function mxRate(id, action) {
+    const r = mxRating();
+    if (!r || !mxCanRate() || mxRateBusy) return;
+    const value = mxRatings.get(id) || 0, left = mxRateLeft();
+    let body;
+    if (action === "plus") {
+      if (!r.multi && value >= 1) { mxNote(id, I18N.mxOnePoint); return; }
+      if (left <= 0) { mxNote(id, I18N.mmPointsNone); return; }
+      body = { delta: 1 };
+    } else if (action === "minus") {
+      if (value <= 0) return;
+      body = { delta: -1 };
+    } else {
+      const want = action === "up" ? 1 : -1;
+      if (value === want) body = { value: 0 };
+      else if (value === 0 && left <= 0) { mxNote(id, I18N.mmRatingsNone); return; }
+      else body = { value: want };
+    }
+    const key = mxKey;
+    mxRateBusy = true;
+    try {
+      let response, data = {};
+      try {
+        response = await post(`/api/live/rooms/${CODE}/matrix/rate/`,
+          { token, question: state.question.id, card: id, ...body });
+        data = await response.json().catch(() => ({}));
+      } catch { mxNote(id, I18N.mmFailed); return; }
+      if (mxKey !== key || !mxIsMatrix()) return;
+      if (response.ok && typeof data.value === "number") {
+        mxRateFetchSeq++; // a late my-ratings answer must not undo this
+        mxRateNote = null;
+        if (data.value) mxRatings.set(id, data.value); else mxRatings.delete(id);
+        if (typeof data.remaining === "number") mxRateRemaining = data.remaining;
+        renderMatrix();
+      } else {
+        mxNote(id, mxRateErrorText(data.detail));
+        mxScheduleRatings(true); // resync with the server's view
+      }
+    } finally {
+      mxRateBusy = false;
+    }
+  }
+  function mxNote(id, text) {
+    mxRateNote = { id, text };
+    renderMatrix();
+  }
+
+  function mxRenderRating(r) {
+    const s = mxSettings();
+    const canRate = mxCanRate();
+    const points = r.mode === "points";
+    const left = mxRateLeft();
+    mxEl("mx-rate-intro").hidden = !canRate;
+    mxEl("mx-rate-intro").textContent = points ? I18N.mxRateIntroPoints : I18N.mxRateIntroUpdown;
+    const status = mxEl("mx-rate-status");
+    status.hidden = !canRate;
+    status.textContent = !canRate ? ""
+      : left <= 0 ? (points ? I18N.mmPointsNone : I18N.mmRatingsNone)
+      : left === 1 ? (points ? I18N.mmPointsLeftOne : I18N.mmRatingsLeftOne)
+      : (points ? I18N.mmPointsLeftMany : I18N.mmRatingsLeftMany).replace("{n}", String(left));
+    const mine = new Set(mxMine.map((c) => c.id));
+    // Rebuild only when something changed: this runs on every SSE render, and
+    // replacing the buttons would drop keyboard/screen-reader focus and taps.
+    const sig = JSON.stringify([mxSig, canRate, r.cards, [...mxRatings], left, r.scores || null,
+      [...mine], mxRateNote]);
+    if (sig === mxRateSig) return;
+    mxRateSig = sig;
+    const list = mxEl("mx-rate-list");
+    const active = document.activeElement;
+    const focus = active && list.contains(active)
+      ? { card: active.closest("li") && active.closest("li").dataset.card, act: active.dataset.act } : null;
+    list.replaceChildren();
+    const groups = new Map();
+    for (const card of r.cards) {
+      if (!groups.has(card.zone)) groups.set(card.zone, []);
+      groups.get(card.zone).push(card);
+    }
+    const btn = (cls, act, label, text) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "mx-rbtn " + cls; b.dataset.act = act;
+      b.textContent = text;
+      b.setAttribute("aria-label", label);
+      return b;
+    };
+    for (const [zone, cards] of groups) {
+      const h = document.createElement("h3");
+      h.textContent = mxZoneName(zone);
+      const ul = document.createElement("ul");
+      for (const card of cards) {
+        const li = document.createElement("li");
+        li.dataset.card = String(card.id);
+        if (s.category_mode !== "off" && card.category) {
+          const info = mxCategoryInfo(card.category);
+          const tag = document.createElement("div");
+          tag.className = "mx-rcat";
+          const dot = document.createElement("span");
+          dot.className = "mx-dot"; dot.style.background = info.hex;
+          dot.setAttribute("aria-hidden", "true");
+          tag.append(dot);
+          if (info.name) {
+            tag.append(document.createTextNode(info.name));
+          } else if (info.letter) {
+            const num = document.createElement("span");
+            num.className = "mx-num"; num.textContent = info.letter;
+            num.setAttribute("aria-hidden", "true");
+            const sr = document.createElement("span");
+            sr.className = "mx-sr"; sr.textContent = I18N.mxColor.replace("{n}", info.letter);
+            tag.append(num, sr);
+          }
+          li.append(tag);
+        }
+        const title = document.createElement("div");
+        title.className = "mx-card-title";
+        title.append(document.createTextNode(card.title));
+        if (mine.has(card.id)) {
+          const badge = document.createElement("span");
+          badge.className = "mx-rmine"; badge.textContent = I18N.mxYourCard;
+          title.append(badge);
+        }
+        li.append(title);
+        if (card.description) {
+          const desc = document.createElement("p");
+          desc.className = "mx-rdesc"; desc.textContent = card.description;
+          li.append(desc);
+        }
+        const value = mxRatings.get(card.id) || 0;
+        const ctl = document.createElement("div");
+        ctl.className = "mx-rctl";
+        if (canRate && points) {
+          const minus = btn("", "minus",
+            I18N.mmTakePoint + " (" + I18N.mmYourPoints.replace("{n}", String(value)) + ") — " + card.title, "−");
+          minus.disabled = value <= 0;
+          const val = document.createElement("span");
+          val.className = "mx-rval"; val.textContent = String(value);
+          val.setAttribute("aria-label", I18N.mmYourPoints.replace("{n}", String(value)));
+          const plus = btn("", "plus", I18N.mmGivePoint + " — " + card.title, "+");
+          plus.disabled = left <= 0 || (!r.multi && value >= 1);
+          ctl.append(minus, val, plus);
+        } else if (canRate) {
+          for (const [act, v, label, icon, cls] of [["up", 1, I18N.mmLike, "👍", "mx-up"], ["down", -1, I18N.mmDislike, "👎", "mx-down"]]) {
+            const pressed = value === v;
+            const hint = pressed ? I18N.mmUndoRating : "";
+            const b = btn("mx-thumb " + cls, act, label + " — " + card.title + (hint ? " — " + hint : ""), icon);
+            b.setAttribute("aria-pressed", String(pressed));
+            if (hint) b.title = hint;
+            b.disabled = !pressed && value === 0 && left <= 0;
+            ctl.append(b);
+          }
+        } else if (value !== 0) {
+          // Read-only own rating (closed / results).
+          const val = document.createElement("span");
+          val.className = "mx-rval";
+          val.textContent = points ? String(value) : (value > 0 ? "👍" : "👎");
+          const text = points ? I18N.mmYourPoints.replace("{n}", String(value)) : (value > 0 ? I18N.mmLike : I18N.mmDislike);
+          val.title = text; val.setAttribute("aria-label", text);
+          ctl.append(val);
+        }
+        const score = r.scores ? r.scores[String(card.id)] : null;
+        if (score) {
+          const total = document.createElement("span");
+          total.className = "mx-rtotal";
+          if (points) {
+            total.textContent = "Σ " + (score.points || 0);
+            total.setAttribute("aria-label", I18N.mmTotal.replace("{n}", String(score.points || 0)));
+          } else {
+            total.textContent = "+" + (score.up || 0) + " / −" + (score.down || 0);
+            total.setAttribute("aria-label",
+              I18N.mmTotalUpdown.replace("{up}", String(score.up || 0)).replace("{down}", String(score.down || 0)));
+          }
+          ctl.append(total);
+        }
+        if (ctl.children.length) li.append(ctl);
+        if (mxRateNote && mxRateNote.id === card.id) {
+          const note = document.createElement("p");
+          note.className = "mx-rnote"; note.setAttribute("role", "alert");
+          note.textContent = mxRateNote.text;
+          li.append(note);
+        }
+        for (const b of ctl.querySelectorAll("button")) {
+          const act = b.dataset.act;
+          b.addEventListener("click", () => void mxRate(card.id, act));
+        }
+        ul.append(li);
+      }
+      list.append(h, ul);
+    }
+    // Keep keyboard focus on the pressed control (or its enabled sibling).
+    if (focus && focus.card) {
+      const row = list.querySelector(`li[data-card="${focus.card}"]`);
+      const target = row && (row.querySelector(`button[data-act="${focus.act}"]:not(:disabled)`) ||
+        row.querySelector("button:not(:disabled)"));
+      if (target) target.focus({ preventScroll: true });
     }
   }
 
@@ -3601,6 +3879,14 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       mxExpired = false;
       mxQuestionHtml = null;
       mxNewId = null;
+      mxRatings = new Map();
+      mxRateRemaining = null;
+      mxRateStage = null;
+      mxRateIds = null;
+      mxRateNote = null;
+      mxRateSig = "";
+      mxRateFetchSeq++;
+      window.clearTimeout(mxRateFetchTimer);
       mxEl("mx-title").value = "";
       mxEl("mx-desc").value = "";
       mxMessage("");
@@ -3622,6 +3908,32 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       // A selection that no longer exists in the rebuilt settings is dropped.
       if (mxZone && !s.zones.includes(mxZone)) mxZone = null;
       if (mxCategory && !s.categories.some((c) => c.key === mxCategory)) mxCategory = null;
+    }
+    // Own ratings: fetched when rating starts (or on reload while it runs /
+    // in the results) and again when the visible cards change while rating
+    // (hiding or stacking refunds ratings).
+    const rating = mxRating();
+    const stage = state.matrix_rating ? state.matrix_rating.stage : null;
+    if (!PREVIEW && token && state.matrix_rating) {
+      const ids = rating ? rating.cards.map((c) => c.id).join(",") : "";
+      if (stage !== mxRateStage) {
+        if (stage === "rate" || mxRateStage === null) { mxRateIds = ids; mxScheduleRatings(true); }
+      } else if (stage === "rate" && ids !== mxRateIds) {
+        mxRateIds = ids;
+        mxScheduleRatings(false);
+      }
+    }
+    mxRateStage = stage;
+    // Rating replaces the card form and the own-card list.
+    mxEl("mx-form").hidden = !!rating;
+    mxEl("mx-own").hidden = !!rating;
+    mxEl("mx-rating").hidden = !rating;
+    if (rating) {
+      const closed = mxEl("mx-status");
+      closed.hidden = mxCanRate();
+      if (!closed.hidden) closed.textContent = mxExpired ? I18N.timeUp : I18N.mxVotingClosed;
+      mxRenderRating(rating);
+      return;
     }
     const canAdd = mxCanAdd(), remaining = mxRemaining();
     const status = mxEl("mx-status");

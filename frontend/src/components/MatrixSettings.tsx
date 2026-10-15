@@ -7,10 +7,10 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { getDefaultContentLang, localizedMap, type LocalizedText } from "@basicbar/ui";
-import type { MatrixCategory, MatrixCategoryMode } from "../api";
+import type { MatrixCategory, MatrixCategoryMode, MatrixRatingMode } from "../api";
 import { MATRIX_PALETTE, categoryLabel, colorName, type MatrixColor } from "../matrixPalette";
 import TranslatableField from "./TranslatableField";
-import { SegmentedControl, ToggleSwitch } from "./ui";
+import { InfoHint, SegmentedControl, ToggleSwitch } from "./ui";
 
 export interface MatrixSettingsValue {
   xFrom: LocalizedText;
@@ -22,6 +22,10 @@ export interface MatrixSettingsValue {
   maxPerPerson: number;
   categoryMode: MatrixCategoryMode;
   categories: MatrixCategory[];
+  ratingMode: MatrixRatingMode;
+  ratingBudget: number;
+  ratingMulti: boolean;
+  ratingLive: boolean;
 }
 
 export type MatrixUpdateFn = (prev: MatrixSettingsValue) => Partial<MatrixSettingsValue>;
@@ -162,6 +166,8 @@ export default function MatrixSettings({
   value,
   onChange,
   disabled = false,
+  ratingError = "",
+  onRatingModeTouched,
 }: {
   value: MatrixSettingsValue;
   /** Receives an updater, not a value: several fields can change in the same
@@ -169,6 +175,10 @@ export default function MatrixSettings({
    *  previous one instead of the render-time `value`. */
   onChange: (update: MatrixUpdate) => void;
   disabled?: boolean;
+  /** Server message of a refused rating-mode change (cleared by the parent). */
+  ratingError?: string;
+  /** The author picked another mode: the parent drops `ratingError`. */
+  onRatingModeTouched?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language.startsWith("de") ? "de" : "en";
@@ -360,6 +370,75 @@ export default function MatrixSettings({
         )}
       </div>
 
+      <div className="grid gap-3 border-t border-slate-200 pt-4 dark:border-slate-700" data-testid="matrix-rating">
+        <div>
+          <span className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {t("Rating phase")}
+          </span>
+          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+            {t(
+              "Optional: after collecting, you start a rating on the beamer and participants rate the cards. The scores stay hidden until you show the results.",
+            )}
+          </p>
+        </div>
+        <SegmentedControl
+          className="max-w-md"
+          ariaLabel={t("Rating phase")}
+          value={value.ratingMode === "" ? "off" : value.ratingMode}
+          onChange={(v) => {
+            patch({ ratingMode: v === "off" ? "" : v });
+            onRatingModeTouched?.();
+          }}
+          options={[
+            { value: "off", label: t("Off") },
+            { value: "points", label: t("Points") },
+            { value: "updown", label: t("Plus/minus") },
+          ]}
+        />
+        {ratingError && (
+          <p className="text-sm text-danger" data-testid="rating-mode-error">
+            {ratingError}
+          </p>
+        )}
+        {value.ratingMode !== "" && (
+          <>
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              {value.ratingMode === "points" ? t("Points per person") : t("Ratings per person")}
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={String(value.ratingBudget)}
+                onChange={(event) =>
+                  patch({ ratingBudget: Math.min(50, Math.max(1, Number(event.target.value) || 1)) })
+                }
+                className="w-16 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
+              />
+              <InfoHint
+                text={
+                  value.ratingMode === "points"
+                    ? t("Each participant distributes this many points among the cards (1–50).")
+                    : t("Each participant may rate this many cards with 👍 or 👎 (1–50).")
+                }
+              />
+            </label>
+            <div className="grid gap-2">
+              {value.ratingMode === "points" && (
+                <ToggleSwitch
+                  checked={value.ratingMulti}
+                  onChange={(ratingMulti) => patch({ ratingMulti })}
+                  label={t("Allow several points per card")}
+                />
+              )}
+              <ToggleSwitch
+                checked={value.ratingLive}
+                onChange={(ratingLive) => patch({ ratingLive })}
+                label={t("Show ratings during the rating")}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </fieldset>
   );
 }

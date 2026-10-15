@@ -1194,5 +1194,10 @@
   "Compact or detailed; zoom the whole board (wheel, drag to pan, Shift+arrows) or fit it.": "Kompakt oder ausführlich; das ganze Brett vergrößern (Mausrad, Ziehen verschiebt, Umschalt+Pfeile) oder einpassen.",
   "Click a category to hide or show its cards.": "Klick auf eine Kategorie blendet ihre Karten aus oder ein.",
   "Add or moderate": "Hinzufügen oder moderieren",
-  "Switch between adding a card and moderating: restore hidden cards, release cards from a stack or dissolve it.": "Wechselt zwischen Karte hinzufügen und Moderieren: ausgeblendete Karten wieder anzeigen, Karten aus einem Stapel herauslösen oder den Stapel auflösen."
+  "Switch between adding a card and moderating: restore hidden cards, release cards from a stack or dissolve it.": "Wechselt zwischen Karte hinzufügen und Moderieren: ausgeblendete Karten wieder anzeigen, Karten aus einem Stapel herauslösen oder den Stapel auflösen.",
+  "Optional: after collecting, you start a rating on the beamer and participants rate the cards. The scores stay hidden until you show the results.": "Optional: Nach dem Sammeln starten Sie am Beamer eine Bewertung, und die Teilnehmenden bewerten die Karten. Die Ergebnisse bleiben verborgen, bis Sie sie anzeigen.",
+  "Each participant distributes this many points among the cards (1–50).": "So viele Punkte verteilt jede Person auf die Karten (1–50).",
+  "Each participant may rate this many cards with 👍 or 👎 (1–50).": "So viele Karten darf jede Person mit 👍 oder 👎 bewerten (1–50).",
+  "Allow several points per card": "Mehrere Punkte pro Karte erlauben",
+  "The rating mode cannot be changed while a running session is rating.": "Die Bewertungsart kann nicht geändert werden, solange eine laufende Durchführung bewertet."
 }

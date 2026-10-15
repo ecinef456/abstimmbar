@@ -290,6 +290,15 @@ export interface Question {
   matrix_category_mode: MatrixCategoryMode;
   /** matrix only: 2–6 categories when the mode is not "off". */
   matrix_categories: MatrixCategory[];
+  /** matrix only: optional rating phase after collecting ("" = off). */
+  matrix_rating_mode: MatrixRatingMode;
+  /** matrix only: points (points) or ratings (updown) per person (1–50). */
+  matrix_rating_budget: number;
+  /** matrix only, points: several points on one card allowed. */
+  matrix_rating_multi: boolean;
+  /** matrix only: scores are shown live while rating (default: hidden until
+   *  the results). */
+  matrix_rating_live: boolean;
   /** Per-question reveal override; "inherit" uses the set default (#28). */
   reveal_answers: "inherit" | RevealAnswers;
   /** Before/after pair (#54): the before-question this one mirrors (null if
@@ -1166,6 +1175,8 @@ export interface MindmapAiSimulation {
 export type MindmapAiUndo = { type: string; data: unknown }[];
 
 export type MindmapRatingMode = "" | "points" | "updown";
+/** Rating phase of a matrix question (same modes as the mind map). */
+export type MatrixRatingMode = MindmapRatingMode;
 
 /** Aggregated rating of one node (only rated visible nodes are keys). */
 export type MindmapScore =

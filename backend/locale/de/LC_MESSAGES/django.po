@@ -616,3 +616,27 @@ msgstr "Das Feld bleibt ausgewählt."
 #: live/templates/live/participant.html
 msgid "You have not added any cards yet."
 msgstr "Sie haben noch keine Karten hinzugefügt."
+
+#: live/templates/live/participant.html
+msgid "Give your points to the cards you find most important."
+msgstr "Vergeben Sie Ihre Punkte an die Karten, die Ihnen am wichtigsten sind."
+
+#: live/templates/live/participant.html
+msgid "Rate the cards: thumbs up or thumbs down."
+msgstr "Bewerten Sie die Karten: Daumen hoch oder Daumen runter."
+
+#: live/templates/live/participant.html
+msgid "Your card"
+msgstr "Ihre Karte"
+
+#: live/templates/live/participant.html
+msgid "This card is no longer available."
+msgstr "Diese Karte ist nicht mehr verfügbar."
+
+#: live/templates/live/participant.html
+msgid "The rating is in progress — cards cannot be added or removed now."
+msgstr "Die Bewertung läuft – jetzt können keine Karten hinzugefügt oder entfernt werden."
+
+#: live/templates/live/participant.html
+msgid "Only one point per card."
+msgstr "Nur ein Punkt pro Karte."

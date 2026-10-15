@@ -4,7 +4,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { test, expect, API_BASE_URL } from './fixtures';
-import { apiClient, createRoomWithQuestions } from './helpers/seed';
+import { apiClient, control, createMatrixQuestion, createRoomWithQuestions, startRun } from './helpers/seed';
 
 test.use({ locale: 'de-DE', viewport: { width: 1280, height: 900 } });
 
@@ -324,6 +324,85 @@ test('a self-paced set does not offer the matrix', async ({ page, trackRoom }) =
   await expect(page.getByRole('menuitem', { name: /Vier-Felder-Matrix/ })).toHaveCount(0);
 });
 
+test('rating section: mode, budget, switches persist; plus/minus hides the multi switch', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  const api = apiClient(page.request);
+  const q = await createMatrixQuestion(api, seed.setId);
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  const group = page.getByRole('group', { name: 'Bewertungsphase' });
+  await expect(group.getByRole('radio', { name: 'Aus' })).toBeChecked();
+  await expect(page.getByRole('spinbutton', { name: /Punkte pro Person/ })).toHaveCount(0);
+
+  await group.getByRole('radio', { name: 'Punkte', exact: true }).click();
+  const budget = page.getByRole('spinbutton', { name: /Punkte pro Person/ });
+  await expect(budget).toHaveValue('5');
+  await budget.fill('99'); // clamped to 50
+  await expect(budget).toHaveValue('50');
+  await budget.fill('7');
+  const multi = page.getByRole('switch', { name: 'Mehrere Punkte pro Karte erlauben' });
+  await expect(multi).toHaveAttribute('aria-checked', 'true');
+  await multi.click();
+  const live = page.getByRole('switch', { name: 'Bewertungen während der Bewertung anzeigen' });
+  await expect(live).toHaveAttribute('aria-checked', 'false');
+  await live.click();
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  let stored = await api.get(`/api/questions/${q}/`);
+  expect([stored.matrix_rating_mode, stored.matrix_rating_budget, stored.matrix_rating_multi, stored.matrix_rating_live]).toEqual(
+    ['points', 7, false, true],
+  );
+
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  await expect(group.getByRole('radio', { name: 'Punkte', exact: true })).toBeChecked();
+  await expect(page.getByRole('spinbutton', { name: /Punkte pro Person/ })).toHaveValue('7');
+  await expect(multi).toHaveAttribute('aria-checked', 'false');
+  await group.getByRole('radio', { name: 'Plus/Minus' }).click();
+  await expect(page.getByRole('spinbutton', { name: /Bewertungen pro Person/ })).toHaveValue('7');
+  await expect(multi).toHaveCount(0);
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  stored = await api.get(`/api/questions/${q}/`);
+  expect(stored.matrix_rating_mode).toBe('updown');
+  // Back to off.
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  await group.getByRole('radio', { name: 'Aus' }).click();
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  expect((await api.get(`/api/questions/${q}/`)).matrix_rating_mode).toBe('');
+});
+
+test('changing the rating mode while a session is rating shows the lock message', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  const api = apiClient(page.request);
+  const q = await createMatrixQuestion(api, seed.setId, { matrix_rating_mode: 'points' });
+  const runId = await startRun(api, seed.setId);
+  await control(api, runId, 'open', q);
+  await api.post(`/api/runs/${runId}/matrix/${q}/stage`, { stage: 'rate' });
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  await page
+    .getByRole('group', { name: 'Bewertungsphase' })
+    .getByRole('radio', { name: 'Plus/Minus' })
+    .click();
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page.getByTestId('rating-mode-error')).toHaveText(
+    'Die Bewertungsart kann nicht geändert werden, solange eine laufende Durchführung bewertet.',
+  );
+  await expect(page).toHaveURL(/\/questions\//);
+  expect((await api.get(`/api/questions/${q}/`)).matrix_rating_mode).toBe('points');
+  // Picking another option clears the message.
+  await page
+    .getByRole('group', { name: 'Bewertungsphase' })
+    .getByRole('radio', { name: 'Punkte', exact: true })
+    .click();
+  await expect(page.getByTestId('rating-mode-error')).toHaveCount(0);
+});
+
 for (const scheme of ['light', 'dark'] as const) {
   test.describe(`axe ${scheme}`, () => {
   test.use({ colorScheme: scheme });
@@ -339,6 +418,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await openMatrixEditor(page, seed.setId);
     await page.getByRole('radio', { name: 'mit Namen' }).click();
     await page.getByRole('textbox', { name: 'Name der Kategorie 1' }).fill('Idee');
+    await page.getByRole('group', { name: 'Bewertungsphase' }).getByRole('radio', { name: 'Punkte', exact: true }).click();
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
     // Let finite transitions (segmented-control thumb) finish before measuring.
     await page.evaluate(() =>
@@ -349,6 +429,9 @@ for (const scheme of ['light', 'dark'] as const) {
           .map((a) => a.finished.catch(() => undefined)),
       ).then(() => undefined),
     );
+    if (process.env.MATRIX_RATING_SHOTS) {
+      await page.getByTestId('matrix-settings').screenshot({ path: `${process.env.MATRIX_RATING_SHOTS}/editor-rating-${scheme}.png` });
+    }
     const { violations } = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
