@@ -7,12 +7,9 @@
 ⋮ menu: review my own answers (and results, if released) — #20. Also carries
 the language switcher (i18n, #33) — kept visible so it can be reached before
 any answer has been given. (Django's {# #} comment is single-line only, so a
-multi-line note must use {% comment %} or it renders as text.) It sits at the
-top of the page and scrolls away with it (absolute, not fixed): a fixed
-button would float over the content below — e.g. the matrix zone picker's
-buttons on a phone.
+multi-line note must use {% comment %} or it renders as text.)
 {% endcomment %}
-<div id="menu-wrap" style="position:absolute;top:9px;right:12px;z-index:20;display:flex;gap:6px;align-items:flex-start">
+<div id="menu-wrap" style="position:fixed;top:9px;right:12px;z-index:20;display:flex;gap:6px;align-items:flex-start">
   {# Language: a globe picker, consistent with the management UI (#33). #}
   <div style="position:relative">
     <button id="lang-btn" type="button" aria-label="{% trans 'Language' %}" aria-haspopup="true" aria-expanded="false"
