@@ -123,6 +123,12 @@ for (const scheme of ['light', 'dark'] as const) {
           `axe on matrix form (${scheme})`,
         ).toEqual([]);
 
+        // The message live region exists (empty, not hidden) before the
+        // first message, so that one is announced too.
+        await expect(view.locator('#mx-msg')).toHaveAttribute('aria-live', 'polite');
+        await expect(view.locator('#mx-msg')).not.toHaveAttribute('hidden', /.*/);
+        await expect(view.locator('#mx-msg')).toBeEmpty();
+
         // Card 1 in q1, with a description. Zone and category stay selected.
         await description.fill('Eine längere Beschreibung der ersten Idee');
         await add.click();

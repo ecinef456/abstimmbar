@@ -146,6 +146,9 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   .mx-del{flex:none;width:44px;height:44px;min-height:44px;margin:0;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;color:var(--ink-soft)}
   .mx-msg{margin-top:8px;font-size:14px;font-weight:600}
   .mx-msg.err{color:var(--danger-strong)}
+  /* The live region stays rendered (an inserted/unhidden region is often not
+     announced); empty it takes no space. */
+  #mx-msg:empty{margin:0}
   /* A successful add must be noticeable: a confirmation box with a check,
      the hint that field and category stay chosen, and the new card in the
      list highlighted for a moment. */
@@ -182,7 +185,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       <textarea id="mx-desc" maxlength="200" rows="3"></textarea>
     </div>
     <button class="primary" id="mx-add" type="button" disabled>{% trans "Add card" %}</button>
-    <p class="mx-msg" id="mx-msg" aria-live="polite" hidden></p>
+    <p class="mx-msg" id="mx-msg" aria-live="polite"></p>
     <p class="mx-msg" id="mx-limit" aria-live="polite" hidden>{% trans "You have reached the maximum number of cards." %}</p>
   </div>
   <h2 class="mx-cap" id="mx-mine-head" tabindex="-1" style="font-size:16px;margin-top:22px"></h2>
@@ -3556,7 +3559,6 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     } else {
       box.textContent = text || "";
     }
-    box.hidden = !text;
     box.classList.toggle("err", !!isError);
     box.classList.toggle("ok", ok);
   }
