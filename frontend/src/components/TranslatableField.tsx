@@ -8,7 +8,7 @@
  * rich-text variant (the shared RichTextEditor from @basicbar/ui, plugged
  * in via `renderInput`), easy mode (#52: non-staff simple users author in a single
  * canonical language; staff are always Pro) and the prominent form label. */
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import {
   TranslatableField as BaseTranslatableField,
   localizedMap,
@@ -25,6 +25,62 @@ import { api } from "../api";
 async function uploadEditorImage(file: File): Promise<string> {
   const { url } = await api.uploadImage(file);
   return url;
+}
+
+/** The shared RichTextEditor is controlled: whenever its `value` prop changes
+ *  it compares it (in a passive effect) with the editor's current HTML and
+ *  calls `setContent` on a mismatch. Our own edits come back as `value` one
+ *  React render later — and under load the user can type another character
+ *  between that render and its effect, so the echo is already stale: the
+ *  editor is reset to the older text (dropping the newest keystroke), and a
+ *  stale echo ending in a space loses that space for good (ProseMirror's
+ *  parser strips trailing block whitespace). This wrapper only hands the
+ *  editor values that did NOT originate from it, so echoes of its own edits
+ *  (current or stale) never trigger a reset; external changes (language tab,
+ *  translation pre-fill, reload) still apply. Limitation: an external value
+ *  identical to the last external one is not re-applied — the field is keyed
+ *  per language below, so tab switches always start from a fresh editor. */
+function RichTextInput({
+  value,
+  onChange,
+  labelledBy,
+  describedBy,
+}: {
+  value: string;
+  onChange: (html: string) => void;
+  labelledBy?: string;
+  describedBy?: string;
+}) {
+  const own = useRef({
+    // Last value handed to the editor from outside (what it shows unless the
+    // user has typed since).
+    shown: value,
+    // Latest HTML the editor emitted, and every emission the parent hasn't
+    // caught up with yet (any of them may still come back as `value`).
+    latest: null as string | null,
+    pending: new Set<string>(),
+  }).current;
+  if (value === own.latest) {
+    // Caught up with the newest emission: older ones can no longer come back.
+    own.pending.clear();
+  } else if (!own.pending.has(value) && value !== own.shown) {
+    own.shown = value;
+    own.latest = null;
+    own.pending.clear();
+  }
+  return (
+    <RichTextEditor
+      value={own.shown}
+      onChange={(html) => {
+        own.latest = html;
+        own.pending.add(html);
+        onChange(html);
+      }}
+      labelledBy={labelledBy}
+      describedBy={describedBy}
+      onUploadImage={uploadEditorImage}
+    />
+  );
 }
 
 export type TranslatableFieldVariant = "input" | "rich";
@@ -89,14 +145,14 @@ export default function TranslatableField({
       }
       renderInput={
         variant === "rich"
-          ? ({ value: html, onChange: set, labelId, describedBy }) => (
+          ? ({ lang, value: html, onChange: set, labelId, describedBy }) => (
               <div>
-                <RichTextEditor
+                <RichTextInput
+                  key={lang}
                   value={html}
                   onChange={set}
                   labelledBy={labelId}
                   describedBy={describedBy}
-                  onUploadImage={uploadEditorImage}
                 />
               </div>
             )

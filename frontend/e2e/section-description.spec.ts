@@ -89,3 +89,64 @@ test('edit a section description; the presenter interstitial shows it', async ({
   await page.keyboard.press('ArrowRight');
   await expect(slide).toHaveCount(0);
 });
+
+test('typing under a busy main thread keeps every character and space', async ({ page, trackRoom }) => {
+  // Regression: the rich editor echoed its own edits back as `value` one
+  // render later; under load a keystroke landed between that render and the
+  // editor's sync effect, so the stale echo reset the editor — dropping the
+  // newest character, and for good any trailing space ("Heutegeht …").
+  const seed = await createRoomWithQuestions(page.request, ['single_choice'], 'Section', trackRoom, 'E2E Section');
+  const api = apiClient(page.request);
+  const section = await api.post('/api/sections/', {
+    question_set: seed.setId,
+    title: { de: 'Teil A', en: 'Part A' },
+  });
+  // Slow autosave responses too, so saves are in flight while typing.
+  await page.route(`**/api/sections/${section.id}/`, async (route) => {
+    if (route.request().method() !== 'PATCH') return route.continue();
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fulfill({ response });
+  });
+  // Emulate a loaded machine: React's scheduler (MessageChannel-driven)
+  // tasks run late, so a render and its passive effects land in separate
+  // tasks with keystrokes in between …
+  await page.addInitScript(() => {
+    const Native = window.MessageChannel;
+    window.MessageChannel = class {
+      port1: MessagePort;
+      port2: Pick<MessagePort, 'postMessage'>;
+      constructor() {
+        const channel = new Native();
+        this.port1 = channel.port1;
+        this.port2 = {
+          postMessage: (message: unknown) =>
+            window.setTimeout(() => channel.port2.postMessage(message), 40),
+        };
+      }
+    } as unknown as typeof MessageChannel;
+  });
+  await page.goto(`/sets/${seed.setId}`);
+  await page.getByRole('button', { name: 'Sections', exact: true }).click();
+  const editor = page
+    .getByTestId(`section-description-${section.id}`)
+    .locator('[contenteditable="true"]')
+    .first();
+  await editor.click();
+  // … and the main thread is busy most of the time.
+  await page.evaluate(() => {
+    window.setInterval(() => {
+      const until = performance.now() + 30;
+      while (performance.now() < until);
+    }, 3);
+  });
+  const text =
+    'Heute geht es um die Grundbegriffe, und zwar um alle Begriffe, die wir in den ' +
+    'kommenden Wochen brauchen werden.';
+  await page.keyboard.type(text, { delay: 20 });
+  await expect(editor).toHaveText(text);
+  await page.getByRole('heading', { level: 1 }).first().click();
+  await expect
+    .poll(async () => (await api.get(`/api/sections/${section.id}/`)).description.en, { timeout: 10000 })
+    .toBe(`<p>${text}</p>`);
+});
