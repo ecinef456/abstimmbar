@@ -113,6 +113,8 @@ for (const scheme of ['light', 'dark'] as const) {
 
       // Legend with both categories; toggling hides a category's cards.
       const legend = page.getByTestId('matrix-legend');
+      // App size here (the beamer uses presentation size).
+      expect(await legend.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBe(14);
       await expect(legend.getByRole('button', { name: 'Idee' })).toBeVisible();
       await expect(legend.getByRole('button', { name: 'Risiko' })).toBeVisible();
       await legend.getByRole('button', { name: 'Risiko' }).click();

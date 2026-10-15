@@ -12,7 +12,10 @@
  *  Cards: a full-colour category tab (colours mode: with the letter in white
  *  or near-black) and a body tinted with the same colour. Their type size
  *  follows the plot width (beamer-sized) and shrinks when a quadrant gets
- *  crowded (`matrixCardFont`); the presenter's zoom applies on top.
+ *  crowded (`matrixCardFont`). Overlapping cards are nudged apart where
+ *  they are drawn (`relaxCards`, within their zone; stored x/y unchanged).
+ *  The presenter zooms the whole board around it (MatrixPanel); with
+ *  `onZoomQuadrant` each quadrant gets a small magnifier in its outer corner.
  *
  *  Cards are individually addressable (`data-card-id`) and positioned
  *  absolutely from their (x, y) via `toPixel` on the measured plot box
@@ -45,11 +48,12 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { EyeOff } from "lucide-react";
+import { EyeOff, ZoomIn } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
 import type { MatrixBoard, MatrixCard, MatrixSettingsPayload } from "../api";
 import { categoryLabel, mixHex, paletteEntry, readableOn } from "../matrixPalette";
 import { fromPixel, resolveZone, toPixel, zoneRect, type Box, type Zone } from "./matrixGeometry";
+import { relaxCards, type LayoutItem } from "./matrixLayout";
 import { useReducedMotion } from "./motion";
 
 export interface MatrixInteraction {
@@ -66,8 +70,11 @@ export interface MatrixProps {
   mode: "present" | "results";
   /** Detailed: descriptions shown on the cards. */
   detailed: boolean;
-  /** Text scale of the cards (1 = default). */
-  zoom?: number;
+  /** Present mode: a magnifier per quadrant zooms the view onto it. */
+  onZoomQuadrant?(quadrant: "q1" | "q2" | "q3" | "q4"): void;
+  /** A quadrant fills the view: its magnifiers are hidden (their space
+   *  stays reserved, so no card moves). */
+  quadrantFocused?: boolean;
   /** Categories switched off in the legend (their cards are not drawn). */
   hiddenCategories?: Set<string>;
   onToggleCategory?(key: string): void;
@@ -208,8 +215,11 @@ function useBox<T extends HTMLElement>() {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Layout size of the padding box (the cards' containing block) — not
+    // getBoundingClientRect: the presenter scales the whole board with a
+    // CSS transform.
     const update = () => {
-      const { width, height } = el.getBoundingClientRect();
+      const { clientWidth: width, clientHeight: height } = el;
       setBox((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
     };
     update();
@@ -220,14 +230,20 @@ function useBox<T extends HTMLElement>() {
   return [ref, box] as const;
 }
 
-/** A card centred on its pixel point, kept fully inside the plot (cards at
- *  the extreme auto-place slots would otherwise stick out into the axis-label
- *  margin). The stored (x, y) is unchanged; only the drawing is nudged. */
+/** Stacked-paper offset of a stack's look (px). */
+const SHADOW = 6;
+/** Side and inset of the quadrant magnifiers (px); cards keep clear. */
+const MAGNIFIER = 30;
+const MAGNIFIER_INSET = 6;
+
+/** A card drawn at `left`/`top` (computed by the board from all measured
+ *  card sizes); reports its own size. Until measured it is invisible and
+ *  not animated (no slide-in from a provisional spot). */
 function PlacedCard({
   tag,
-  px,
-  py,
-  box,
+  left,
+  top,
+  onSize,
   style,
   children,
   cardRef,
@@ -235,46 +251,58 @@ function PlacedCard({
 }: {
   tag: "div" | "button";
   cardRef?: (el: HTMLElement | null) => void;
-  px: number;
-  py: number;
-  box: Box;
+  left: number | null;
+  top: number | null;
+  onSize(size: Box): void;
   style: CSSProperties;
   children: ReactNode;
   [attr: string]: unknown;
 }) {
   const ref = useRef<HTMLElement>(null);
-  const [size, setSize] = useState<Box | null>(null);
+  const onSizeRef = useRef(onSize);
+  onSizeRef.current = onSize;
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    let last = "";
     const update = () => {
       const { offsetWidth: width, offsetHeight: height } = el;
-      setSize((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
+      const key = `${width}x${height}`;
+      if (key === last) return;
+      last = key;
+      onSizeRef.current({ width, height });
     };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  // No slide-in from the unclamped spot: animate only once measured.
+  const placed = left != null && top != null;
   const [settled, setSettled] = useState(false);
   useLayoutEffect(() => {
-    if (!size || settled) return;
+    if (!placed || settled) return;
     const frame = requestAnimationFrame(() => setSettled(true));
     return () => cancelAnimationFrame(frame);
-  }, [size, settled]);
-  const SHADOW = 6; // stacked-paper offset
-  const w = size?.width ?? 0;
-  const h = size?.height ?? 0;
-  const clamp = (v: number, half: number, max: number) =>
-    Math.max(half, Math.min(v, max - half - SHADOW));
-  const left = clamp(px, w / 2, box.width) - w / 2;
-  const top = clamp(py, h / 2, box.height) - h / 2;
+  }, [placed, settled]);
   const setRef = (el: HTMLElement | null) => {
     (ref as { current: HTMLElement | null }).current = el;
     cardRef?.(el);
   };
-  return createElement(tag, { ref: setRef, ...rest, style: { ...style, left, top, ...(settled ? null : { transition: "none" }) } }, children);
+  return createElement(
+    tag,
+    {
+      ref: setRef,
+      ...rest,
+      style: {
+        ...style,
+        left: left ?? 0,
+        top: top ?? 0,
+        ...(placed ? null : { visibility: "hidden" }),
+        ...(settled ? null : { transition: "none" }),
+      },
+    },
+    children,
+  );
 }
 
 export default function Matrix({
@@ -282,12 +310,13 @@ export default function Matrix({
   settings,
   mode,
   detailed,
-  zoom = 1,
   hiddenCategories,
   onToggleCategory,
   legendHelp,
   showHidden = false,
   interactive,
+  onZoomQuadrant,
+  quadrantFocused = false,
 }: MatrixProps) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language.startsWith("de") ? "de" : "en";
@@ -487,12 +516,59 @@ export default function Matrix({
     return categoryLabel(categories, c.category, categoryMode, lang, t);
   };
 
-  // Card size: beamer-sized from the plot, scaled down when crowded; the
-  // presenter's zoom applies on top.
-  const cardFont =
-    (box
-      ? matrixCardFont(box, stacks.map((st) => st.card.zone), { mode, narrow, detailed: showDescriptions })
-      : CARD_FONT.narrow) * zoom;
+  // Card size: beamer-sized from the plot, scaled down when crowded.
+  const cardFont = box
+    ? matrixCardFont(box, stacks.map((st) => st.card.zone), { mode, narrow, detailed: showDescriptions })
+    : CARD_FONT.narrow;
+
+  // --- Where the cards are drawn: measured sizes, relaxed apart. ---
+  const [sizes, setSizes] = useState<Map<number, Box>>(() => new Map());
+  const reportSize = (id: number, size: Box) =>
+    setSizes((prev) => {
+      const old = prev.get(id);
+      if (old && old.width === size.width && old.height === size.height) return prev;
+      return new Map(prev).set(id, size);
+    });
+  const magnifiers = !!onZoomQuadrant && !results;
+  const placements = (() => {
+    if (!box) return new Map<number, { cx: number; cy: number }>();
+    const items: LayoutItem[] = [];
+    for (const stack of stacks) {
+      const size = sizes.get(stack.card.id);
+      if (!size) continue;
+      const shadow = stackSize(stack) > 1 ? SHADOW : 0;
+      const [px, py] = toPixel(stack.card.x, stack.card.y, box);
+      const [xmin, xmax, ymin, ymax] = zoneRect(stack.card.zone as Zone, settings.edges);
+      const [zx0, zy0] = toPixel(xmin, ymax, box);
+      const [zx1, zy1] = toPixel(xmax, ymin, box);
+      items.push({
+        id: stack.card.id,
+        // The footprint includes the paper shadow (right/bottom): the centre
+        // of the footprint sits half a shadow right/below the card's centre.
+        cx: px + shadow / 2,
+        cy: py + shadow / 2,
+        w: size.width + shadow,
+        h: size.height + shadow,
+        zone: { x0: zx0, y0: zy0, x1: zx1, y1: zy1 },
+        // The dragged card keeps its place among the others (no shuffling
+        // while dragging); it is drawn at the pointer.
+        fixed: drag?.id === stack.card.id,
+      });
+    }
+    if (magnifiers) {
+      const m = MAGNIFIER + MAGNIFIER_INSET;
+      const corners: [number, number][] = [
+        [m / 2, m / 2],
+        [box.width - m / 2, m / 2],
+        [m / 2, box.height - m / 2],
+        [box.width - m / 2, box.height - m / 2],
+      ];
+      corners.forEach(([x, y], i) =>
+        items.push({ id: -1 - i, cx: x, cy: y, w: m, h: m, zone: { x0: 0, y0: 0, x1: box.width, y1: box.height }, fixed: true }),
+      );
+    }
+    return relaxCards(items, box);
+  })();
 
   const tint = {
     q1: "bg-[#f5fbf6]",
@@ -570,11 +646,57 @@ export default function Matrix({
           })()}
         </div>
 
+        {magnifiers &&
+          !quadrantFocused &&
+          (["q2", "q1", "q3", "q4"] as const).map((q) => {
+            const right = q === "q1" || q === "q4";
+            const bottom = q === "q3" || q === "q4";
+            const name = t("Zoom into the field “{{zone}}”", { zone: matrixZoneName(q, settings.axes, t) });
+            return (
+              <button
+                key={q}
+                type="button"
+                data-zoom-quadrant={q}
+                // One help label for all four.
+                data-help={q === "q2" ? "mx.focus" : undefined}
+                aria-label={name}
+                title={name}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  onZoomQuadrant?.(q);
+                }}
+                className="absolute z-30 flex items-center justify-center rounded-full border border-slate-300 bg-white/80 text-slate-500 hover:bg-white hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                style={{
+                  width: MAGNIFIER,
+                  height: MAGNIFIER,
+                  [right ? "right" : "left"]: MAGNIFIER_INSET,
+                  [bottom ? "bottom" : "top"]: MAGNIFIER_INSET,
+                }}
+              >
+                <ZoomIn aria-hidden className="h-4 w-4" />
+              </button>
+            );
+          })}
+
         {box &&
           stacks.map((stack) => {
             const { card } = stack;
             const dragging = drag?.id === card.id;
-            const [px, py] = dragging ? toPixel(drag.x, drag.y, box) : toPixel(card.x, card.y, box);
+            const size = sizes.get(card.id);
+            const n0 = stackSize(stack);
+            const shadow = n0 > 1 ? SHADOW : 0;
+            const placed = placements.get(card.id);
+            let left: number | null = null;
+            let top: number | null = null;
+            if (size && dragging) {
+              // Follows the pointer, kept inside the plot.
+              const [px, py] = toPixel(drag.x, drag.y, box);
+              left = Math.max(0, Math.min(px - size.width / 2, box.width - size.width - shadow));
+              top = Math.max(0, Math.min(py - size.height / 2, box.height - size.height - shadow));
+            } else if (size && placed) {
+              left = placed.cx - (size.width + shadow) / 2;
+              top = placed.cy - (size.height + shadow) / 2;
+            }
             const isTarget = drag != null && drag.target === card.id;
             const isFresh = fresh.has(card.id);
             const n = stackSize(stack);
@@ -591,9 +713,9 @@ export default function Matrix({
               <PlacedCard
                 key={card.id}
                 tag={Tag}
-                px={px}
-                py={py}
-                box={box}
+                left={left}
+                top={top}
+                onSize={(sz: Box) => reportSize(card.id, sz)}
                 {...(interactive
                   ? {
                       type: "button" as const,
@@ -709,7 +831,10 @@ export default function Matrix({
           aria-label={t("Categories")}
           data-help={legendHelp}
           // The app's legend look (LikertResult): text-sm, 12px rounded swatches.
-          className={`col-start-2 row-start-4 mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-1.5 px-1.5 text-sm text-slate-600 ${dk("dark:text-slate-300")}`}
+          // On the beamer presentation-sized like the axis labels.
+          className={`col-start-2 row-start-4 flex flex-wrap items-center justify-end px-1.5 text-slate-600 ${
+            results ? "mt-2 gap-x-4 gap-y-1.5 text-sm" : "mt-3 gap-x-6 gap-y-2 text-xl"
+          } ${dk("dark:text-slate-300")}`}
           data-testid="matrix-legend"
         >
           {categories.map((c) => {
@@ -720,7 +845,7 @@ export default function Matrix({
                 <span
                   aria-hidden
                   data-swatch
-                  className="inline-block h-3 w-3 flex-none rounded border"
+                  className={`inline-block flex-none rounded border ${results ? "h-3 w-3" : "h-4 w-4"}`}
                   style={{
                     background: off ? "transparent" : paletteEntry(c.key)?.hex,
                     borderColor: paletteEntry(c.key)?.hex,
@@ -737,7 +862,7 @@ export default function Matrix({
                     aria-pressed={!off}
                     aria-label={cat.name || cat.a11y}
                     onClick={() => onToggleCategory(c.key)}
-                    className="inline-flex items-center gap-1.5 rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                    className={`inline-flex items-center rounded hover:underline ${results ? "gap-1.5" : "gap-2"} focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600`}
                   >
                     {content}
                   </button>

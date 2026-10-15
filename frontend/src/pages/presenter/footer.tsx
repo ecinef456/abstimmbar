@@ -83,7 +83,19 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
     name: "Add card",
     text: "Add your own card; show hidden cards again.",
   },
-  "handle.mx-zoom": { name: "Display", text: "Compact or detailed, larger or smaller cards." },
+  "handle.mx-zoom": {
+    name: "Display",
+    text: "Compact or detailed; zoom the whole board (wheel, drag to pan, Shift+arrows) or fit it.",
+    keys: "+ − 0",
+  },
+  "mx.focus": {
+    name: "Zoom into a field",
+    text: "Fills the screen with this field; [ and ] step through the fields, Esc returns to the overview.",
+    keys: "[ ]",
+  },
+  "mx.prev-field": { name: "Previous field", text: "Shows the field before this one (reading order).", keys: "[" },
+  "mx.next-field": { name: "Next field", text: "Shows the next field (reading order).", keys: "]" },
+  "mx.overview": { name: "Overview", text: "Back to the whole board.", keys: "Esc / 0" },
   "mx.legend": { name: "Categories", text: "Click a category to hide or show its cards." },
 };
 

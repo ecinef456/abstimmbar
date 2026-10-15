@@ -358,10 +358,16 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     **Ausgeblendete anzeigen**.
   - **Darstellung:** Die Karten tragen links einen Reiter in der Farbe ihrer
     Kategorie (bei Farbkategorien mit Buchstaben). Bei vielen Karten werden
-    alle automatisch etwas kleiner. Die Lasche mit dem Anzeige-Symbol
-    schaltet zwischen **Kompakt** und **Ausführlich** (mit Beschreibungen)
-    und macht die Karten größer oder kleiner. Ein Klick auf eine Kategorie in der Legende blendet ihre
-    Karten aus bzw. wieder ein.
+    alle automatisch etwas kleiner und rücken so auseinander, dass sie sich
+    nicht überdecken. Die Lasche mit dem Anzeige-Symbol schaltet zwischen
+    **Kompakt** und **Ausführlich** (mit Beschreibungen). Ein Klick auf eine
+    Kategorie in der Legende blendet ihre Karten aus bzw. wieder ein.
+  - **Vergrößern:** Wie bei der Mindmap lässt sich das ganze Brett
+    vergrößern (Mausrad, + / −, Lasche) und durch Ziehen auf freier Fläche
+    oder mit Umschalt+Pfeiltasten verschieben; 0 passt es wieder ein. Die
+    Lupe in der Ecke eines Feldes zeigt dieses Feld bildschirmfüllend; mit
+    **[** und **]** (oder den Pfeilen in der Leiste oben) wechseln Sie zum
+    vorherigen bzw. nächsten Feld, **Esc** oder **Übersicht** führt zurück.
   - **Tastatur:** Mit Tab erreichen Sie die Karten, Enter öffnet eine Karte,
     die Pfeiltasten verschieben sie (Umschalt für größere Schritte). Ein
     Mausklick beendet die Tastatursteuerung wieder. **?** beschriftet alle

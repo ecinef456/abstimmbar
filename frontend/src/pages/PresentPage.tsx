@@ -1351,9 +1351,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       // Ctrl/Cmd/Alt + letter belongs to the browser / OS (Ctrl+A, Cmd+L, …),
       // never to a presenter shortcut.
       if ((event.ctrlKey || event.metaKey || event.altKey) && key.length === 1) return;
-      // Shift+arrows pan the mind map (MindMap's own listener) — they must
-      // not also navigate between questions.
-      if (event.shiftKey && key.startsWith("arrow") && mmShown) return;
+      // Shift+arrows pan the mind map / matrix board (their own listeners) —
+      // they must not also navigate between questions.
+      if (event.shiftKey && key.startsWith("arrow") && (mmShown || mxShown)) return;
       // Enter/Space on a focused drawer control activate that control
       // natively — they must not also advance the presentation.
       if ((key === "enter" || key === " ") && inWcDrawer(event.target)) return;
@@ -1436,7 +1436,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         void leave();
       }
     },
-    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mmStopCloses, pendingFinish, backFromClosing, finishAndLeave],
+    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, mmStopCloses, pendingFinish, backFromClosing, finishAndLeave],
   );
 
   useEffect(() => {

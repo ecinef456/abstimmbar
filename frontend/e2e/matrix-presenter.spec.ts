@@ -341,9 +341,17 @@ test('keyboard moves, footer views, help labels, zoom handle, axe, no overlap', 
 
   // Zoom handle: compact / detailed.
   await page.locator('[data-help="handle.mx-zoom"]').click();
-  await expect(page.getByTestId('mx-compact')).toHaveAttribute('aria-checked', 'true');
+  // Compact / detailed are icon toggles (tooltip, accessible name, aria-pressed).
+  await expect(page.getByTestId('mx-compact')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('mx-compact')).toHaveAccessibleName('Kompakt');
+  await expect(page.getByTestId('mx-compact')).toHaveAttribute('title', 'Kompakt');
+  await expect(page.getByTestId('mx-compact')).toHaveText('');
+  await expect(page.getByTestId('mx-compact').locator('svg')).toBeVisible();
+  await expect(page.getByTestId('mx-detailed')).toHaveAccessibleName('Ausführlich');
+  await expect(page.getByTestId('mx-detailed')).toHaveAttribute('aria-pressed', 'false');
   await expect(card(page, ids.chatbot)).not.toContainText('Beantwortet Fragen');
   await page.getByTestId('mx-detailed').click();
+  await expect(page.getByTestId('mx-detailed')).toHaveAttribute('aria-pressed', 'true');
   await expect(card(page, ids.chatbot)).toContainText('Beantwortet Fragen');
   await page.locator('[data-help="handle.mx-zoom"]').click();
 
@@ -377,7 +385,8 @@ test('keyboard moves, footer views, help labels, zoom handle, axe, no overlap', 
     expect(a.mode, name).toBe('horizontal-tb');
     expect(a.size, name).toBeGreaterThanOrEqual(18);
   }
-  // Legend: the app's legend look (text-sm, 12px rounded square swatches).
+  // Legend: the app's legend look, presentation-sized on the beamer (like
+  // the axis labels: text-xl, 16px rounded square swatches).
   const legendStyle = await page.getByTestId('matrix-legend').evaluate((el) => {
     const swatch = el.querySelector('[data-swatch]') as HTMLElement;
     return {
@@ -385,7 +394,7 @@ test('keyboard moves, footer views, help labels, zoom handle, axe, no overlap', 
       swatch: [swatch.getBoundingClientRect().width, swatch.getBoundingClientRect().height],
     };
   });
-  expect(legendStyle).toEqual({ size: 14, swatch: [12, 12] });
+  expect(legendStyle).toEqual({ size: 20, swatch: [16, 16] });
 
   // Axis labels and legend never overlap a card (present mode).
   await page.waitForTimeout(400);
@@ -561,4 +570,193 @@ test('colour mode: lettered tabs with contrast, tinted bodies; crowded boards sc
   }
   // Legend shows the letters.
   await expect(page.getByTestId('matrix-legend').getByRole('button')).toHaveText(['A', 'B', 'C', 'D']);
+});
+
+/** The transform of the zoomable board (scale, translate x/y). */
+async function boardView(page: Page) {
+  return page.getByTestId('matrix-viewport').evaluate((el) => {
+    const world = el.querySelector('[data-matrix-world]') as HTMLElement;
+    const m = new DOMMatrix(getComputedStyle(world).transform);
+    return { s: m.a, x: m.e, y: m.f, focus: el.getAttribute('data-focus') };
+  });
+}
+
+test('whole-board zoom and pan, quadrant focus with next/previous/overview, drag while zoomed', async ({ page, trackRoom }) => {
+  test.setTimeout(120_000);
+  const s = await seed(page, trackRoom);
+  const { ids } = s;
+  await openPresenter(page, s.room.setId);
+  await expect(board(page).locator('[data-card-id]')).toHaveCount(4);
+  const settle = () => page.waitForTimeout(700);
+  await settle();
+  const before = (await card(page, ids.chatbot).boundingBox())!;
+  const labelBefore = (await page.locator('[data-axis="y_to"]').boundingBox())!;
+  expect((await boardView(page)).s).toBeCloseTo(1, 2);
+
+  // + zooms the whole board: cards AND labels grow together.
+  await page.locator('[data-help="handle.mx-zoom"]').click();
+  await page.getByRole('button', { name: 'Vergrößern (+)' }).click();
+  await settle();
+  const zoomed = await boardView(page);
+  expect(zoomed.s).toBeGreaterThan(1.1);
+  const after = (await card(page, ids.chatbot).boundingBox())!;
+  expect(after.width / before.width).toBeCloseTo(zoomed.s, 1);
+  const labelAfter = (await page.locator('[data-axis="y_to"]').boundingBox())!;
+  expect(labelAfter.height / labelBefore.height).toBeCloseTo(zoomed.s, 1);
+  // Reset (fit) returns to the overview.
+  await page.getByRole('button', { name: 'An Bildschirm anpassen (0)' }).click();
+  await settle();
+  expect((await boardView(page)).s).toBeCloseTo(1, 2);
+  await page.locator('[data-help="handle.mx-zoom"]').click();
+
+  // Keys: + zooms, Shift+arrows pan (and don't navigate), 0 fits.
+  await page.keyboard.press('+');
+  await settle();
+  const k = await boardView(page);
+  expect(k.s).toBeGreaterThan(1.1);
+  await page.keyboard.press('Shift+ArrowRight');
+  await settle();
+  expect((await boardView(page)).x).toBeLessThan(k.x);
+  await expect(board(page)).toBeVisible(); // still on the matrix question
+  await page.keyboard.press('0');
+  await settle();
+  expect((await boardView(page)).s).toBeCloseTo(1, 2);
+
+  // Wheel over the board zooms at the pointer.
+  const bb = (await board(page).boundingBox())!;
+  await page.mouse.move(bb.x + bb.width * 0.3, bb.y + bb.height * 0.3);
+  await page.mouse.wheel(0, -400);
+  await settle();
+  expect((await boardView(page)).s).toBeGreaterThan(1.05);
+  // Drag on empty space pans.
+  const pv = await boardView(page);
+  await page.mouse.move(bb.x + bb.width * 0.45, bb.y + bb.height * 0.75);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + bb.width * 0.45 - 120, bb.y + bb.height * 0.75 - 40, { steps: 8 });
+  await page.mouse.up();
+  const panned = await boardView(page);
+  expect(panned.x).toBeLessThan(pv.x - 50);
+  await page.keyboard.press('0');
+  await settle();
+
+  // Quadrant magnifier: fills the screen with the field.
+  const vp = (await page.getByTestId('matrix-viewport').boundingBox())!;
+  await page.getByRole('button', { name: 'Feld „nützlich & modern“ vergrößern' }).click();
+  await settle();
+  let v = await boardView(page);
+  expect(v.focus).toBe('q1');
+  expect(v.s).toBeGreaterThan(1.6);
+  const toolbar = page.getByTestId('matrix-focus-bar');
+  await expect(toolbar).toContainText('nützlich & modern');
+  // The quadrant now spans (almost) the viewport's width or height.
+  const plot = (await board(page).boundingBox())!;
+  const qw = plot.width / 2;
+  const qh = plot.height / 2;
+  expect(Math.max(qw / vp.width, qh / vp.height)).toBeGreaterThan(0.85);
+
+  // Drag still lands where the pointer is (board coordinates under zoom).
+  await drag(page, ids.chatbot, await pointPx(page, 0.7, 0.6));
+  const moved = await s.serverCard(ids.chatbot);
+  expect(moved.zone).toBe('q1');
+  expect(moved.x).toBeCloseTo(0.7, 1);
+  expect(moved.y).toBeCloseTo(0.6, 1);
+  // A click still opens the card.
+  await card(page, ids.chatbot).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await boardView(page)).focus).toBe('q1'); // Esc closed only the dialog
+
+  // Next / previous field in reading order q2 → q1 → q3 → q4: buttons and ] / [.
+  await toolbar.getByRole('button', { name: 'Nächstes Feld' }).click();
+  await settle();
+  expect((await boardView(page)).focus).toBe('q3');
+  await page.keyboard.press(']');
+  await settle();
+  expect((await boardView(page)).focus).toBe('q4');
+  await page.keyboard.press('[');
+  await settle();
+  expect((await boardView(page)).focus).toBe('q3');
+  await toolbar.getByRole('button', { name: 'Vorheriges Feld' }).click();
+  await settle();
+  expect((await boardView(page)).focus).toBe('q1');
+
+  // "?" labels the new controls.
+  await page.keyboard.press('?');
+  const helpFor = await page.getByTestId('help-card').evaluateAll((els) =>
+    els.flatMap((e) => (e.getAttribute('data-help-for') ?? '').split(' ')),
+  );
+  expect(helpFor).toEqual(expect.arrayContaining(['mx.prev-field', 'mx.next-field', 'mx.overview']));
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('presenter-help')).toHaveCount(0);
+
+  // Esc returns to the overview — it does not leave the presentation.
+  await page.keyboard.press('Escape');
+  await settle();
+  v = await boardView(page);
+  expect(v.focus).toBeNull();
+  expect(v.s).toBeCloseTo(1, 2);
+  await expect(toolbar).toHaveCount(0);
+  await expect(page).toHaveURL(/\/present/);
+  await expect(page.getByRole('heading', { name: 'Abstimmung läuft noch' })).toHaveCount(0);
+  await expect(board(page)).toBeVisible();
+  // Overview: the magnifier is labelled in the help overlay.
+  await page.keyboard.press('?');
+  const helpOverview = await page.getByTestId('help-card').evaluateAll((els) =>
+    els.flatMap((e) => (e.getAttribute('data-help-for') ?? '').split(' ')),
+  );
+  expect(helpOverview).toEqual(expect.arrayContaining(['mx.focus']));
+  await page.keyboard.press('Escape');
+});
+
+test('crowded board: drawn cards never overlap (collision avoidance within the zone)', async ({ page, trackRoom }) => {
+  test.setTimeout(120_000);
+  const s = await seed(page, trackRoom, { tokens: 8 });
+  const titles: [string, string][] = [
+    ['q1', 'Lernvideos zum Nacharbeiten'],
+    ['q1', 'Peer-Review'],
+    ['q1', 'Umfrage-Tool'],
+    ['q2', 'VR-Labor'],
+    ['q3', 'Overhead-Folien'],
+    ['q3', 'Faxformular'],
+    ['q4', 'Klausur auf Papier'],
+    ['q4', 'Sprechstunde'],
+    ['e_top', 'Wiki'],
+    ['e_left', 'E-Mail-Verteiler'],
+  ];
+  const extra: number[] = [];
+  for (let i = 0; i < titles.length; i++) {
+    extra.push(await s.add(s.tokens[3 + Math.floor(i / 2)], titles[i][0], titles[i][1], i % 2 ? 'blue' : 'orange'));
+  }
+  // A stack in the crowded quadrant.
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/stack`, { card: extra[2], onto: s.ids.chatbot });
+  await openPresenter(page, s.room.setId);
+  await expect(board(page).locator('[data-card-id]')).toHaveCount(13);
+  await page.waitForTimeout(900);
+  const boxes = await Promise.all(
+    (await board(page).locator('[data-card-id]').all()).map(async (l) => ({
+      id: await l.getAttribute('data-card-id'),
+      zone: await l.getAttribute('data-zone'),
+      ...(await l.boundingBox())!,
+    })),
+  );
+  const hit = (a: (typeof boxes)[number], b: (typeof boxes)[number]) =>
+    a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) expect(hit(boxes[i], boxes[j]), JSON.stringify([boxes[i], boxes[j]])).toBe(false);
+  // Quadrant cards stay in their quadrant (centre on the right side of the axes).
+  const plot = (await board(page).boundingBox())!;
+  const cx = plot.x + plot.width / 2;
+  const cy = plot.y + plot.height / 2;
+  for (const b of boxes) {
+    const mx = b.x + b.width / 2;
+    const my = b.y + b.height / 2;
+    if (b.zone === 'q1') expect(mx > cx && my < cy, JSON.stringify(b)).toBe(true);
+    if (b.zone === 'q2') expect(mx < cx && my < cy, JSON.stringify(b)).toBe(true);
+    if (b.zone === 'q3') expect(mx < cx && my > cy, JSON.stringify(b)).toBe(true);
+    if (b.zone === 'q4') expect(mx > cx && my > cy, JSON.stringify(b)).toBe(true);
+  }
+  // The stored positions are untouched (only the drawing is nudged).
+  const stored = await s.serverCard(extra[0]);
+  expect(stored.zone).toBe('q1');
 });

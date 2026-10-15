@@ -5,38 +5,54 @@
  *  free space), dragging / stacking / keyboard moves with optimistic
  *  positions, the card dialog (unstack, hide/show, delete teacher cards), the
  *  pencil handle (add a teacher card, show hidden cards) and the display
- *  handle (compact / detailed, card size). Every presenter may arrange and
- *  moderate (not expert-only).
+ *  handle (compact / detailed, zoom − + fit). The whole board zooms and pans
+ *  like the mind map (`useMatrixView`); a quadrant's magnifier focuses it,
+ *  with previous / next field and overview in a bar on top. Every presenter
+ *  may arrange and moderate (not expert-only).
  *
  *  Server answers are authoritative: every call returns the whole board,
  *  which replaces the shown one until the next SSE update arrives; errors
  *  revert the optimistic position and show a short toast. */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, EyeOff, Info, Minus, Pencil, Plus, RotateCcw, X, ZoomIn } from "lucide-react";
+import {
+  AlignJustify,
+  ChevronLeft,
+  ChevronRight,
+  EyeOff,
+  Info,
+  List,
+  Maximize2,
+  Minus,
+  Pencil,
+  Plus,
+  X,
+  ZoomIn,
+} from "lucide-react";
 import { live, type MatrixBoard, type MatrixCard, type MatrixSettingsPayload } from "../../api";
 import Matrix, { matrixStacks, matrixZoneName } from "../../results/Matrix";
 import { clampToZone, resolveZone } from "../../results/matrixGeometry";
 import { categoryLabel } from "../../matrixPalette";
 import { MatrixCategoryChips, MatrixZonePicker } from "../../results/MatrixZonePicker";
 import { requestDetail } from "../../results/mindmapModeration";
+import { useReducedMotion } from "../../results/motion";
+import { useMatrixView } from "./useMatrixView";
 
 type Placement = { zone: string; x: number; y: number; stack?: number | null };
 
-const ZOOM_MIN = 0.7;
-const ZOOM_MAX = 2;
-const ZOOM_STEP = 1.2;
+const ZOOM_STEP = 1.25;
 const TITLE_MAX = 60;
 const DESCRIPTION_MAX = 200;
 
 const HANDLE =
   "fixed right-0 z-30 rounded-l-xl border border-r-0 border-slate-200 bg-white/95 text-slate-500 shadow-md transition-opacity hover:text-slate-800";
+const ROUND_BTN =
+  "flex h-9 w-9 items-center justify-center rounded-full hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600";
 const SMALL_BTN =
   "rounded-lg border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600";
 
 /** Width of the largest 16:9 box that fits the element. */
-function useFitWidth() {
-  const ref = useRef<HTMLDivElement>(null);
+function useFitWidth(ref: RefObject<HTMLDivElement>) {
   const [width, setWidth] = useState<number | null>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -225,7 +241,6 @@ export default function MatrixPanel({
   const [zoomOpen, setZoomOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [detailed, setDetailed] = useState(false);
-  const [zoom, setZoom] = useState(1);
   const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(() => new Set());
   const toggleCategory = (key: string) =>
     setHiddenCategories((prev) => {
@@ -272,8 +287,19 @@ export default function MatrixPanel({
   // sees it (it would leave the presentation); inside the dialog no
   // presenter shortcut fires at all, and Tab stays in it.
   const dialogRef = useRef<HTMLDivElement>(null);
+  // --- Board view: zoom / pan / quadrant focus ---------------------------
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const worldRef = useRef<HTMLDivElement>(null);
+  const [fitRef, fitWidth] = useFitWidth(viewportRef);
+  const reduced = useReducedMotion();
+  const bv = useMatrixView({
+    viewportRef,
+    worldRef,
+    worldKey: fitWidth,
+    enabled: openId == null && !drawerOpen,
+  });
   useEffect(() => {
-    if (openId == null && !drawerOpen && !zoomOpen) return;
+    if (openId == null && !drawerOpen && !zoomOpen && !bv.zoomed) return;
     const onKey = (e: KeyboardEvent) => {
       if (openId != null) {
         const dialog = dialogRef.current;
@@ -304,18 +330,22 @@ export default function MatrixPanel({
         e.stopPropagation();
         return;
       }
+      // The "?" help overlay closes itself first.
+      if (e.key === "Escape" && document.querySelector("[data-help-overlay]")) return;
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        closeHandles(true);
+        // Drawers first; then a zoomed board returns to the overview (Esc
+        // must not leave the presentation from there).
+        if (drawerOpen || zoomOpen) closeHandles(true);
+        else bv.overview();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openId, drawerOpen, zoomOpen, closeDialog]);
+  }, [openId, drawerOpen, zoomOpen, closeDialog, bv.zoomed]);
 
-  const [fitRef, fitWidth] = useFitWidth();
   const open = openId != null ? board.cards.find((c) => c.id === openId) : undefined;
   // The opened card went away (deleted, withdrawn): close.
   useEffect(() => {
@@ -332,21 +362,89 @@ export default function MatrixPanel({
 
   return (
     <>
-      <div ref={fitRef} className="mt-3 flex min-h-0 w-full flex-1 items-center justify-center">
+      <div
+        ref={fitRef}
+        data-testid="matrix-viewport"
+        data-focus={bv.focus ?? undefined}
+        onPointerDown={bv.onPointerDown}
+        className={`relative mt-3 min-h-0 w-full flex-1 touch-none overflow-hidden ${bv.zoomed ? "cursor-grab" : ""}`}
+      >
         {fitWidth != null && (
-          <div style={{ width: fitWidth }}>
+          <div
+            ref={worldRef}
+            data-matrix-world=""
+            className="absolute left-0 top-0"
+            style={{
+              width: fitWidth,
+              transform: `translate(${bv.view.x}px, ${bv.view.y}px) scale(${bv.view.s})`,
+              transformOrigin: "0 0",
+              transition: bv.view.smooth && !reduced ? "transform 450ms cubic-bezier(.2,.7,.2,1)" : undefined,
+            }}
+          >
             <Matrix
               board={board}
               settings={settings}
               mode="present"
               detailed={detailed && settings.descriptions}
-              zoom={zoom}
               hiddenCategories={hiddenCategories}
               onToggleCategory={toggleCategory}
               legendHelp="mx.legend"
               showHidden={showHidden}
               interactive={{ onMove, onStack, onOpen: onOpenCard }}
+              onZoomQuadrant={bv.focusOn}
+              quadrantFocused={bv.focus != null}
             />
+          </div>
+        )}
+        {bv.focus && (
+          // Focused quadrant: previous / next field and back to the overview.
+          <div
+            data-matrix-focus-bar=""
+            data-testid="matrix-focus-bar"
+            className="absolute left-1/2 top-2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-slate-200 bg-white/95 p-1 text-slate-700 shadow-md"
+          >
+            <button
+              type="button"
+              data-help="mx.prev-field"
+              className={ROUND_BTN}
+              onClick={(e) => {
+                e.currentTarget.blur();
+                bv.step(-1);
+              }}
+              aria-label={t("Previous field")}
+              title={`${t("Previous field")} ([)`}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="px-2 text-base font-semibold" aria-live="polite">
+              {zoneName(bv.focus)}
+            </span>
+            <button
+              type="button"
+              data-help="mx.next-field"
+              className={ROUND_BTN}
+              onClick={(e) => {
+                e.currentTarget.blur();
+                bv.step(1);
+              }}
+              aria-label={t("Next field")}
+              title={`${t("Next field")} (])`}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              data-help="mx.overview"
+              className="ml-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+              onClick={(e) => {
+                e.currentTarget.blur();
+                bv.overview();
+              }}
+              title={`${t("Overview")} (Esc)`}
+            >
+              <Maximize2 aria-hidden className="h-4 w-4" />
+              {t("Overview")}
+            </button>
           </div>
         )}
       </div>
@@ -438,35 +536,36 @@ export default function MatrixPanel({
         {zoomOpen && (
           <div ref={zoomPanelRef} className="flex items-center pl-1">
             {settings.descriptions && (
-              <div
-                role="radiogroup"
-                aria-label={t("Display")}
-                className="mr-1 flex items-center rounded-full border border-slate-200 p-0.5 text-xs font-medium"
-              >
-                {([false, true] as const).map((d) => (
-                  <button
-                    key={String(d)}
-                    type="button"
-                    role="radio"
-                    aria-checked={detailed === d}
-                    data-testid={d ? "mx-detailed" : "mx-compact"}
-                    onClick={(e) => {
-                      e.currentTarget.blur();
-                      setDetailed(d);
-                    }}
-                    className={`rounded-full px-2.5 py-1 ${
-                      detailed === d ? "bg-brand-100 text-brand-800" : "text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    {d ? t("Detailed") : t("Compact")}
-                  </button>
-                ))}
+              <div className="mr-1 flex items-center rounded-full border border-slate-200 p-0.5">
+                {([false, true] as const).map((d) => {
+                  const label = d ? t("Detailed") : t("Compact");
+                  const Icon = d ? AlignJustify : List;
+                  return (
+                    <button
+                      key={String(d)}
+                      type="button"
+                      aria-pressed={detailed === d}
+                      aria-label={label}
+                      title={label}
+                      data-testid={d ? "mx-detailed" : "mx-compact"}
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        setDetailed(d);
+                      }}
+                      className={`rounded-full p-1.5 ${
+                        detailed === d ? "bg-brand-100 text-brand-800" : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      <Icon aria-hidden className="h-5 w-5" />
+                    </button>
+                  );
+                })}
               </div>
             )}
             {[
-              { label: t("Smaller cards"), icon: Minus, run: () => setZoom((z) => Math.max(ZOOM_MIN, z / ZOOM_STEP)) },
-              { label: t("Larger cards"), icon: Plus, run: () => setZoom((z) => Math.min(ZOOM_MAX, z * ZOOM_STEP)) },
-              { label: t("Reset size"), icon: RotateCcw, run: () => setZoom(1) },
+              { label: t("Zoom out (−)"), icon: Minus, run: () => bv.zoomCentre(1 / ZOOM_STEP) },
+              { label: t("Zoom in (+)"), icon: Plus, run: () => bv.zoomCentre(ZOOM_STEP) },
+              { label: t("Fit to screen (0)"), icon: Maximize2, run: () => bv.overview() },
             ].map(({ label, icon: Icon, run }) => (
               <button
                 key={label}
