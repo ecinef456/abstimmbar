@@ -37,9 +37,8 @@ async function uploadEditorImage(file: File): Promise<string> {
  *  parser strips trailing block whitespace). This wrapper only hands the
  *  editor values that did NOT originate from it, so echoes of its own edits
  *  (current or stale) never trigger a reset; external changes (language tab,
- *  translation pre-fill, reload) still apply. Limitation: an external value
- *  identical to the last external one is not re-applied — the field is keyed
- *  per language below, so tab switches always start from a fresh editor. */
+ *  translation pre-fill, reload, a form reset) still apply — one equal to
+ *  what the editor was last given remounts it. */
 function RichTextInput({
   value,
   onChange,
@@ -51,7 +50,14 @@ function RichTextInput({
   labelledBy?: string;
   describedBy?: string;
 }) {
+  // Bookkeeping lives in a ref and is updated during render on purpose: the
+  // decision "own echo or outside value?" must be made for the very value
+  // this render hands to the editor. Every step is idempotent for a given
+  // `value` (a repeated render — StrictMode, unrelated re-render — sees
+  // `value === own.prop` and changes nothing).
   const own = useRef({
+    // The `value` prop of the previous render.
+    prop: value,
     // Last value handed to the editor from outside (what it shows unless the
     // user has typed since).
     shown: value,
@@ -59,17 +65,26 @@ function RichTextInput({
     // caught up with yet (any of them may still come back as `value`).
     latest: null as string | null,
     pending: new Set<string>(),
+    // Remount counter: an outside value equal to `shown` would not change
+    // the editor's prop (so its sync effect would not run) — remount instead.
+    version: 0,
   }).current;
-  if (value === own.latest) {
-    // Caught up with the newest emission: older ones can no longer come back.
-    own.pending.clear();
-  } else if (!own.pending.has(value) && value !== own.shown) {
-    own.shown = value;
-    own.latest = null;
-    own.pending.clear();
+  if (value !== own.prop) {
+    own.prop = value;
+    if (value === own.latest) {
+      // Caught up with the newest emission: older ones can no longer come back.
+      own.pending.clear();
+    } else if (!own.pending.has(value)) {
+      // Outside change (reset, reload, other question, translation pre-fill).
+      if (value === own.shown) own.version += 1;
+      own.shown = value;
+      own.latest = null;
+      own.pending.clear();
+    }
   }
   return (
     <RichTextEditor
+      key={own.version}
       value={own.shown}
       onChange={(html) => {
         own.latest = html;

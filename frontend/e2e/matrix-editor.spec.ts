@@ -327,6 +327,15 @@ test('the editor appears only with its breadcrumb, so nothing shifts under it', 
   await expect(page.getByRole('link', { name: /^E2E Matrix Matrix – ein ziemlich langer/ })).toBeVisible();
 });
 
+test('a question that cannot be loaded shows "not found", not a blank page', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await page.goto(`/sets/${seed.setId}/questions/999999999`);
+  await expect(page.getByText('Frage nicht gefunden')).toBeVisible();
+});
+
 test('saving with an empty axis label is blocked', async ({ page, trackRoom }) => {
   const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
   await openMatrixEditor(page, seed.setId);

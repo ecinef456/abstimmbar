@@ -604,6 +604,8 @@
   "Votes for the current question": "Stimmen für die aktuelle Frage",
 
   "Page not found": "Seite nicht gefunden",
+  "Question not found": "Frage nicht gefunden",
+  "This question or its question set no longer exists, or you have no access to it.": "Diese Frage oder ihr Fragenset existiert nicht mehr, oder Sie haben keinen Zugriff darauf.",
   "This page no longer exists.": "Diese Seite existiert nicht (mehr).",
   "Overview of processed data": "Übersicht der verarbeiteten Daten",
   "Data": "Daten",

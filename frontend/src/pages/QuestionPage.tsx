@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, Eye, Files, FolderInput, ImageOff, ImagePlus, Link2, Pencil, Shuffle, TriangleAlert, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Eye, FileQuestion, Files, FolderInput, ImageOff, ImagePlus, Link2, Pencil, Shuffle, TriangleAlert, X } from "lucide-react";
 import {
   API_BASE_URL,
   api,
@@ -41,7 +41,7 @@ import HomeCrumb from "../components/HomeCrumb";
 import MatrixSettings, { matrixProblem, type MatrixSettingsValue, type MatrixUpdate } from "../components/MatrixSettings";
 import SortableList from "../components/SortableList";
 import TranslatableField from "../components/TranslatableField";
-import { Button, Field, InfoHint, MenuItem, MoreMenu, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
+import { Button, EmptyState, Field, InfoHint, MenuItem, MoreMenu, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
 import { KIND_LABEL, REVEAL_LABEL } from "./SetPage";
 
 function aiErrorText(err: unknown): string {
@@ -317,9 +317,15 @@ export default function QuestionPage() {
   const [siblingIds, setSiblingIds] = useState<number[]>([]);
   const [pendingNav, setPendingNav] = useState<number | null>(null);
   const baselineRef = useRef<string>("");
+  // The set or the question could not be loaded (deleted, no access, …).
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
-    void api.getQuestionSet(Number(setId)).then(setSet);
+    setLoadFailed(false);
+    void api
+      .getQuestionSet(Number(setId))
+      .then(setSet)
+      .catch(() => setLoadFailed(true));
     if (isNew) {
       const raw = searchParams.get("kind") ?? "single_choice";
       const kind = (QUESTION_KINDS as readonly string[]).includes(raw)
@@ -417,7 +423,7 @@ export default function QuestionPage() {
       setOptionBaseline(
         Object.fromEntries(editableOptions.map((o) => [o.clientId, o.text])),
       );
-    });
+    }).catch(() => setLoadFailed(true));
   }, [questionId]);
 
   // #92: the set's question order, for the previous/next arrows.
@@ -828,6 +834,13 @@ export default function QuestionPage() {
   // Wait for the set as well: it fills the breadcrumb (room / set title),
   // and rendering the form first made the whole editor jump down a line or
   // two once that request finished (a layout shift under the user's cursor).
+  if (loadFailed) {
+    return (
+      <EmptyState icon={FileQuestion} title={t("Question not found")}>
+        {t("This question or its question set no longer exists, or you have no access to it.")}
+      </EmptyState>
+    );
+  }
   if (!question || !set) return null;
   const isLikert = question.kind === "likert";
   const isMindmap = question.kind === "mindmap";
