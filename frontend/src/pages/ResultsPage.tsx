@@ -26,6 +26,7 @@ import { Button, ConfirmInline, EmptyState, TextInput } from "../components/ui";
 import LikertResult from "../components/LikertResult";
 import { mindmapBranchHues, mindmapNodeDescriptions, mindmapNodeText } from "../results/MindMap";
 import MindmapRanking, { rankMindmap } from "../results/MindmapRanking";
+import MatrixResult from "../results/MatrixResult";
 import PriorityBar from "../results/PriorityBar";
 import ResultBar from "../results/ResultBar";
 import {
@@ -674,10 +675,8 @@ export default function ResultsPage() {
                               rating={question.mindmap?.rating}
                             />
                           )}
-                          {question.kind === "matrix" && (
-                            <span className="text-slate-400">
-                              {t("Results for this question type follow on the beamer.")}
-                            </span>
+                          {question.kind === "matrix" && question.matrix && question.matrix_settings && (
+                            <MatrixResult board={question.matrix} settings={question.matrix_settings} />
                           )}
                           {question.words && question.kind === "word_cloud" && (
                             <WordCloudResult

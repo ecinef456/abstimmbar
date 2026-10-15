@@ -145,6 +145,42 @@ export interface MatrixCategory {
   name: LocalizedText;
 }
 
+/** One card on a matrix board (presenter/results payload). `stack` is the id
+ *  of the stack's top card (null for tops and loose cards); stacked cards
+ *  already carry their top's zone/x/y. `hidden` cards are only present in the
+ *  presenter/owner payloads. */
+export interface MatrixCard {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  zone: string;
+  x: number;
+  y: number;
+  stack: number | null;
+  hidden: boolean;
+  teacher: boolean;
+  placed: boolean;
+}
+
+export interface MatrixBoard {
+  cards: MatrixCard[];
+  /** Visible cards (hidden cards and members of a hidden top excluded). */
+  count: number;
+  contributors: number;
+}
+
+/** What a device needs to render the matrix (`matrix_settings`). */
+export interface MatrixSettingsPayload {
+  zones: string[];
+  edges: boolean;
+  descriptions: boolean;
+  max_per_person: number;
+  category_mode: MatrixCategoryMode;
+  categories: { key: string; name: LocalizedText }[];
+  axes: { x_from: LocalizedText; x_to: LocalizedText; y_from: LocalizedText; y_to: LocalizedText };
+}
+
 /** One predefined branch of a mindmap question (plain canonical-language
  *  text; level 1 = child of the root). */
 /** A predefined mindmap branch. `text`/`description` are `{de, en}` maps
@@ -1050,6 +1086,9 @@ export interface LiveState {
   wordcloud_moderation?: WordCloudModeration;
   /** Mindmap: the shared tree (presenter form incl. hidden nodes). */
   mindmap?: LiveMindmap;
+  /** Matrix: the whole board (presenter form, hidden cards flagged). */
+  matrix?: MatrixBoard;
+  matrix_settings?: MatrixSettingsPayload;
 }
 
 /** One node of the live mind map. `hidden` is only sent to the presenter and
@@ -1268,6 +1307,9 @@ export interface RunResults {
     ordering?: OrderingResults;
     /** Mindmap: visible tree (hidden nodes already excluded). */
     mindmap?: LiveMindmap;
+    /** Matrix: the whole board (hidden cards flagged) and its settings. */
+    matrix?: MatrixBoard;
+    matrix_settings?: MatrixSettingsPayload;
   }[];
 }
 
@@ -1361,6 +1403,13 @@ export const selfCheck = {
     `${API_BASE_URL}/c/${token}/qr.png${questionId ? `?q=${questionId}` : ""}`,
 };
 
+function matrixCall(runId: number, questionId: number, action: string, body: unknown) {
+  return request<{ matrix: MatrixBoard }>(`/api/runs/${runId}/matrix/${questionId}/${action}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export const live = {
   status: (setId: number) =>
     request<{
@@ -1417,6 +1466,25 @@ export const live = {
       `/api/runs/${runId}/mindmap/${questionId}/hide`,
       { method: "POST", body: JSON.stringify({ node, hidden }) },
     ),
+  /** Presenter matrix moderation (owner only). Each call answers with the
+   *  whole board as the server resolved it (zone hysteresis, clamping). */
+  matrixMove: (runId: number, questionId: number, card: number, x: number, y: number) =>
+    matrixCall(runId, questionId, "move", { card, x, y }),
+  matrixStack: (runId: number, questionId: number, card: number, onto: number) =>
+    matrixCall(runId, questionId, "stack", { card, onto }),
+  matrixUnstack: (runId: number, questionId: number, card: number) =>
+    matrixCall(runId, questionId, "unstack", { card }),
+  matrixHide: (runId: number, questionId: number, card: number, hidden: boolean) =>
+    matrixCall(runId, questionId, "hide", { card, hidden }),
+  /** A teacher card in `zone` (category required unless the mode is "off"). */
+  matrixAdd: (
+    runId: number,
+    questionId: number,
+    body: { zone: string; title: string; category: string; description: string },
+  ) => matrixCall(runId, questionId, "add", body),
+  /** Deletes a teacher card (participant cards can only be hidden). */
+  matrixDelete: (runId: number, questionId: number, card: number) =>
+    matrixCall(runId, questionId, "delete", { card }),
   /** Presenter switches the mindmap stage (collect / rate); `open` also
    *  opens the vote in the same request (one broadcast, no flash). */
   mindmapStage: (runId: number, questionId: number, stage: "collect" | "rate", open = false) =>

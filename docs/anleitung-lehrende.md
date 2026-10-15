@@ -68,8 +68,9 @@ ausprobieren und jederzeit löschen.
 3. Den Set-Editor: eine Frage hinzufügen und die Liste der Fragetypen.
 4. Jeden Fragetyp einzeln im Editor — dazu die Einstellungen, die jede Frage
    hat (zufällige Reihenfolge, Lösung aufdecken, Zeitbegrenzung) und das
-   Einfügen von Bildern. Enthält Ihr Beispielset eine Mindmap (Beispielräume ab
-   Oktober 2026), stellt der Rundgang auch sie vor.
+   Einfügen von Bildern. Enthält Ihr Beispielset eine Mindmap oder eine
+   Vier-Felder-Matrix (Beispielräume ab Oktober 2026), stellt der Rundgang auch
+   sie vor.
 5. Den Präsentationsmodus: Beitritt per QR- oder Raumcode, Abstimmung starten
    und stoppen, zwischen Frage, Ergebnis und Lösung umschalten, zur nächsten
    Frage wechseln und die Präsentation verlassen.
@@ -147,6 +148,20 @@ Folgende Fragetypen stehen zur Verfügung:
   Anzahl der Begriffe pro Person, Titel + Beschreibung sowie vorgegebene Äste.
   Optional folgt eine **Bewertungsphase** (Punkte oder Plus/Minus, siehe
   unten). Nur in Live-Umfragen möglich.
+- **Vier-Felder-Matrix** — Teilnehmende legen Karten auf ein Koordinatenkreuz
+  mit zwei Achsen, z. B. „wenig/viel Aufwand“ gegen „wenig/viel Nutzen“. Sie
+  beschriften beide Enden beider Achsen (zweisprachig möglich); die Felder
+  heißen oben rechts, oben links, unten links und unten rechts. Einstellbar sind:
+  **Kanten erlauben** (Karten dürfen auch auf den Achsenlinien liegen, also
+  zwischen zwei Feldern), **Beschreibungen auf Karten** (zusätzlich zum Titel),
+  **Karten pro Person** und **Kategorien**: *aus*, *nur Farben* (bis zu sechs
+  Farben, die Sie frei aus der Palette wählen; auf Smartphone und Beamer als
+  Buchstaben A–F nach Reihenfolge benannt) oder *mit Namen* (Farbe plus Name, z. B. „Präsenz“ und
+  „Digital“). Mindestens zwei Kategorien sind nötig. Teilnehmende wählen auf dem
+  Smartphone ein Feld (die „+“-Flächen), geben Titel (und ggf. Beschreibung und
+  Kategorie) ein und sehen unter „Ihre Karten“, wie viele sie noch
+  setzen dürfen; eigene Karten lassen sich dort löschen. Nur in Live-Umfragen
+  möglich.
 - **Prioritäten** — Ihre Teilnehmenden verteilen bis zu **100 Punkte** auf die
   Antworten: je wichtiger, desto mehr Punkte. Die Auswertung zeigt je Antwort
   den Durchschnitt (mit Minimum und Maximum), absteigend sortiert — so sehen
@@ -322,6 +337,42 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   mit **Zurück zum Sammeln** können Teilnehmende wieder Begriffe ergänzen
   (die Bewertungen bleiben erhalten). Auf der Ergebnisseite erscheinen die
   Bewertungen am Begriffsbaum, als Rangliste und im CSV-Export.
+- **Vier-Felder-Matrix:** Die Karten erscheinen live auf dem Koordinatenkreuz;
+  der Beamer zeigt das Brett, solange die Abstimmung läuft und in der
+  Ergebnisansicht. Die Fußleiste schaltet zwischen **Frage** und **Matrix** um
+  (A wechselt die Ansicht, E führt zur Matrix); Stoppen (S) oder E lässt das
+  Brett stehen. Sie moderieren direkt am Beamer:
+  - **Ziehen:** Karten lassen sich mit Maus oder Finger ziehen. Das Feld
+    wechselt erst, wenn Sie die Karte deutlich über eine Grenze ziehen
+    (sonst rutscht sie zurück in ihr Feld); das Zielfeld leuchtet beim
+    Ziehen auf.
+  - **Stapeln:** Legen Sie eine Karte auf eine andere, bilden beide einen
+    Stapel („×2“, „×3“ …) – praktisch für gleiche oder ähnliche Beiträge.
+  - **Öffnen:** Ein Klick auf eine Karte öffnet sie mit Beschreibung und, bei
+    einem Stapel, allen enthaltenen Karten; dort können Sie Karten
+    **herauslösen**, eine Karte **ausblenden** bzw. **einblenden** und eigene
+    Karten löschen. Ausgeblendete Karten sind reversibel.
+  - **Eigene Karten:** Der Stift am rechten Rand fügt eine Karte der
+    Lehrperson hinzu (z. B. als Anker oder Beispiel) – das Feld wählen Sie
+    wie die Teilnehmenden am kleinen Koordinatenkreuz – und zeigt auf Wunsch
+    **Ausgeblendete anzeigen**.
+  - **Darstellung:** Die Karten tragen links einen Reiter in der Farbe ihrer
+    Kategorie (bei Farbkategorien mit Buchstaben). Bei vielen Karten werden
+    alle automatisch etwas kleiner und rücken so auseinander, dass sie sich
+    nicht überdecken. Die Lasche mit dem Anzeige-Symbol schaltet zwischen
+    **Kompakt** und **Ausführlich** (mit Beschreibungen). Ein Klick auf eine
+    Kategorie in der Legende blendet ihre Karten aus bzw. wieder ein.
+  - **Vergrößern:** Wie bei der Mindmap lässt sich das ganze Brett
+    vergrößern (Mausrad, + / −, Lasche) und durch Ziehen auf freier Fläche
+    oder mit Umschalt+Pfeiltasten verschieben; 0 passt es wieder ein. Die
+    Lupe in der Ecke eines Feldes zeigt dieses Feld bildschirmfüllend; mit
+    **,** und **.** (alternativ **[** und **]**, oder den Pfeilen in der
+    Leiste oben) wechseln Sie zum vorherigen bzw. nächsten Feld, **Esc** oder
+    **Übersicht** führt zurück.
+  - **Tastatur:** Mit Tab erreichen Sie die Karten, Enter öffnet eine Karte,
+    die Pfeiltasten verschieben sie (Umschalt für größere Schritte). Ein
+    Mausklick beendet die Tastatursteuerung wieder. **?** beschriftet alle
+    Bedienelemente.
 - **Wortwolken bearbeiten (Experten-Modus):** Ziehen Sie einen Begriff auf
   einen anderen, um beide zusammenzuführen; mit × blenden Sie einen Begriff aus.
   Der Stift am rechten Rand öffnet die Liste zum Wiederherstellen, Trennen und
@@ -353,14 +404,20 @@ abstimmen.
 Nach der Durchführung finden Sie alle Antworten in der **Ergebnisansicht** — im
 Fragenset über **„Ergebnisse"**. Dort können Sie:
 
-- die Auswertung je Frage einsehen (inkl. Wortwolke, Likert-Balken, Prioritäten
-  und Sortierung); richtige Antworten sind hier immer grün mit „Richtig“
+- die Auswertung je Frage einsehen (inkl. Wortwolke, Likert-Balken, Prioritäten,
+  Sortierung und Vier-Felder-Matrix – dort als Brett und als Liste der Karten
+  nach Feldern gruppiert; ausgeblendete Karten sind markiert); richtige
+  Antworten sind hier immer grün mit „Richtig“
   markiert,
 - über das Auswahlfeld oben **frühere Durchführungen** wählen — jede
   Präsentation wird als eigene Durchführung gespeichert,
 - die Ergebnisse als **CSV-Datei exportieren** (nur diese oder alle
   Durchführungen, z. B. für die weitere Auswertung),
 - nicht mehr benötigte Durchführungen löschen.
+
+Im CSV-Export hat jede sichtbare Karte einer Vier-Felder-Matrix eine Zeile mit
+den Spalten **beschreibung**, **kategorie**, **zone**, **x**, **y** und
+**stapel** (x und y liegen zwischen −1 und 1; ausgeblendete Karten fehlen).
 
 **Archivieren oder löschen?** Im Raum archiviert das Archiv-Symbol an einem
 Fragenset nur dessen **Ergebnisse**: Die nächste Präsentation startet leer, die

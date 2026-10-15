@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { getDefaultContentLang, localizedMap, type LocalizedText } from "@basicbar/ui";
 import type { MatrixCategory, MatrixCategoryMode } from "../api";
-import { MATRIX_PALETTE, colorName, type MatrixColor } from "../matrixPalette";
+import { MATRIX_PALETTE, categoryLabel, colorName, type MatrixColor } from "../matrixPalette";
 import TranslatableField from "./TranslatableField";
 import { SegmentedControl, ToggleSwitch } from "./ui";
 
@@ -170,7 +170,8 @@ export default function MatrixSettings({
   onChange: (update: MatrixUpdate) => void;
   disabled?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language.startsWith("de") ? "de" : "en";
   const patch = (changes: Partial<MatrixSettingsValue> | MatrixUpdateFn) =>
     onChange((prev) => ({
       ...prev,
@@ -298,7 +299,7 @@ export default function MatrixSettings({
                         aria-hidden
                         className="w-4 text-center text-sm font-semibold text-slate-700 dark:text-slate-300"
                       >
-                        {String.fromCharCode(65 + index)}
+                        {categoryLabel(value.categories, category.key, "colors", lang, t).short}
                       </span>
                     )}
                     <ColorPicker

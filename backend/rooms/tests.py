@@ -3911,14 +3911,23 @@ class OnboardingSeedTests(TestCase):
     def test_one_question_of_every_kind(self):
         question_set = self.room.question_sets.get()
         kinds = list(question_set.questions.values_list("kind", flat=True))
-        # TODO(matrix PR3): the example room gains a matrix question.
-        self.assertEqual(
-            sorted(kinds), sorted(k for k in Question.Kind.values if k != "matrix")
-        )
+        self.assertEqual(sorted(kinds), sorted(Question.Kind.values))
         self.assertEqual(len(kinds), len(set(kinds)))  # exactly one each
 
-    def test_mindmap_is_last_with_bilingual_root_and_branches(self):
+    def test_matrix_is_last_with_axes_edges_and_named_categories(self):
         last = self.room.question_sets.get().questions.order_by("position").last()
+        self.assertEqual(last.kind, Question.Kind.MATRIX)
+        self.assertTrue(last.matrix_edges)
+        self.assertEqual(last.matrix_category_mode, "named")
+        self.assertEqual(
+            [c["name"] for c in last.matrix_categories],
+            [{"de": "Präsenz", "en": "In person"}, {"de": "Digital", "en": "Digital"}],
+        )
+        self.assertEqual((last.matrix_x_from_de, last.matrix_x_from_en), ("wenig aktivierend", "not activating"))
+        self.assertEqual((last.matrix_y_to_de, last.matrix_y_to_en), ("viel Aufwand", "a lot of effort"))
+
+    def test_mindmap_follows_ordering_with_bilingual_root_and_branches(self):
+        last = self.room.question_sets.get().questions.get(kind=Question.Kind.MINDMAP)
         self.assertEqual(last.kind, Question.Kind.MINDMAP)
         self.assertEqual((last.mindmap_root_de, last.mindmap_root_en), ("Gute Lehre", "Good teaching"))
         self.assertEqual(
@@ -4011,7 +4020,9 @@ class ExampleResultsSeedTests(TestCase):
 
     def test_every_question_answered_in_every_run(self):
         for run in self.question_set.runs.all():
-            for question in self.question_set.questions.exclude(kind=Question.Kind.MINDMAP):
+            for question in self.question_set.questions.exclude(
+                kind__in=(Question.Kind.MINDMAP, Question.Kind.MATRIX)
+            ):
                 self.assertTrue(
                     run.votes.filter(question=question).exists(), (run.pk, question.kind)
                 )
@@ -4044,6 +4055,21 @@ class ExampleResultsSeedTests(TestCase):
             twice = nodes.get(text="Beispiele")
             self.assertEqual(twice.contributions.count(), 2)
             self.assertEqual(twice.parent.text, "Methoden")
+            self.assertEqual(run.votes.filter(question=question).count(), 0)
+
+    def test_matrix_cards_in_both_runs(self):
+        from live.models import MatrixCard
+
+        question = self.question_set.questions.get(kind=Question.Kind.MATRIX)
+        for run in self.question_set.runs.all():
+            cards = MatrixCard.objects.filter(run=run, question=question)
+            self.assertEqual(cards.count(), 8)
+            self.assertEqual(cards.filter(teacher=True).count(), 1)
+            self.assertEqual(cards.filter(stack__isnull=False).count(), 1)
+            self.assertGreaterEqual(len(set(cards.values_list("zone", flat=True))), 4)
+            self.assertTrue(cards.filter(zone__startswith="e_").exists())
+            keys = {c["key"] for c in question.matrix_categories}
+            self.assertTrue(set(cards.values_list("category", flat=True)) <= keys)
             self.assertEqual(run.votes.filter(question=question).count(), 0)
 
     def test_participant_counts_per_run(self):

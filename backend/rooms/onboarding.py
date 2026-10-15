@@ -273,6 +273,37 @@ def seed_example_room(user) -> Room:
         ],
         position=position,
     )
+    position += 1
+
+    # matrix: four-field board with edges, named categories and card
+    # descriptions. Example cards: live.onboarding.
+    text_de, text_en = _p(
+        "Wie schätzen Sie diese Lehrformate ein?",
+        "How do you rate these teaching formats?",
+    )
+    Question.objects.create(
+        question_set=question_set,
+        kind=Question.Kind.MATRIX,
+        text_de=text_de,
+        text_en=text_en,
+        matrix_x_from_de="wenig aktivierend",
+        matrix_x_from_en="not activating",
+        matrix_x_to_de="sehr aktivierend",
+        matrix_x_to_en="very activating",
+        matrix_y_from_de="wenig Aufwand",
+        matrix_y_from_en="little effort",
+        matrix_y_to_de="viel Aufwand",
+        matrix_y_to_en="a lot of effort",
+        matrix_edges=True,
+        matrix_descriptions=True,
+        matrix_max_per_person=3,
+        matrix_category_mode="named",
+        matrix_categories=[
+            {"key": "blue", "name": {"de": "Präsenz", "en": "In person"}},
+            {"key": "orange", "name": {"de": "Digital", "en": "Digital"}},
+        ],
+        position=position,
+    )
 
     # Example results (guided tour): two finished runs with invented answers.
     # Imported here — live depends on rooms, not the other way round.

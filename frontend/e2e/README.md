@@ -21,7 +21,13 @@ Projects:
   and the translation-controls drag smoke test (`translation-controls.spec.ts`),
   and the guided tour (`tour.spec.ts`: sections/progress, Back across a page
   change, "Skip section", ←/→, mind map step shown only if the demo user's
-  example set has one; read-only on the example room, restores it if missing),
+  example set has one — otherwise a visible `skip-reason` annotation is recorded;
+  read-only on the example room, restores it if missing; set `TOUR_USER=<keycloak
+  user>` to run it as a fresh dev account, password `demo` like all dev users,
+  whose example room then includes the matrix),
+  and the four-field matrix (`matrix-results.spec.ts`: results board, stack badge,
+  hidden marker, legend, zone list, axe; `matrix-presenter.spec.ts`: beamer board —
+  drag, stack, dialog, hide, teacher card, keyboard moves, new-card highlight),
   and the presenter footer (`presenter-footer.spec.ts`: icon bar per question
   kind, view switcher, keys A/E/L, axe on the footer, no overflow at 1280 px;
   `FOOTER_SHOTS=<dir>` saves footer screenshots), and the presenter "?" help
@@ -31,7 +37,9 @@ Projects:
   screenshots).
 - `phone-chromium` / `phone-firefox` — 324×756 px (Galaxy Z Fold7 front
   screen), `mobile-*.spec.ts` only: layout checks (`mobile-layout.spec.ts`,
-  tour popover in `mobile-tour.spec.ts`) and
+  tour popover in `mobile-tour.spec.ts`, matrix participant page in
+  `mobile-matrix-participant.spec.ts`, matrix results board and list in
+  `mobile-matrix-results.spec.ts`) and
   axe accessibility smoke checks (`mobile-a11y.spec.ts`), each in light and dark.
 - `mobile-setup` / `mobile-teardown` — log in once (storage states in
   `e2e/.auth/`, gitignored) and seed/delete one shared "E2E Mobile …" room.

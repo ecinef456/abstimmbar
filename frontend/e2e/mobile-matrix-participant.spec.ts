@@ -19,6 +19,18 @@ const ZONE = {
   e_left: 'zwischen nicht nützlich & modern und nicht nützlich & altbacken',
 } as const;
 
+/** The fixed language (globe) button does not intersect any zone button in
+ *  the initial view (scrolled content passes under the fixed buttons like on
+ *  every participant section). */
+async function expectGlobeClear(page: Page) {
+  const globe = (await page.locator('#lang-btn').boundingBox())!;
+  for (const button of await page.locator('#mx-zones button').all()) {
+    const b = (await button.boundingBox())!;
+    const hit = globe.x < b.x + b.width && b.x < globe.x + globe.width && globe.y < b.y + b.height && b.y < globe.y + globe.height;
+    expect(hit, JSON.stringify({ globe, b })).toBe(false);
+  }
+}
+
 async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
   await page.evaluate(() =>
@@ -67,6 +79,9 @@ for (const scheme of ['light', 'dark'] as const) {
           await expect(button.locator('.mx-plus svg')).toBeVisible();
           await expect(button.locator('.mx-tick')).toBeHidden();
         }
+        // The floating language button never covers the picker.
+        await expectGlobeClear(page);
+
         // Touch targets.
         for (const button of await zones.all()) {
           const box = await button.boundingBox();
@@ -108,6 +123,12 @@ for (const scheme of ['light', 'dark'] as const) {
           `axe on matrix form (${scheme})`,
         ).toEqual([]);
 
+        // The message live region exists (empty, not hidden) before the
+        // first message, so that one is announced too.
+        await expect(view.locator('#mx-msg')).toHaveAttribute('aria-live', 'polite');
+        await expect(view.locator('#mx-msg')).not.toHaveAttribute('hidden', /.*/);
+        await expect(view.locator('#mx-msg')).toBeEmpty();
+
         // Card 1 in q1, with a description. Zone and category stay selected.
         await description.fill('Eine längere Beschreibung der ersten Idee');
         await add.click();
@@ -119,6 +140,19 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(q1).toHaveAttribute('aria-pressed', 'true');
         await expect(idea).toHaveAttribute('aria-checked', 'true');
         await expect(add).toBeDisabled(); // title is empty again
+        // Noticeable: a success message (live region) with the hint that field
+        // and category stay, the new card highlighted and scrolled into view,
+        // the focus back in the title for the next card.
+        const msg = view.locator('#mx-msg');
+        await expect(msg).toBeVisible();
+        await expect(msg).toContainText('Karte hinzugefügt.');
+        await expect(msg).toHaveAttribute('aria-live', 'polite');
+        await expect(msg).toHaveClass(/\bok\b/);
+        await expect(view.locator('#mx-keep')).toBeVisible();
+        await expect(view.locator('#mx-keep')).toHaveText('Feld und Kategorie bleiben ausgewählt.');
+        await expect(cards.first()).toHaveClass(/\bmx-new\b/);
+        await expect(cards.first()).toBeInViewport();
+        await expect(title).toBeFocused();
 
         // Card 2 on the top edge with the other category → at the limit.
         const top = view.getByRole('button', { name: ZONE.e_top, exact: true });
