@@ -905,10 +905,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         // Keep the cloud / matrix board on the beamer after the timer expires (and surface
         // #30's deferred cloud) — the same "results" landing as the Stop
         // button, instead of a bare closed slide that would hide it.
-        void (async () => {
-          await live.control(runId, { phase: "closed" });
-          await live.control(runId, { phase: "results" });
-        })();
+        // One transition (no transient "closed" that would hide the cloud).
+        void live.control(runId, { phase: "results" });
       } else {
         void live.control(runId, { phase: "closed" });
       }
@@ -1109,7 +1107,10 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       return;
     }
     if (phase === "open" || phase === "closed" || phase === "preview") {
-      if (phase === "open") await live.control(runId, { phase: "closed" });
+      // An open vote goes straight to "results" (one transition, which also
+      // closes it): a detour via "closed" put a transient state on the beamer
+      // (the live cloud / map vanished, "Question" active, Start shown) and a
+      // key pressed in that window (e.g. A right after S) acted on it.
       // "Results" means without the solution, also when it was revealed
       // before the presenter went back to the question (un-reveal first: no
       // flash of the solution).
@@ -1121,7 +1122,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const showSolution = useCallback(async () => {
     if (!runId) return;
     if (phase === "lobby" || phase === "finished") return; // no active question
-    if (phase === "open") await live.control(runId, { phase: "closed" });
+    // Straight to "results" (also from an open vote — no transient "closed").
     if (phase !== "results") await live.control(runId, { phase: "results" });
     await live.control(runId, { reveal: true });
   }, [runId, phase]);

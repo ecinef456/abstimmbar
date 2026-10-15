@@ -214,9 +214,25 @@ test('word cloud: Original only, AI views when the question has AI', async ({
   await page.keyboard.press('a'); // one live view only: nothing to cycle, still open
   await expectActive(page, 'view.wc.raw');
   await expect(seg(page, 'toggle')).toContainText('Stop');
+  // Regression: Stop goes straight to the results — no transient "closed"
+  // step that hid the cloud (Question active) and made a quick A act on it.
+  await page.evaluate(() => {
+    const w = window as unknown as { __questionShown?: boolean };
+    w.__questionShown = false;
+    const footerEl = document.querySelector('footer')!;
+    new MutationObserver(() => {
+      const q = footerEl.querySelector('[data-help="view.question"]');
+      if (q?.getAttribute('aria-checked') === 'true') w.__questionShown = true;
+    }).observe(footerEl, { subtree: true, attributes: true, childList: true });
+  });
   await page.keyboard.press('s'); // stop → results, the cloud stays
-  await expectActive(page, 'view.wc.raw');
+  // "Question" becomes choosable once the results phase has arrived.
   await expect(seg(page, 'view.question')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(seg(page, 'toggle')).toContainText('Start');
+  await expectActive(page, 'view.wc.raw');
+  expect(
+    await page.evaluate(() => (window as unknown as { __questionShown?: boolean }).__questionShown),
+  ).toBe(false);
   await page.keyboard.press('a');
   await expectActive(page, 'view.question');
   await shot(page, 'word-cloud');
