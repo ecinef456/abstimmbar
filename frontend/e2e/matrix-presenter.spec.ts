@@ -452,6 +452,115 @@ test('after a keyboard move, a click ends the keyboard session: → navigates ag
   expect(moves).toEqual([]);
 });
 
+test('compact ↔ detailed keeps the arrangement: no flipped order, no overlap, board stays in view', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  // As reported: two cards close together at the top of a field (the
+  // second right of and below the first), one with a long description,
+  // and one card elsewhere. Detailed cards are taller: clamped to the plot,
+  // the taller card's centre ended up below the other's and the pair was
+  // pushed apart the wrong way round.
+  const s = await seed(page, trackRoom, { tokens: 4 });
+  const long = await s.add(s.tokens[2], 'q1', 'Podcast selbst erstellen', 'blue', 'Alles einsprechen, Inhalte erarbeiten, schneiden und veröffentlichen');
+  const short = await s.add(s.tokens[3], 'q1', 'Podcast hören', 'blue', 'Einfach zuhören und lernen');
+  const move = (id: number, x: number, y: number) => s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/move`, { card: id, x, y });
+  await move(long, 0.45, 0.99);
+  await move(short, 0.5, 0.84);
+  // The seed's other cards: one far away, the rest out of the way.
+  await move(s.ids.chatbot, 0.6, -0.5);
+  await move(s.ids.feedback, 0.85, 0.3);
+  await move(s.ids.altlast, -0.6, -0.6);
+  await move(s.ids.podcast, -0.5, 0.15);
+  const [l, r] = [await s.serverCard(long), await s.serverCard(short)];
+  expect(r.x > l.x && r.y < l.y, 'stored: short card right of and below the long one').toBe(true);
+  const names = new Map([
+    [long, 'long'],
+    [short, 'short'],
+    ...Object.entries(s.ids).map(([name, id]) => [id, name] as [number, string]),
+  ]);
+  const ids = [...names.keys()];
+  await openPresenter(page, s.room.setId);
+  for (const id of ids) await expect(card(page, id)).toBeVisible();
+
+  type Box = { x: number; y: number; width: number; height: number };
+  const layout = async () => {
+    await page.waitForTimeout(400); // cards slide to their place
+    const boxes = new Map<number, Box>();
+    for (const id of ids) boxes.set(id, (await card(page, id).boundingBox())!);
+    const frame = [
+      (await board(page).boundingBox())!,
+      ...(await Promise.all(
+        ['x_from', 'x_to', 'y_from', 'y_to'].map(async (n) => (await page.locator(`[data-axis="${n}"] [data-axis-label]`).boundingBox())!),
+      )),
+    ];
+    return { boxes, frame };
+  };
+  const mid = (b: Box) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+  const sign = (v: number) => (Math.abs(v) < 1 ? 0 : Math.sign(v));
+  /** Per pair: left/right and above/below of the drawn centres. */
+  const orders = (boxes: Map<number, Box>) => {
+    const out: Record<string, [number, number]> = {};
+    for (const a of ids)
+      for (const b of ids) {
+        if (a >= b) continue;
+        const [p, q] = [mid(boxes.get(a)!), mid(boxes.get(b)!)];
+        out[`${names.get(a)}–${names.get(b)}`] = [sign(q.x - p.x), sign(q.y - p.y)];
+      }
+    return out;
+  };
+  const overlaps = (boxes: Map<number, Box>) => {
+    const out: string[] = [];
+    for (const a of ids)
+      for (const b of ids) {
+        if (a >= b) continue;
+        const [p, q] = [boxes.get(a)!, boxes.get(b)!];
+        if (p.x < q.x + q.width - 0.5 && q.x < p.x + p.width - 0.5 && p.y < q.y + q.height - 0.5 && q.y < p.y + p.height - 0.5)
+          out.push(`${names.get(a)}–${names.get(b)}`);
+      }
+    return out;
+  };
+  const inView = async (frame: Box[]) => {
+    const vp = (await page.getByTestId('matrix-viewport').boundingBox())!;
+    for (const r of frame) {
+      expect(r.x).toBeGreaterThanOrEqual(vp.x - 0.5);
+      expect(r.y).toBeGreaterThanOrEqual(vp.y - 0.5);
+      expect(r.x + r.width).toBeLessThanOrEqual(vp.x + vp.width + 0.5);
+      expect(r.y + r.height).toBeLessThanOrEqual(vp.y + vp.height + 0.5);
+    }
+  };
+
+  const compact = await layout();
+  await page.locator('[data-help="handle.mx-zoom"]').click();
+  await page.getByTestId('mx-detailed').click();
+  await expect(card(page, long)).toContainText('Alles einsprechen');
+  const detailed = await layout();
+  await page.screenshot({ path: test.info().outputPath('detailed.png') });
+
+  // The reported pair: the short card stays right of and below the long one.
+  for (const { boxes } of [compact, detailed]) {
+    const [p, q] = [mid(boxes.get(long)!), mid(boxes.get(short)!)];
+    expect(q.x, 'short card right of the long one').toBeGreaterThan(p.x);
+    expect(q.y, 'short card below the long one').toBeGreaterThan(p.y);
+  }
+  // Same relative order of every pair in both modes; no overlap in either.
+  expect(orders(detailed.boxes)).toEqual(orders(compact.boxes));
+  expect(overlaps(compact.boxes)).toEqual([]);
+  expect(overlaps(detailed.boxes)).toEqual([]);
+  // The board does not move: plot and all four axis labels stay put and in view.
+  await inView(compact.frame);
+  await inView(detailed.frame);
+  detailed.frame.forEach((r, i) => {
+    const c = compact.frame[i];
+    expect([r.x, r.y, r.width, r.height].map(Math.round)).toEqual([c.x, c.y, c.width, c.height].map(Math.round));
+  });
+  // Back to compact: the same picture as before.
+  await page.getByTestId('mx-compact').click();
+  const again = await layout();
+  for (const id of ids) {
+    const [a, b] = [again.boxes.get(id)!, compact.boxes.get(id)!];
+    expect([a.x, a.y].map(Math.round), `card ${id} back in place`).toEqual([b.x, b.y].map(Math.round));
+  }
+});
+
 test('new-card highlight expires for every batch, also when batches arrive 600 ms apart', async ({ page, trackRoom }) => {
   test.setTimeout(90_000);
   const s = await seed(page, trackRoom);

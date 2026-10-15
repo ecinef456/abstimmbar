@@ -10,7 +10,14 @@
  *  an obstacle like the quadrant magnifiers — does not move), and every
  *  card's footprint (incl. a stack's paper offset) is kept inside its zone
  *  where it fits (else its centre stays in the zone) and inside the plot,
- *  a little clear of the border. Pure: same input, same output. */
+ *  a little clear of the border. Pure: same input, same output.
+ *
+ *  A pair is always pushed apart in the order of its WANTED centres (left /
+ *  right, above / below; equal: the lower id goes left / up) — never in the
+ *  order of where they happen to be drawn. Clamping into the zone can swap
+ *  that drawn order (a taller card's centre is held further from the
+ *  border), and pushing by it would flip the arrangement the teacher made,
+ *  e.g. when the detailed cards grow. */
 
 export interface LayoutRect {
   x0: number;
@@ -66,13 +73,29 @@ export function relaxCards(
   // Overlap of a pair per axis (allocation-free; ≤ 0: apart on that axis).
   const overlapX = (i: number, j: number) => (items[i].w + items[j].w) / 2 + GAP - Math.abs(cx[j] - cx[i]);
   const overlapY = (i: number, j: number) => (items[i].h + items[j].h) / 2 + GAP - Math.abs(cy[j] - cy[i]);
-  /** Push i and j apart along one axis by `amount`; returns whether either moved. */
-  const push = (i: number, j: number, axis: "x" | "y", amount: number) => {
+  /** Side of j relative to i on an axis (+1: j right of / below i, −1:
+   *  left of / above). Two cards keep the order of their WANTED centres
+   *  (ties by id); against a fixed item (obstacle, dragged card) — and as
+   *  the last resort when that order is blocked by walls — the order in
+   *  which they are drawn. */
+  const side = (i: number, j: number, axis: "x" | "y", drawn: boolean) => {
+    const wanted = !drawn && !items[i].fixed && !items[j].fixed;
+    const d = axis === "x" ? (wanted ? items[j].cx - items[i].cx : cx[j] - cx[i]) : wanted ? items[j].cy - items[i].cy : cy[j] - cy[i];
+    if (Math.abs(d) > 0.5) return d > 0 ? 1 : -1;
+    return items[j].id > items[i].id ? 1 : -1;
+  };
+  /** How far i and j must still move apart on an axis to be clear of each
+   *  other on that side (more than the overlap when drawn the other way). */
+  const need = (i: number, j: number, axis: "x" | "y", sign: number) =>
+    axis === "x"
+      ? (items[i].w + items[j].w) / 2 + GAP - sign * (cx[j] - cx[i])
+      : (items[i].h + items[j].h) / 2 + GAP - sign * (cy[j] - cy[i]);
+  /** Push i and j apart along one axis (j to the `sign` side of i) until
+   *  clear; returns whether either moved. */
+  const push = (i: number, j: number, axis: "x" | "y", sign: number) => {
     const c = axis === "x" ? cx : cy;
     const clamp = axis === "x" ? clampX : clampY;
-    const d = c[j] - c[i];
-    // Coincident centres: the later item goes right / down.
-    const sign = d > 0 ? 1 : d < 0 ? -1 : 1;
+    const amount = need(i, j, axis, sign);
     const fi = !!items[i].fixed;
     const fj = !!items[j].fixed;
     const oi = c[i];
@@ -87,26 +110,45 @@ export function relaxCards(
     if (got() < amount - 0.5 && !fi) c[i] = clamp(i, c[i] - sign * (amount - got()));
     return Math.abs(c[i] - oi) + Math.abs(c[j] - oj) > 0.01;
   };
-  for (let pass = 0; pass < PASSES; pass++) {
+  /** One relaxation pass; false when nothing overlapped any more. `keep`:
+   *  pairs of cards keep their wanted order (else the drawn order). */
+  const relax = (keep: boolean) => {
     let any = false;
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
         if (items[i].fixed && items[j].fixed) continue;
-        const ox = overlapX(i, j);
-        if (ox <= 0) continue;
-        const oy = overlapY(i, j);
-        if (oy <= 0) continue;
+        if (overlapX(i, j) <= 0 || overlapY(i, j) <= 0) continue;
         any = true;
-        const first = ox <= oy ? "x" : "y";
-        if (!push(i, j, first, first === "x" ? ox : oy)) {
-          // That way is blocked: try the other axis.
-          const ax = overlapX(i, j);
-          const ay = overlapY(i, j);
-          if (ax > 0 && ay > 0) push(i, j, first === "x" ? "y" : "x", first === "x" ? ay : ax);
+        const sx = side(i, j, "x", !keep);
+        const sy = side(i, j, "y", !keep);
+        const first = need(i, j, "x", sx) <= need(i, j, "y", sy) ? "x" : "y";
+        const other = first === "x" ? "y" : "x";
+        const stillOverlap = () => overlapX(i, j) > 0 && overlapY(i, j) > 0;
+        // That way blocked (zone wall): the other axis; both blocked: the
+        // drawn order.
+        if (push(i, j, first, first === "x" ? sx : sy)) continue;
+        if (stillOverlap() && push(i, j, other, other === "x" ? sx : sy)) continue;
+        if (keep && stillOverlap()) {
+          const axis = overlapX(i, j) <= overlapY(i, j) ? "x" : "y";
+          if (!push(i, j, axis, side(i, j, axis, true)) && stillOverlap()) {
+            const rest = axis === "x" ? "y" : "x";
+            push(i, j, rest, side(i, j, rest, true));
+          }
         }
       }
     }
-    if (!any) break;
+    return any;
+  };
+  let done = false;
+  for (let pass = 0; pass < PASSES && !done; pass++) done = !relax(true);
+  if (!done) {
+    // Too crowded to keep every order (the passes keep undoing each other):
+    // start over and push apart by the drawn order alone.
+    items.forEach((it, i) => {
+      cx[i] = clampX(i, it.cx);
+      cy[i] = clampY(i, it.cy);
+    });
+    for (let pass = 0; pass < PASSES && !done; pass++) done = !relax(false);
   }
   return new Map(items.map((it, i) => [it.id, { cx: cx[i], cy: cy[i] }]));
 }
