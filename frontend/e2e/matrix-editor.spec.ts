@@ -294,6 +294,48 @@ test('the Bearbeiten/Vorschau switcher keeps icon and label on one line', async 
   }
 });
 
+test('the editor appears only with its breadcrumb, so nothing shifts under it', async ({
+  page,
+  trackRoom,
+}) => {
+  // Regression (flaky switcher test): the form rendered before the set
+  // request finished; the breadcrumb then grew by the room/set title and
+  // pushed the whole editor down while the user (or a test) was measuring.
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await page.goto(`/sets/${seed.setId}`);
+  const newQuestion = page.getByRole('button', { name: /Neue Frage/ });
+  await expect(newQuestion).toBeVisible(); // the set page has its set already
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let held!: () => void;
+  const holding = new Promise<void>((resolve) => (held = resolve));
+  await page.route(new RegExp(`/api/question-sets/${seed.setId}/$`), async (route) => {
+    const response = await route.fetch();
+    held();
+    await gate;
+    await route.fulfill({ response });
+  });
+  await newQuestion.click();
+  await page
+    .getByRole('group', { name: 'Offen antworten' })
+    .getByRole('menuitem', { name: /Vier-Felder-Matrix/ })
+    .click();
+  await holding;
+  await expect(page.locator('[data-tour="question.editor"]')).toBeHidden();
+  release();
+  await expect(page.locator('[data-tour="question.editor"]')).toBeVisible();
+  await expect(page.getByRole('link', { name: /^E2E Matrix Matrix – ein ziemlich langer/ })).toBeVisible();
+});
+
+test('a question that cannot be loaded shows "not found", not a blank page', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  await page.goto(`/sets/${seed.setId}/questions/999999999`);
+  await expect(page.getByText('Frage nicht gefunden')).toBeVisible();
+});
+
 test('saving with an empty axis label is blocked', async ({ page, trackRoom }) => {
   const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
   await openMatrixEditor(page, seed.setId);
@@ -373,6 +415,47 @@ test('rating section: mode, budget, switches persist; plus/minus hides the multi
   await page.getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
   expect((await api.get(`/api/questions/${q}/`)).matrix_rating_mode).toBe('');
+});
+
+test('a superseded load of the question does not overwrite the author\'s edits', async ({
+  page,
+  trackRoom,
+}) => {
+  // Regression (flaky "rating section" test): the editor's load effect had no
+  // cleanup, so a superseded request — StrictMode's double effect in dev, or
+  // paging on before a load finished — still applied its late response and
+  // reset fields the author had already changed (the save then stored the
+  // old rating mode). Hold the first load until after the edit.
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  const api = apiClient(page.request);
+  const q = await createMatrixQuestion(api, seed.setId, { matrix_rating_mode: 'points' });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let delivered!: () => void;
+  const late = new Promise<void>((resolve) => (delivered = resolve));
+  let loads = 0;
+  await page.route(new RegExp(`/api/questions/${q}/$`), async (route) => {
+    if (route.request().method() !== 'GET' || ++loads > 1) return route.continue();
+    const response = await route.fetch();
+    await gate;
+    await route.fulfill({ response });
+    delivered();
+  });
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  const group = page.getByRole('group', { name: 'Bewertungsphase' });
+  await expect(group.getByRole('radio', { name: 'Punkte', exact: true })).toBeChecked();
+  expect(loads).toBe(2); // the dev build double-runs effects (StrictMode)
+  await group.getByRole('radio', { name: 'Plus/Minus' }).click();
+  // Deliver the superseded response and let the page process it (two frames).
+  release();
+  await late;
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+  await expect(group.getByRole('radio', { name: 'Plus/Minus' })).toBeChecked();
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  expect((await api.get(`/api/questions/${q}/`)).matrix_rating_mode).toBe('updown');
 });
 
 test('changing the rating mode while a session is rating shows the lock message', async ({
