@@ -321,11 +321,19 @@ export default function QuestionPage() {
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
+    // A superseded load (StrictMode's double effect in dev, or paging on to
+    // another question before this one arrived) must not land: its late
+    // response would overwrite the newer question — or edits the author has
+    // already made — with stale data.
+    let current = true;
+    const supersede = () => {
+      current = false;
+    };
     setLoadFailed(false);
     void api
       .getQuestionSet(Number(setId))
-      .then(setSet)
-      .catch(() => setLoadFailed(true));
+      .then((data) => current && setSet(data))
+      .catch(() => current && setLoadFailed(true));
     if (isNew) {
       const raw = searchParams.get("kind") ?? "single_choice";
       const kind = (QUESTION_KINDS as readonly string[]).includes(raw)
@@ -340,12 +348,13 @@ export default function QuestionPage() {
       setBinaryChoice(template === "binary");
       setOptions(defaultOptions(kind, template));
       setOptionBaseline({});
-      return;
+      return supersede;
     }
     // Already have this question in state (e.g. just created via save →
     // URL replaced to the real id) — don't refetch and clobber live edits.
-    if (question && question.id === Number(questionId)) return;
+    if (question && question.id === Number(questionId)) return supersede;
     void api.getQuestion(Number(questionId)).then((data) => {
+      if (!current) return;
       setQuestion(data);
       setText(data.text);
       setTextBaseline(data.text);
@@ -423,7 +432,8 @@ export default function QuestionPage() {
       setOptionBaseline(
         Object.fromEntries(editableOptions.map((o) => [o.clientId, o.text])),
       );
-    }).catch(() => setLoadFailed(true));
+    }).catch(() => current && setLoadFailed(true));
+    return supersede;
   }, [questionId]);
 
   // #92: the set's question order, for the previous/next arrows.

@@ -101,12 +101,22 @@ test('typing under a busy main thread keeps every character and space', async ({
     question_set: seed.setId,
     title: { de: 'Teil A', en: 'Part A' },
   });
-  // Slow autosave responses too, so saves are in flight while typing.
+  // Slow autosave responses too, so saves are in flight while typing. A
+  // trailing autosave can still be on its way when the test ends; errors of
+  // such a leftover (disposed response, closed page) don't concern the test.
+  let finished = false;
+  const inFlight = new Set<Promise<void>>();
   await page.route(`**/api/sections/${section.id}/`, async (route) => {
     if (route.request().method() !== 'PATCH') return route.continue();
-    const response = await route.fetch();
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    await route.fulfill({ response });
+    const handled = (async () => {
+      const response = await route.fetch();
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await route.fulfill({ response });
+    })().catch((error) => {
+      if (!finished) throw error;
+    });
+    inFlight.add(handled);
+    await handled.finally(() => inFlight.delete(handled));
   });
   // Emulate a loaded machine: React's scheduler (MessageChannel-driven)
   // tasks run late, so a render and its passive effects land in separate
@@ -149,4 +159,7 @@ test('typing under a busy main thread keeps every character and space', async ({
   await expect
     .poll(async () => (await api.get(`/api/sections/${section.id}/`)).description.en, { timeout: 10000 })
     .toBe(`<p>${text}</p>`);
+  // Saves in flight now must still succeed; anything later is a leftover.
+  await Promise.all(inFlight);
+  finished = true;
 });

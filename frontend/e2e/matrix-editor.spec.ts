@@ -417,6 +417,47 @@ test('rating section: mode, budget, switches persist; plus/minus hides the multi
   expect((await api.get(`/api/questions/${q}/`)).matrix_rating_mode).toBe('');
 });
 
+test('a superseded load of the question does not overwrite the author\'s edits', async ({
+  page,
+  trackRoom,
+}) => {
+  // Regression (flaky "rating section" test): the editor's load effect had no
+  // cleanup, so a superseded request — StrictMode's double effect in dev, or
+  // paging on before a load finished — still applied its late response and
+  // reset fields the author had already changed (the save then stored the
+  // old rating mode). Hold the first load until after the edit.
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  const api = apiClient(page.request);
+  const q = await createMatrixQuestion(api, seed.setId, { matrix_rating_mode: 'points' });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let delivered!: () => void;
+  const late = new Promise<void>((resolve) => (delivered = resolve));
+  let loads = 0;
+  await page.route(new RegExp(`/api/questions/${q}/$`), async (route) => {
+    if (route.request().method() !== 'GET' || ++loads > 1) return route.continue();
+    const response = await route.fetch();
+    await gate;
+    await route.fulfill({ response });
+    delivered();
+  });
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  const group = page.getByRole('group', { name: 'Bewertungsphase' });
+  await expect(group.getByRole('radio', { name: 'Punkte', exact: true })).toBeChecked();
+  expect(loads).toBe(2); // the dev build double-runs effects (StrictMode)
+  await group.getByRole('radio', { name: 'Plus/Minus' }).click();
+  // Deliver the superseded response and let the page process it (two frames).
+  release();
+  await late;
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+  await expect(group.getByRole('radio', { name: 'Plus/Minus' })).toBeChecked();
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  expect((await api.get(`/api/questions/${q}/`)).matrix_rating_mode).toBe('updown');
+});
+
 test('changing the rating mode while a session is rating shows the lock message', async ({
   page,
   trackRoom,
