@@ -90,6 +90,10 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
     name: "Add card",
     text: "Add your own card; show hidden cards again.",
   },
+  "handle.mx-ai": {
+    name: "AI grouping",
+    text: "Let AI suggest cards of a field that belong together, under a summary card.",
+  },
   "handle.mx-zoom": {
     name: "Display",
     text: "Compact or detailed; zoom the whole board (wheel, drag to pan, Shift+arrows) or fit it.",

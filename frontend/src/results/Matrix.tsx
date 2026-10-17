@@ -57,7 +57,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { EyeOff, ZoomIn } from "lucide-react";
+import { EyeOff, Sparkles, ZoomIn } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
 import type { MatrixBoard, MatrixCard, MatrixRating, MatrixScore, MatrixSettingsPayload } from "../api";
 import { categoryLabel, mixHex, paletteEntry, readableOn } from "../matrixPalette";
@@ -65,6 +65,7 @@ import { fromPixel, resolveZone, toPixel, zoneRect, type Box, type Zone } from "
 import { relaxCards, type LayoutItem } from "./matrixLayout";
 import { useReducedMotion } from "./motion";
 import { CORRECT as UP, MINUS as DOWN } from "./palette";
+import { AI_MARK } from "./MindMap";
 
 /** Plus / minus counts as text on a tinted card body (≥ 4.5:1 on every
  *  category tint; the palette's CORRECT_STRONG / MINUS_INK are too light), as
@@ -106,6 +107,9 @@ export interface MatrixProps {
   interactive?: MatrixInteraction;
   /** Scores to draw on the cards (only when they are to be shown). */
   rating?: { mode: MatrixRating["mode"]; scores: Record<string, MatrixScore> };
+  /** Present mode: cards to ring (an AI hint shown on the board); a stack
+   *  is ringed when its top or a member is listed. */
+  highlightIds?: Set<number>;
 }
 
 /** Score row of one card: bar shares (0–1) and the text. */
@@ -371,6 +375,7 @@ export default function Matrix({
   rating,
   onZoomQuadrant,
   quadrantFocused = false,
+  highlightIds,
 }: MatrixProps) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language.startsWith("de") ? "de" : "en";
@@ -777,6 +782,8 @@ export default function Matrix({
             }
             const isTarget = drag != null && drag.target === card.id;
             const isFresh = fresh.has(card.id);
+            const isHighlit =
+              !!highlightIds && (highlightIds.has(card.id) || stack.members.some((m) => highlightIds.has(m.id)));
             const n = stackSize(stack);
             const cat = label(card);
             const categoryHex =
@@ -834,6 +841,8 @@ export default function Matrix({
                 data-hidden={isHidden ? "true" : undefined}
                 data-stack-target={isTarget ? "true" : undefined}
                 data-fresh={isFresh ? "true" : undefined}
+                data-summary={card.summary ? "true" : undefined}
+                data-ai-highlight={isHighlit ? "true" : undefined}
                 className={`absolute flex w-max items-stretch overflow-hidden rounded-md text-left leading-tight ${
                   interactive
                     ? `cursor-grab touch-none focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
@@ -841,8 +850,8 @@ export default function Matrix({
                       }`
                     : ""
                 } ${n > 1 && !dragging ? "z-10" : ""} ${isTarget ? "outline outline-[3px] outline-offset-2 outline-brand-600" : ""} ${
-                  isFresh && !isTarget ? "outline outline-4 outline-amber-300" : ""
-                } ${
+                  isFresh && !isTarget && !isHighlit ? "outline outline-4 outline-amber-300" : ""
+                } ${isHighlit && !isTarget ? "z-10 outline outline-4 outline-offset-2" : ""} ${
                   isHidden
                     ? `border border-dashed border-slate-400 text-slate-600 ${dk("dark:border-slate-500 dark:text-slate-300")}`
                     : `text-slate-900 ${dk("dark:text-slate-100")} ${
@@ -852,6 +861,7 @@ export default function Matrix({
                       }`
                 }`}
                 style={{
+                  ...(isHighlit && !isTarget ? { outlineColor: AI_MARK } : null),
                   fontSize: `${cardFont}px`,
                   maxWidth: narrow ? "34%" : `min(${results ? 26 : 28}%, 11em)`,
                   transition: reduced || dragging ? "none" : "left .25s ease, top .25s ease, outline-color .3s ease",
@@ -881,6 +891,16 @@ export default function Matrix({
                     } as CSSProperties
                   }
                 >
+                  {card.summary && (
+                    // AI summary card: symbol + label above the title.
+                    <span
+                      data-card-summary=""
+                      className={`mb-[0.15em] flex items-center gap-[0.25em] text-[0.7em] font-semibold text-[oklch(0.42_0.17_290)] ${dk("dark:text-[oklch(0.8_0.12_290)]")}`}
+                    >
+                      <Sparkles aria-hidden className="h-[1em] w-[1em] flex-none" />
+                      {t("Summary")}
+                    </span>
+                  )}
                   <span className={`flex items-start gap-[0.3em] ${narrow ? "flex-wrap" : ""}`}>
                     <span data-card-title className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">
                       {card.title}

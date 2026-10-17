@@ -33,6 +33,7 @@ import {
   Minus,
   Pencil,
   Plus,
+  Sparkles,
   X,
   ZoomIn,
 } from "lucide-react";
@@ -43,6 +44,7 @@ import { clampToZone, resolveZone } from "../../results/matrixGeometry";
 import { categoryLabel } from "../../matrixPalette";
 import { MatrixCategoryChips, MatrixZonePicker } from "../../results/MatrixZonePicker";
 import { requestDetail } from "../../results/mindmapModeration";
+import { MatrixAiDrawer, useMatrixAi } from "../../results/matrixAi";
 import { useReducedMotion } from "../../results/motion";
 import { useMatrixView } from "./useMatrixView";
 
@@ -89,6 +91,7 @@ export default function MatrixPanel({
   rating,
   phase,
   view = "raw",
+  aiAvailable = false,
 }: {
   runId: number;
   questionId: number;
@@ -108,6 +111,9 @@ export default function MatrixPanel({
   phase?: string;
   /** Footer view: the board, or the ranking (only with scores). */
   view?: "raw" | "ranking";
+  /** AI grouping (✦ handle between pencil and display): expert mode, AI
+   *  configured and the question's AI switch on. */
+  aiAvailable?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const rateStage = rating?.stage === "rate";
@@ -191,6 +197,12 @@ export default function MatrixPanel({
     },
     [t],
   );
+
+  /** A board answered outside `call` (AI apply / undo): newest wins. */
+  const showBoard = useCallback((matrix: MatrixBoard) => {
+    shownSeq.current = ++sentSeq.current;
+    setLocal(matrix);
+  }, []);
 
   const onMove = (id: number, x: number, y: number, via: "pointer" | "keyboard") => {
     const card = findCard(id);
@@ -278,9 +290,27 @@ export default function MatrixPanel({
       return next;
     });
 
+  const ai = useMatrixAi({
+    runId,
+    questionId,
+    board,
+    settings,
+    rating: rateStage,
+    showBoard,
+    notify: (text) => setToast((p) => ({ text, n: (p?.n ?? 0) + 1 })),
+  });
+  const aiOpen = aiAvailable && ai.open;
+  // The handle going away (AI switch off, easy mode) closes the panel.
+  useEffect(() => {
+    if (!aiAvailable && ai.open) ai.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiAvailable]);
+
   // Opened from the keyboard, a drawer takes the focus; closing it returns
   // the focus to its handle when it was inside.
   const pencilRef = useRef<HTMLButtonElement>(null);
+  const aiHandleRef = useRef<HTMLButtonElement>(null);
+  const aiDrawerRef = useRef<HTMLDivElement>(null);
   const zoomToggleRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const zoomPanelRef = useRef<HTMLDivElement>(null);
@@ -306,9 +336,13 @@ export default function MatrixPanel({
     } else if (zoomOpen && zoomPanelRef.current?.contains(active)) {
       if (byKeyboard) zoomToggleRef.current?.focus({ preventScroll: true });
       else active?.blur();
+    } else if (aiOpen && aiDrawerRef.current?.contains(active)) {
+      if (byKeyboard) window.requestAnimationFrame(() => aiHandleRef.current?.focus({ preventScroll: true }));
+      else active?.blur();
     }
     setDrawerOpen(false);
     setZoomOpen(false);
+    if (ai.open) ai.close();
   };
 
   // Esc closes the dialog / drawer / display controls before the presenter
@@ -329,7 +363,7 @@ export default function MatrixPanel({
     enabled: openId == null && !drawerOpen,
   });
   useEffect(() => {
-    if (openId == null && !drawerOpen && !zoomOpen && !bv.zoomed) return;
+    if (openId == null && !drawerOpen && !zoomOpen && !aiOpen && !bv.zoomed) return;
     const onKey = (e: KeyboardEvent) => {
       if (openId != null) {
         const dialog = dialogRef.current;
@@ -367,14 +401,14 @@ export default function MatrixPanel({
         e.stopPropagation();
         // Drawers first; then a zoomed board returns to the overview (Esc
         // must not leave the presentation from there).
-        if (drawerOpen || zoomOpen) closeHandles(true);
+        if (drawerOpen || zoomOpen || aiOpen) closeHandles(true);
         else bv.overview();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openId, drawerOpen, zoomOpen, closeDialog, bv.zoomed]);
+  }, [openId, drawerOpen, zoomOpen, aiOpen, closeDialog, bv.zoomed]);
 
   const open = openId != null ? board.cards.find((c) => c.id === openId) : undefined;
   // The opened card went away (deleted, withdrawn): close.
@@ -386,6 +420,10 @@ export default function MatrixPanel({
   const catText = (key: string) => {
     if (settings.category_mode === "off") return "";
     if (!settings.categories.some((c) => c.key === key)) return t("no category");
+    const label = categoryLabel(settings.categories, key, settings.category_mode, lang, t);
+    return label.name || label.a11y;
+  };
+  const categoryName = (key: string) => {
     const label = categoryLabel(settings.categories, key, settings.category_mode, lang, t);
     return label.name || label.a11y;
   };
@@ -422,6 +460,9 @@ export default function MatrixPanel({
         data-testid="matrix-viewport"
         data-focus={bv.focus ?? undefined}
         onPointerDown={bv.onPointerDown}
+        // With the AI panel (w-96) open the board fits beside it, so the
+        // proposed and highlighted cards stay visible.
+        style={aiOpen ? { width: "calc(100% - 22rem)" } : undefined}
         className={`relative mt-3 min-h-0 w-full flex-1 touch-none overflow-hidden ${bv.zoomed ? "cursor-grab" : ""}`}
       >
         {fitWidth != null && (
@@ -453,6 +494,7 @@ export default function MatrixPanel({
               rating={shownRating}
               onZoomQuadrant={bv.focusOn}
               quadrantFocused={bv.focus != null}
+              highlightIds={aiOpen ? ai.highlightIds : undefined}
             />
           </div>
         )}
@@ -572,6 +614,7 @@ export default function MatrixPanel({
           const byKeyboard = e.detail === 0;
           e.currentTarget.blur();
           setZoomOpen(false);
+          if (ai.open) ai.close();
           setDrawerOpen((o) => !o);
           if (byKeyboard && !drawerOpen) focusFirstIn(drawerRef);
         }}
@@ -601,12 +644,51 @@ export default function MatrixPanel({
         onAdd={(body) => call(() => live.matrixAdd(runId, questionId, body))}
       />
 
+      {/* ✦ AI grouping (expert mode, AI on): below the pencil. */}
+      {aiAvailable && (
+        <>
+          <button
+            type="button"
+            {...{ [drawerAttr]: "" }}
+            ref={aiHandleRef}
+            onClick={(e) => {
+              const byKeyboard = e.detail === 0;
+              e.currentTarget.blur();
+              setDrawerOpen(false);
+              setZoomOpen(false);
+              if (ai.open) ai.close();
+              else {
+                ai.setOpen(true);
+                if (byKeyboard) focusFirstIn(aiDrawerRef);
+              }
+            }}
+            aria-label={t("AI grouping")}
+            title={t("AI grouping")}
+            data-help="handle.mx-ai"
+            data-beamer-inset=""
+            style={{ top: handleTop + handleStep }}
+            className={`${HANDLE} p-3 ${ai.open ? "pointer-events-none opacity-0" : "opacity-100"}`}
+          >
+            <Sparkles className="h-5 w-5" />
+          </button>
+          <MatrixAiDrawer
+            ai={ai}
+            drawerRef={aiDrawerRef}
+            drawerAttr={drawerAttr}
+            settings={settings}
+            zoneName={zoneName}
+            catText={catText}
+            categoryName={categoryName}
+          />
+        </>
+      )}
+
       {/* Display: compact / detailed, card size. */}
       <div
         {...{ [drawerAttr]: "" }}
         data-beamer-inset=""
         className="fixed right-0 z-30 flex items-center rounded-l-xl border border-r-0 border-slate-200 bg-white/95 text-slate-500 shadow-md"
-        style={{ top: handleTop + handleStep }}
+        style={{ top: handleTop + handleStep * (aiAvailable ? 2 : 1) }}
       >
         {zoomOpen && (
           <div ref={zoomPanelRef} className="flex items-center pl-1">
@@ -666,6 +748,7 @@ export default function MatrixPanel({
             const byKeyboard = e.detail === 0;
             if (!byKeyboard) e.currentTarget.blur();
             setDrawerOpen(false);
+            if (ai.open) ai.close();
             setZoomOpen((o) => !o);
             if (byKeyboard && !zoomOpen) focusFirstIn(zoomPanelRef);
           }}

@@ -161,6 +161,56 @@ export interface MatrixCard {
   hidden: boolean;
   teacher: boolean;
   placed: boolean;
+  /** Summary card of an AI grouping (tops its group's stack). */
+  summary?: boolean;
+}
+
+/** AI grouping (ai-propose): `level` of sameness the AI looks for. */
+export type MatrixAiLevel = "spelling" | "same" | "similar";
+
+/** Why a proposed group cannot be applied (live.matrix SKIP_*). */
+export type MatrixAiSkipReason = "unknown" | "hidden" | "zones" | "duplicate" | "too_few" | "changed" | "limit";
+
+/** One proposed group, checked against the live board. */
+export interface MatrixAiGroup {
+  index: number;
+  status: "ok" | "skip";
+  skip_reason?: MatrixAiSkipReason;
+  zone: string | null;
+  /** The distinct tops of the group (stack members map to their top). */
+  cards: { id: number; title: string; category: string }[];
+  /** Proposed (or, with `top_summary_id`, the existing) summary title. */
+  title: string;
+  description: string;
+  reason: string;
+  /** An existing summary card on top of the group stays (no new one). */
+  top_summary_id?: number;
+  category?: string;
+  anchor_id?: number;
+  x?: number;
+  y?: number;
+  placed?: boolean;
+}
+
+/** Same content in different fields: display only. */
+export interface MatrixAiHint {
+  index: number;
+  cards: { id: number; title: string; category: string; zone: string }[];
+  reason: string;
+}
+
+export interface MatrixAiProposal {
+  groups: MatrixAiGroup[];
+  hints: MatrixAiHint[];
+  dropped: number;
+  /** Signed proposal for ai-apply (24 h). */
+  proposal: string;
+}
+
+export interface MatrixAiEdit {
+  title: string;
+  description?: string;
+  category?: string;
 }
 
 export interface MatrixBoard {
@@ -1528,6 +1578,36 @@ export const live = {
   /** Deletes a teacher card (participant cards can only be hidden). */
   matrixDelete: (runId: number, questionId: number, card: number) =>
     matrixCall(runId, questionId, "delete", { card }),
+  /** AI grouping proposal (no change yet). 503 AI off, 400 switch off /
+   *  fewer than 3 cards, 409 rating, 502 AI error. */
+  matrixAiPropose: (runId: number, questionId: number, level: MatrixAiLevel) =>
+    request<MatrixAiProposal>(`/api/runs/${runId}/matrix/${questionId}/ai-propose`, {
+      method: "POST",
+      body: JSON.stringify({ level }),
+    }),
+  /** Applies the selected groups in one step (`skipped`: no longer fitting). */
+  matrixAiApply: (
+    runId: number,
+    questionId: number,
+    proposal: string,
+    selected: number[],
+    edits: Record<number, MatrixAiEdit>,
+  ) =>
+    request<{
+      applied: number[];
+      skipped: { index: number; reason: MatrixAiSkipReason }[];
+      undo: string;
+      matrix: MatrixBoard;
+    }>(`/api/runs/${runId}/matrix/${questionId}/ai-apply`, {
+      method: "POST",
+      body: JSON.stringify({ proposal, selected, edits }),
+    }),
+  /** Reverts an applied step (409 when a stack changed in between). */
+  matrixAiUndo: (runId: number, questionId: number, undo: string) =>
+    request<{ status: string; matrix: MatrixBoard }>(`/api/runs/${runId}/matrix/${questionId}/ai-undo`, {
+      method: "POST",
+      body: JSON.stringify({ undo }),
+    }),
   /** Presenter switches the matrix stage (collect / rate); `open` also
    *  opens the vote in the same request (like `mindmapStage`). */
   matrixStage: (runId: number, questionId: number, stage: "collect" | "rate", open = false) =>

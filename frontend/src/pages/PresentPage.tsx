@@ -616,6 +616,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     !!matrixBoard &&
     !!matrixSettings &&
     (phase === "open" || phase === "results" || (phase === "closed" && mxRate));
+  // Matrix AI grouping (✦ handle): expert mode, AI configured, the
+  // question's AI switch on (like the mind map's).
+  const showMxAi = expert && mxShown && whoAi.ai && state?.question?.wordcloud_ai_enabled === true;
   const stopCloses = mmStopCloses || (activeKind === "matrix" && mxRate && !mxRating?.live);
   // The rating whose raters the counter shows.
   const rateStats = mmRate ? mmRating : mxRate ? mxRating : undefined;
@@ -759,8 +762,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     (showModHandle || showMmHandle ? 1 : 0) +
       (showAiButton || mmShown ? 1 : 0) +
       (showMmAi ? 1 : 0) +
-      // Matrix: pencil + display.
-      (mxShown ? 2 : 0),
+      // Matrix: pencil, AI star, display.
+      (mxShown ? 2 : 0) +
+      (showMxAi ? 1 : 0),
   );
   const aiHandleTop = handleColumnTop + (showModHandle ? HANDLE_STEP : 0);
   // Mind map: pencil, AI star, zoom.
@@ -2205,6 +2209,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               rating={mxRating}
               phase={phase}
               view={wcView === "ranking" ? "ranking" : "raw"}
+              aiAvailable={showMxAi}
             />
           )}
 
