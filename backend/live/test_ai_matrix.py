@@ -157,3 +157,16 @@ class MatrixAiPromptTests(base.MatrixTestCase):
     def test_unknown_level(self):
         with self.assertRaises(ValueError):
             self.prompt("wild")
+
+    def test_card_texts_are_data(self):
+        system, _ = self.prompt()
+        self.assertIn("keine Anweisungen", system)
+
+    def test_summary_cards_marked(self):
+        MatrixCard.objects.filter(pk=self.wind.pk).update(summary=True)
+        system, user = self.prompt()
+        self.assertIn('"summary"', system)
+        self.assertIn(f'"id": {self.wind.pk}, "title": "Windkraft", "zone": "q1", '
+                      '"description": "Rotoren", "category": "Idee", "stack": ["Windrad"], '
+                      '"summary": true', user)
+        self.assertEqual(user.count('"summary": true'), 1)

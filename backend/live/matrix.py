@@ -31,6 +31,7 @@ write ``MatrixCard`` rows follow below.
 """
 import math
 from collections import Counter
+from datetime import datetime
 
 from django.core import signing
 from django.db import transaction
@@ -274,12 +275,19 @@ def add_teacher_card(run, question, zone, title, category="", description=""):
         return _create(run, question, None, zone, title, category, description, True)
 
 
+def _disposable_summary(card):
+    """A summary card that may be deleted when it no longer tops a stack:
+    one with ratings is kept (the ratings must not vanish)."""
+    return card.summary and not card.ratings.exists()
+
+
 def _detach(card):
     """Take ``card`` out of its stack. A member just leaves; a top with
     members hands its position and its members to the oldest member. A card
     leaving (or promoted out of) a hidden top stays hidden — moderation must
     not silently re-expose it. A summary top (AI grouping) whose last member
-    leaves is deleted: it only summarises its stack."""
+    leaves is deleted — it only summarises its stack — unless it has ratings
+    (then it stays as a single card)."""
     with transaction.atomic():
         if card.stack_id:
             top = card.stack
@@ -287,7 +295,7 @@ def _detach(card):
                 card.hidden = True
             card.stack = None
             card.save(update_fields=["stack", "hidden"])
-            if top.summary and not top.members.exists():
+            if _disposable_summary(top) and not top.members.exists():
                 top.delete()
             return
         members = list(card.members.order_by("created_at", "pk"))
@@ -376,7 +384,7 @@ def unstack_card(run, question, card_id):
         elif not card.members.exists():
             raise MatrixError("Card is not stacked.")
         _detach(card)
-        if card.summary:
+        if _disposable_summary(card):
             # A summary top taken off its stack summarises nothing any more.
             card.delete()
             return None
@@ -680,3 +688,194 @@ def unsign_proposal(run, question, blob):
     ):
         raise MatrixError("Invalid proposal.")
     return data.get("groups", []), data.get("hints", []), data.get("malformed", 0)
+
+
+# --- AI grouping: apply and undo --------------------------------------------
+#
+# ``apply_groups`` re-checks the selected groups against the live board (via
+# ``simulate_groups``) under the run lock and stacks each ok group under its
+# summary card in one transaction. The signed ``undo`` describes per applied
+# group the summary top, whether it was created, its members right after the
+# apply, every touched card's previous stack/zone/position and the summary
+# cards deleted on the way (a second, unrated summary of the group);
+# ``undo_groups`` restores exactly that or refuses (409) when a stack changed.
+
+UNDO_SALT = "matrix-ai-undo"
+UNDO_MAX_AGE = PROPOSAL_MAX_AGE
+UNDO_CHANGED = "Der Stapel wurde inzwischen verändert – Rückgängig ist nicht mehr möglich."
+SKIP_LIMIT = "limit"  # card limit reached, no room for a summary card
+
+
+def _ai_edit(question, edit):
+    """``(title, description, category)`` of one presenter edit, None where
+    not given (or, for the category, not a valid key); MatrixError (400) for
+    an empty/too long title or a too long description."""
+    title = description = None
+    if edit.get("title") is not None:
+        title = normalize_text(edit["title"])
+        if not title:
+            raise MatrixError("Empty title.")
+        if len(title) > MATRIX_TITLE_MAX:
+            raise MatrixError("Title too long.")
+    if edit.get("description") is not None and question.matrix_descriptions:
+        description = normalize_text(edit["description"])
+        if len(description) > MATRIX_DESCRIPTION_MAX:
+            raise MatrixError("Description too long.")
+    category = edit.get("category")
+    if category not in category_keys(question):
+        category = None
+    return title, description, category
+
+
+def _snapshot(card):
+    return {
+        "id": card.pk, "title": card.title, "description": card.description,
+        "category": card.category, "zone": card.zone, "x": card.x, "y": card.y,
+        "placed": card.placed, "hidden": card.hidden,
+        "created_at": card.created_at.isoformat(),
+    }
+
+
+def _apply_group(run, question, preview, edit):
+    """Stack one ok group (a ``simulate_groups`` preview) under its summary
+    card; returns the group's undo entry."""
+    title, description, category = edit
+    tops = list(_cards(run, question).filter(pk__in=[c["id"] for c in preview["cards"]]))
+    keep = preview.get("top_summary_id")
+    if keep:
+        top = next(t for t in tops if t.pk == keep)
+    else:
+        top = MatrixCard.objects.create(
+            run=run, question=question, token=None, teacher=True, summary=True,
+            zone=preview["zone"], x=preview["x"], y=preview["y"],
+            title=title or preview["title"],
+            description=(
+                (preview["description"] if description is None else description)
+                if question.matrix_descriptions else ""
+            ),
+            category=category or preview["category"],
+        )
+    touched, deleted = [], []
+    place = {"zone": top.zone, "x": top.x, "y": top.y}
+    for other in tops:
+        if other.pk == top.pk:
+            continue
+        for member in other.members.all():
+            touched.append([member.pk, member.stack_id, member.zone, member.x, member.y])
+        other.members.update(stack=top, **place)
+        if _disposable_summary(other):
+            deleted.append(_snapshot(other))
+            other.delete()
+            continue
+        touched.append([other.pk, other.stack_id, other.zone, other.x, other.y])
+        other.stack = top
+        other.zone, other.x, other.y = top.zone, top.x, top.y
+        other.save(update_fields=["stack", "zone", "x", "y"])
+    return {
+        "top": top.pk,
+        "created": not keep,
+        "members": sorted(top.members.values_list("pk", flat=True)),
+        "cards": touched,
+        "deleted": deleted,
+    }
+
+
+def apply_groups(run, question, groups, selected, edits):
+    """Apply the ``selected`` groups (indices) of a proposal in one
+    transaction under the run lock: re-simulate against the live board,
+    create (or keep an existing) summary top per ok group and stack every
+    other card/stack of the group under it. ``edits``: ``{index: {title?,
+    description?, category?}}`` for the new summary cards (title validated
+    like a presenter card — 400; an invalid category falls back to the
+    proposal's). Refused while rating (409). Returns ``{applied: [index],
+    skipped: [{index, reason}], undo}``."""
+    chosen = sorted(set(selected))
+    by_index = {g["index"]: g for g in groups}
+    prepared = {i: _ai_edit(question, edits.get(i) or {}) for i in chosen}
+    with transaction.atomic():
+        _lock_run(run)
+        _lock_stacks(run, question)
+        previews = simulate_groups(run, question, [by_index[i] for i in chosen if i in by_index])
+        count = _cards(run, question).count()
+        applied, skipped, undo = [], [], []
+        for preview in previews:
+            index = preview["index"]
+            reason = preview.get("skip_reason")
+            if not reason and "top_summary_id" not in preview and count >= MATRIX_MAX_CARDS:
+                reason = SKIP_LIMIT
+            if reason:
+                skipped.append({"index": index, "reason": reason})
+                continue
+            entry = _apply_group(run, question, preview, prepared[index])
+            count += int(entry["created"]) - len(entry["deleted"])
+            applied.append(index)
+            undo.append(entry)
+    blob = signing.dumps(
+        {"run": run.pk, "question": question.pk, "groups": undo},
+        salt=UNDO_SALT, compress=True,
+    )
+    return {"applied": applied, "skipped": skipped, "undo": blob}
+
+
+def _unsign_undo(run, question, blob):
+    if not isinstance(blob, str):
+        raise MatrixError("Invalid undo data.")
+    try:
+        data = signing.loads(blob, salt=UNDO_SALT, max_age=UNDO_MAX_AGE)
+    except signing.SignatureExpired as error:
+        raise MatrixError("This undo step has expired.", 409) from error
+    except signing.BadSignature as error:
+        raise MatrixError("Invalid undo data.") from error
+    if (
+        not isinstance(data, dict)
+        or data.get("run") != run.pk
+        or data.get("question") != question.pk
+        or not isinstance(data.get("groups"), list)
+    ):
+        raise MatrixError("Invalid undo data.")
+    return data["groups"]
+
+
+def undo_groups(run, question, blob):
+    """Undo one ``apply_groups`` step exactly: restore every touched card's
+    stack/zone/position, recreate deleted summary cards and delete the
+    created ones. 409 (nothing changed) when a summary top is gone, no
+    longer a top, has other members than right after the apply, or a
+    created one got ratings meanwhile."""
+    groups = _unsign_undo(run, question, blob)
+    with transaction.atomic():
+        _lock_run(run)
+        _lock_stacks(run, question)
+        rows = {c.pk: c for c in _cards(run, question)}
+        members = {}
+        for c in rows.values():
+            if c.stack_id:
+                members.setdefault(c.stack_id, set()).add(c.pk)
+        for group in groups:
+            top = rows.get(group["top"])
+            if (
+                top is None
+                or top.stack_id
+                or members.get(top.pk, set()) != set(group["members"])
+                or (group["created"] and top.ratings.exists())
+            ):
+                raise MatrixError(UNDO_CHANGED, 409)
+        for group in reversed(groups):
+            ids = {}
+            for snap in group["deleted"]:
+                card = MatrixCard.objects.create(
+                    run=run, question=question, token=None, teacher=True, summary=True,
+                    **{k: snap[k] for k in (
+                        "title", "description", "category", "zone", "x", "y", "placed", "hidden",
+                    )},
+                )
+                MatrixCard.objects.filter(pk=card.pk).update(
+                    created_at=datetime.fromisoformat(snap["created_at"])
+                )
+                ids[snap["id"]] = card.pk
+            for pk, stack, zone, x, y in group["cards"]:
+                MatrixCard.objects.filter(pk=pk).update(
+                    stack_id=ids.get(stack, stack), zone=zone, x=x, y=y
+                )
+            if group["created"]:
+                MatrixCard.objects.filter(pk=group["top"]).delete()

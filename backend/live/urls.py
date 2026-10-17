@@ -76,6 +76,18 @@ api_urlpatterns = [
         views.matrix_teacher_delete,
     ),
     path(
+        "runs/<int:run_id>/matrix/<int:question_id>/ai-propose",
+        views.matrix_ai_propose,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/ai-apply",
+        views.matrix_ai_apply,
+    ),
+    path(
+        "runs/<int:run_id>/matrix/<int:question_id>/ai-undo",
+        views.matrix_ai_undo,
+    ),
+    path(
         "runs/<int:run_id>/mindmap/<int:question_id>/hide",
         views.mindmap_hide,
     ),
