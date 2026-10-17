@@ -1248,7 +1248,7 @@
   "Get proposal": "Vorschlag holen",
   "The question, the axes, the field names and the cards are sent to the AI model — no names or other participant data. Nothing changes until you apply the proposal.": "Die Frage, die Achsen, die Feldnamen und die Karten werden an das KI-Modell gesendet – keine Namen oder sonstigen Daten der Teilnehmenden. Es ändert sich nichts, bis Sie den Vorschlag übernehmen.",
   "The AI found nothing to group.": "Die KI hat nichts zum Zusammenfassen gefunden.",
-  "{{count}} groups proposed — untick what you don't want._one": "{{count}} Gruppe vorgeschlagen – entfernen Sie das Häkchen bei allem, was Sie nicht möchten.",
+  "{{count}} groups proposed — untick what you don't want._one": "{{count}} Gruppe vorgeschlagen – entfernen Sie das Häkchen, falls Sie sie nicht möchten.",
   "{{count}} groups proposed — untick what you don't want._other": "{{count}} Gruppen vorgeschlagen – entfernen Sie das Häkchen bei allem, was Sie nicht möchten.",
   "Proposed groups": "Vorgeschlagene Gruppen",
   "Group: {{titles}}": "Gruppe: {{titles}}",

@@ -284,6 +284,12 @@ test('keyboard opening focuses the level; skipped groups keep the edited title; 
   expect(req.edits['1']).toMatchObject({ title: 'Assistenz-Ideen', category: 'blue' });
   const toast = page.getByRole('status').filter({ hasText: '1 Vorschlag übernommen' });
   await expect(toast).toContainText('Übersprungen: Assistenz-Ideen – Eine Karte ist ausgeblendet.');
+  // A summary card over a single card shows no badge.
+  const summary = (await s.cards()).find((c) => c.summary)!;
+  await expect(card(page, summary.id).getByTestId('matrix-stack-badge')).toHaveText('×2');
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/unstack`, { card: ids.chatbot2 });
+  await expect(card(page, summary.id).getByTestId('matrix-stack-badge')).toHaveCount(0);
+  await expect(card(page, summary.id).locator('[data-card-summary]')).toBeVisible();
 });
 
 test('AI error and too few cards', async ({ page, trackRoom }) => {

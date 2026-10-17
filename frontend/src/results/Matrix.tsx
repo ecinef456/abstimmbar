@@ -921,7 +921,8 @@ export default function Matrix({
                     <span data-card-title className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">
                       {card.title}
                     </span>
-                    {n > 1 && (
+                    {/* A summary card over a single card shows no "×1". */}
+                    {stackCount(stack) > 1 && (
                       <span
                         data-testid="matrix-stack-badge"
                         className="ml-auto flex-none rounded-full bg-slate-800 px-1.5 text-[0.7em] font-semibold text-white"

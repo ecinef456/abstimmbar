@@ -32,6 +32,8 @@ import { matrixStacks } from "./Matrix";
 import { requestBody, requestDetail } from "./mindmapModeration";
 
 const TITLE_MAX = 60;
+/** Drawer width (rem); the board fits beside it (MatrixPanel). */
+export const MATRIX_AI_DRAWER_REM = 24;
 const DESCRIPTION_MAX = 200;
 
 export const MATRIX_AI_LEVELS: MatrixAiLevel[] = ["spelling", "same", "similar"];
@@ -229,7 +231,10 @@ export function useMatrixAi({
   return {
     open,
     setOpen,
-    /** Closing drops the proposal and the undo step. */
+    /** Closing drops the proposal and the undo step. Closing while an apply
+     *  is in flight (`discard` bumps `seq`) ignores its answer: the board
+     *  still updates via SSE (the server broadcasts the apply), but the undo
+     *  token is dropped with the panel — like any close after an apply. */
     close: () => {
       discard();
       setUndo(null);
@@ -327,7 +332,8 @@ export function MatrixAiDrawer({
       data-testid="mx-ai-panel"
       role="region"
       aria-labelledby="mx-ai-title"
-      className={`fixed right-0 top-0 z-40 flex h-full w-96 max-w-full flex-col border-l border-slate-200 bg-white text-slate-800 transition-transform duration-300 motion-reduce:transition-none ${
+      style={{ width: `${MATRIX_AI_DRAWER_REM}rem` }}
+      className={`fixed right-0 top-0 z-40 flex h-full max-w-full flex-col border-l border-slate-200 bg-white text-slate-800 transition-transform duration-300 motion-reduce:transition-none ${
         ai.open ? "translate-x-0 shadow-2xl" : "translate-x-full"
       }`}
     >

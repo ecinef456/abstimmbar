@@ -414,9 +414,10 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     nennt die KI gleiche Inhalte in verschiedenen Feldern – **Zeigen** hebt
     diese Karten auf dem Brett hervor, geändert wird dabei nichts – ein guter
     Anlass zur Diskussion. **Übernehmen** stapelt alle angehakten Gruppen in
-    einem Schritt; **Rückgängig** im Panel nimmt genau diesen Schritt zurück,
-    solange Sie das Panel nicht schließen und den Stapel nicht von Hand
-    verändert haben. Sammelkarten tragen auf dem Beamer, auf der
+    einem Schritt; **Rückgängig** im Panel nimmt genau diesen Schritt zurück –
+    bis zum nächsten Übernehmen oder bis Sie das Panel schließen (auch Stift
+    oder Anzeige öffnen schließt es), und nur, solange die Stapel nicht von
+    Hand verändert wurden. Sammelkarten tragen auf dem Beamer, auf der
     Ergebnisseite und in der Bewertungsliste der Teilnehmenden einen Stern
     und „Zusammenfassung“; sie lassen sich bewerten wie jede andere Karte,
     und die Zahl am Stapel („×3“) zählt nur die Karten darunter. Lösen Sie

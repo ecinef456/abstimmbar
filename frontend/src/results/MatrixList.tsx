@@ -63,12 +63,12 @@ export default function MatrixList({
                         {t("stacked on “{{title}}”", { title: top.title })}
                       </span>
                     )}
-                    {!top && stack.members.length > 0 && (
+                    {!top && stackCount(stack) > 1 && (
                       <span className="ml-1.5 text-xs text-slate-500 dark:text-slate-400">
                         {t("stack of {{n}}", { n: stackCount(stack) })}
                       </span>
                     )}
-                    {c.teacher && (
+                    {c.teacher && !c.summary && (
                       <span className="ml-1.5 text-xs text-slate-500 dark:text-slate-400">{t("teacher card")}</span>
                     )}
                     {(c.hidden || top?.hidden) && (

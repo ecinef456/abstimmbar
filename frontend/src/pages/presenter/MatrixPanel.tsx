@@ -44,7 +44,7 @@ import { clampToZone, resolveZone } from "../../results/matrixGeometry";
 import { categoryLabel } from "../../matrixPalette";
 import { MatrixCategoryChips, MatrixZonePicker } from "../../results/MatrixZonePicker";
 import { requestDetail } from "../../results/mindmapModeration";
-import { MatrixAiDrawer, useMatrixAi } from "../../results/matrixAi";
+import { MATRIX_AI_DRAWER_REM, MatrixAiDrawer, useMatrixAi } from "../../results/matrixAi";
 import { useReducedMotion } from "../../results/motion";
 import { useMatrixView } from "./useMatrixView";
 
@@ -462,7 +462,8 @@ export default function MatrixPanel({
         onPointerDown={bv.onPointerDown}
         // With the AI panel (w-96) open the board fits beside it, so the
         // proposed and highlighted cards stay visible.
-        style={aiOpen ? { width: "calc(100% - 22rem)" } : undefined}
+        // (The viewport starts after main's 2rem padding: drawer width − 2rem.)
+        style={aiOpen ? { width: `calc(100% - ${MATRIX_AI_DRAWER_REM - 2}rem)` } : undefined}
         className={`relative mt-3 min-h-0 w-full flex-1 touch-none overflow-hidden ${bv.zoomed ? "cursor-grab" : ""}`}
       >
         {fitWidth != null && (
