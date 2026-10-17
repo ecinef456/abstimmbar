@@ -124,6 +124,12 @@ class MatrixAiPromptTests(base.MatrixTestCase):
         # A member is context of its top, not a top of its own.
         self.assertNotIn(f'"id": {self.member.pk}', user)
 
+    def test_descriptions_only_when_enabled(self):
+        self.configure(matrix_descriptions=False)
+        _, user = self.prompt()
+        self.assertNotIn("Rotoren", user)
+        self.assertNotIn('"description"', user)
+
     def test_canonical_language(self):
         from django.utils import translation
 
@@ -164,7 +170,7 @@ class MatrixAiPromptTests(base.MatrixTestCase):
 
     def test_summary_cards_marked(self):
         MatrixCard.objects.filter(pk=self.wind.pk).update(summary=True)
-        system, user = self.prompt()
+        system, user = self.prompt()  # descriptions on (setUp)
         self.assertIn('"summary"', system)
         self.assertIn(f'"id": {self.wind.pk}, "title": "Windkraft", "zone": "q1", '
                       '"description": "Rotoren", "category": "Idee", "stack": ["Windrad"], '

@@ -9148,6 +9148,23 @@ class MatrixSummaryCardTests(MatrixTestCase):
         mxs.remove_card(self.run, self.xq, self.tok, a.pk)
         self.assertFalse(MatrixCard.objects.filter(pk=top.pk).exists())
 
+    def test_unrated_summary_dragged_onto_card_loses_flag(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        top = self.summary_on(a)
+        mxs.stack_card(self.run, self.xq, top.pk, b.pk)
+        top.refresh_from_db()
+        self.assertEqual(top.stack_id, b.pk)
+        self.assertFalse(top.summary)
+
+    def test_rated_summary_dragged_onto_card_keeps_flag(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        top = self.summary_on(a)
+        MatrixRating.objects.create(card=top, token=self.tok2, value=1)
+        mxs.stack_card(self.run, self.xq, top.pk, b.pk)
+        top.refresh_from_db()
+        self.assertEqual(top.stack_id, b.pk)
+        self.assertTrue(top.summary)
+
     def test_plain_top_kept(self):
         a, b = self.add(title="A"), self.add(title="B")
         self.stacked(a, b)
@@ -9549,6 +9566,30 @@ class MatrixAiApplyTests(MatrixTestCase):
         self.assertEqual(cm.exception.status, 409)
         self.assertEqual(self.snapshot(), before)
 
+    def test_undo_refused_when_recreation_exceeds_limit(self):
+        first = self.summary("First")
+        second = self.summary("Second")
+        self.stacked(first, self.a)
+        self.stacked(second, self.b)
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        self.add(title="Filler")
+        before = self.snapshot()
+        with patch.object(mxs, "MATRIX_MAX_CARDS", len(before)), \
+                self.assertRaises(MatrixError) as cm:
+            mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_skipped_when_tops_changed_since_proposal(self):
+        [group] = self.groups([self.a, self.b])
+        group["tops"] = [self.a.pk, self.b.pk]
+        self.stacked(self.c, self.b)  # B now in C's (unreviewed) stack
+        result = self.apply([group])
+        self.assertEqual(result["skipped"], [{"index": 0, "reason": "changed"}])
+        self.c.refresh_from_db()
+        self.assertIsNone(self.c.stack_id)
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
+
     def test_undo_expired(self):
         undo = self.apply(self.groups([self.a, self.b]))["undo"]
         later = timezone.now() + timezone.timedelta(hours=25)
@@ -9679,6 +9720,17 @@ class MatrixAiApiTests(MatrixTestCase):
         self.assertEqual(self.post("ai-undo", {"undo": data["undo"]}).status_code, 409)
         self.broadcast.assert_not_called()
 
+    def test_apply_skips_stack_changed_since_proposal(self):
+        proposal = self.propose().json()["proposal"]
+        mxs.stack_card(self.run, self.xq, self.b.pk, self.c.pk)
+        response = self.post("ai-apply", {"proposal": proposal, "selected": [0]})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["skipped"], [{"index": 0, "reason": "changed"}])
+        self.broadcast.assert_not_called()  # nothing applied
+        self.c.refresh_from_db()
+        self.assertIsNone(self.c.stack_id)
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
+
     def test_apply_invalid(self):
         proposal = self.propose().json()["proposal"]
         for body in (
@@ -9687,6 +9739,7 @@ class MatrixAiApiTests(MatrixTestCase):
             {"proposal": proposal, "selected": [True]},
             {"proposal": proposal, "selected": [0], "edits": []},
             {"proposal": proposal, "selected": [0], "edits": {"x": {}}},
+            {"proposal": proposal, "selected": [0], "edits": {"²": {}}},
             {"proposal": proposal, "selected": [0], "edits": {"0": "t"}},
             {"proposal": proposal, "selected": [0], "edits": {"0": {"title": 5}}},
             {"proposal": proposal, "selected": [0], "edits": {"0": {"title": "x" * 61}}},

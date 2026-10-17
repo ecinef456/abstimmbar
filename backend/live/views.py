@@ -1027,12 +1027,10 @@ def matrix_stage(request, run_id, question_id):
     return Response(body)
 
 
-def _matrix_moderate(request, run_id, question_id, action, http_status=200):
-    """Owner-only shell for the presenter endpoints: 404 for anyone else and
-    for non-matrix questions, MatrixError mapping, board echo + broadcast."""
-    run = get_object_or_404(
-        Run.objects.select_related("question_set__room"), pk=run_id
-    )
+def _matrix_owner(request, run_id, question_id):
+    """``(run, room, question)`` of a matrix question for the room's owner;
+    404 for anyone else and for non-matrix questions."""
+    run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
     room = run.question_set.room
     if not _require_owner(request.user, room):
         raise Http404
@@ -1040,6 +1038,13 @@ def _matrix_moderate(request, run_id, question_id, action, http_status=200):
         Question, pk=question_id, question_set=run.question_set,
         kind=Question.Kind.MATRIX,
     )
+    return run, room, question
+
+
+def _matrix_moderate(request, run_id, question_id, action, http_status=200):
+    """Owner-only shell for the presenter endpoints: 404 for anyone else and
+    for non-matrix questions, MatrixError mapping, board echo + broadcast."""
+    run, room, question = _matrix_owner(request, run_id, question_id)
     if not isinstance(request.data, dict):
         return Response({"detail": "Invalid request."}, status=400)
     try:
@@ -1126,20 +1131,6 @@ def matrix_teacher_delete(request, run_id, question_id):
     )
 
 
-def _matrix_owner(request, run_id, question_id):
-    """``(run, room, question)`` of a matrix question for the room's owner;
-    404 for anyone else and for non-matrix questions."""
-    run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
-    room = run.question_set.room
-    if not _require_owner(request.user, room):
-        raise Http404
-    question = get_object_or_404(
-        Question, pk=question_id, question_set=run.question_set,
-        kind=Question.Kind.MATRIX,
-    )
-    return run, room, question
-
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def matrix_ai_propose(request, run_id, question_id):
@@ -1180,7 +1171,9 @@ def matrix_ai_propose(request, run_id, question_id):
         "groups": previews,
         "hints": hint_previews,
         "dropped": malformed + skipped + len(hints) - len(hint_previews),
-        "proposal": matrix.sign_proposal(run, question, groups, hints, malformed),
+        "proposal": matrix.sign_proposal(
+            run, question, matrix.with_tops(groups, previews), hints, malformed
+        ),
     })
 
 
@@ -1194,7 +1187,7 @@ def _matrix_ai_edits(data, count):
         raise _BadField("edits must be an object.")
     edits = {}
     for key, edit in raw.items():
-        if not (isinstance(key, str) and key.isdigit() and int(key) < count):
+        if not (isinstance(key, str) and key.isdecimal() and int(key) < count):
             raise _BadField("edits must be keyed by proposal indices.")
         if not isinstance(edit, dict) or not all(
             edit.get(field) is None or isinstance(edit[field], str)
@@ -1207,7 +1200,8 @@ def _matrix_ai_edits(data, count):
 
 def _matrix_ai_moderate(request, run_id, question_id, action):
     """Owner-only shell for ai-apply/ai-undo: _BadField/MatrixError mapping,
-    then one broadcast; the body gets the presenter board."""
+    then one broadcast (none when an apply applied nothing); the body gets
+    the presenter board."""
     run, room, question = _matrix_owner(request, run_id, question_id)
     if not isinstance(request.data, dict):
         return Response({"detail": "Invalid request."}, status=400)
@@ -1217,7 +1211,8 @@ def _matrix_ai_moderate(request, run_id, question_id, action):
         return Response({"detail": str(error)}, status=400)
     except matrix.MatrixError as error:
         return Response(error.body(), status=error.status)
-    broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
+    if body.get("applied", True):  # ai-undo bodies carry no "applied"
+        broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
     return Response({**body, "matrix": matrix.board_payload(run, question, presenter=True)})
 
 

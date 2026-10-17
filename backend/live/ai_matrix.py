@@ -112,7 +112,7 @@ def visible_cards(run, question):
         if c.stack_id or c.hidden:
             continue
         entry = {"id": c.pk, "title": c.title, "zone": c.zone}
-        if c.description:
+        if c.description and question.matrix_descriptions:
             entry["description"] = c.description
         if c.category in categories:
             entry["category"] = categories[c.category]

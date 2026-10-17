@@ -370,7 +370,11 @@ def stack_card(run, question, card_id, onto_id):
         moving.members.update(**place)
         moving.stack = target
         moving.zone, moving.x, moving.y = target.zone, target.x, target.y
-        moving.save(update_fields=["stack", "zone", "x", "y"])
+        # An unrated summary card under another card summarises nothing any
+        # more; a rated one keeps its flag (and its ratings).
+        if _disposable_summary(moving):
+            moving.summary = False
+        moving.save(update_fields=["stack", "zone", "x", "y", "summary"])
         return target
 
 
@@ -529,6 +533,7 @@ SKIP_HIDDEN = "hidden"        # card (or its top) hidden
 SKIP_ZONES = "zones"          # cards in different fields
 SKIP_DUPLICATE = "duplicate"  # a card already belongs to an earlier group
 SKIP_TOO_FEW = "too_few"      # fewer than two distinct tops
+SKIP_CHANGED = "changed"      # the group's stacks differ from the proposal's
 
 
 def _age(card):
@@ -662,6 +667,15 @@ def simulate_hints(run, question, hints):
     return result
 
 
+def with_tops(groups, previews):
+    """The parsed ``groups`` with the tops they resolved to at propose time
+    (``tops``), so apply can tell when a stack changed in between."""
+    return [
+        {**group, "tops": [c["id"] for c in preview["cards"]]}
+        for group, preview in zip(groups, previews, strict=True)
+    ]
+
+
 def sign_proposal(run, question, groups, hints, malformed=0):
     """Signed (not encrypted) parsed proposal for ai-apply, bound to run +
     question, valid for PROPOSAL_MAX_AGE."""
@@ -786,7 +800,9 @@ def apply_groups(run, question, groups, selected, edits):
     """Apply the ``selected`` groups (indices) of a proposal in one
     transaction under the run lock: re-simulate against the live board,
     create (or keep an existing) summary top per ok group and stack every
-    other card/stack of the group under it. ``edits``: ``{index: {title?,
+    other card/stack of the group under it. A group whose resolved tops
+    differ from the ``tops`` recorded at propose time (``with_tops``) is
+    skipped ("changed") — apply never pulls in unreviewed stacks. ``edits``: ``{index: {title?,
     description?, category?}}`` for the new summary cards (title validated
     like a presenter card — 400; an invalid category falls back to the
     proposal's; edits of a group that keeps an existing summary top are
@@ -804,6 +820,12 @@ def apply_groups(run, question, groups, selected, edits):
         for preview in previews:
             index = preview["index"]
             reason = preview.get("skip_reason")
+            signed = by_index[index].get("tops")
+            if not reason and signed is not None and (
+                {c["id"] for c in preview["cards"]} != set(signed)
+            ):
+                # E.g. a card was stacked into an unreviewed stack since.
+                reason = SKIP_CHANGED
             if not reason and "top_summary_id" not in preview and count >= MATRIX_MAX_CARDS:
                 reason = SKIP_LIMIT
             if reason:
@@ -867,6 +889,9 @@ def undo_groups(run, question, blob):
                 or (group["created"] and top.ratings.exists())
             ):
                 raise MatrixError(UNDO_CHANGED, 409)
+        net = sum(len(g["deleted"]) - int(g["created"]) for g in groups)
+        if net > 0 and len(rows) + net > MATRIX_MAX_CARDS:
+            raise MatrixError("Card limit reached.", 409)
         for group in reversed(groups):
             ids = {}
             for snap in group["deleted"]:
