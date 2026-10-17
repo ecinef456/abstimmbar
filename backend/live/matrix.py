@@ -30,7 +30,9 @@ The first half of this module is pure geometry; the services that read and
 write ``MatrixCard`` rows follow below.
 """
 import math
+from collections import Counter
 
+from django.core import signing
 from django.db import transaction
 
 from common.i18n_fields import translated_map
@@ -276,13 +278,17 @@ def _detach(card):
     """Take ``card`` out of its stack. A member just leaves; a top with
     members hands its position and its members to the oldest member. A card
     leaving (or promoted out of) a hidden top stays hidden — moderation must
-    not silently re-expose it."""
+    not silently re-expose it. A summary top (AI grouping) whose last member
+    leaves is deleted: it only summarises its stack."""
     with transaction.atomic():
         if card.stack_id:
-            if card.stack.hidden:
+            top = card.stack
+            if top.hidden:
                 card.hidden = True
             card.stack = None
             card.save(update_fields=["stack", "hidden"])
+            if top.summary and not top.members.exists():
+                top.delete()
             return
         members = list(card.members.order_by("created_at", "pk"))
         if not members:
@@ -370,6 +376,10 @@ def unstack_card(run, question, card_id):
         elif not card.members.exists():
             raise MatrixError("Card is not stacked.")
         _detach(card)
+        if card.summary:
+            # A summary top taken off its stack summarises nothing any more.
+            card.delete()
+            return None
         card.x, card.y = free_slot(run, question, card.zone, exclude_pk=card.pk)
         card.placed = False
         card.save(update_fields=["x", "y", "zone", "placed"])
@@ -427,7 +437,7 @@ def board_payload(run, question, presenter):
             "id": c.pk, "title": c.title, "description": c.description,
             "category": c.category, "zone": c.zone, "x": c.x, "y": c.y,
             "stack": c.stack_id, "hidden": c.hidden, "teacher": c.teacher,
-            "placed": c.placed,
+            "placed": c.placed, "summary": c.summary,
         })
     return {
         "cards": cards,
@@ -492,3 +502,181 @@ def settings_payload(question):
             "y_to": translated_map(question, "matrix_y_to"),
         },
     }
+
+
+# --- AI grouping: proposal simulation and signing ---------------------------
+#
+# ``live.ai_matrix`` builds the prompt and parses the reply into groups (cards
+# of one field that belong together, topped by a new summary card) and hints
+# (same content in different fields; display only). ``simulate_groups``
+# checks every group against the live board and previews the summary card;
+# the parsed proposal travels to the client signed (``sign_proposal``) so
+# apply can re-check it without trusting the client.
+
+PROPOSAL_SALT = "matrix-ai-proposal"
+PROPOSAL_MAX_AGE = 24 * 60 * 60  # seconds
+
+SKIP_UNKNOWN = "unknown"      # card deleted / never on this board
+SKIP_HIDDEN = "hidden"        # card (or its top) hidden
+SKIP_ZONES = "zones"          # cards in different fields
+SKIP_DUPLICATE = "duplicate"  # a card already belongs to an earlier group
+SKIP_TOO_FEW = "too_few"      # fewer than two distinct tops
+
+
+def _age(card):
+    return (card.created_at, card.pk)
+
+
+def _board(run, question):
+    """``(cards by id, members by top id)`` of the run's board."""
+    rows = list(_cards(run, question))
+    members = {}
+    for c in rows:
+        if c.stack_id:
+            members.setdefault(c.stack_id, []).append(c)
+    return {c.pk: c for c in rows}, members
+
+
+def _resolve_top(card, by_id):
+    """The visible top of ``card`` or a skip reason."""
+    if card is None:
+        return None, SKIP_UNKNOWN
+    top = by_id.get(card.stack_id) if card.stack_id else card
+    if top is None:
+        return None, SKIP_UNKNOWN
+    if card.hidden or top.hidden:
+        return None, SKIP_HIDDEN
+    return top, None
+
+
+def _group_category(question, cards):
+    """Most frequent valid category of ``cards``; tie -> the oldest card's;
+    "" when categories are off. Falls back to the first category."""
+    keys = category_keys(question)
+    if not keys:
+        return ""
+    counts = Counter(c.category for c in cards if c.category in keys)
+    if not counts:
+        return keys[0]
+    best = max(counts.values())
+    tied = {key for key, n in counts.items() if n == best}
+    return min((c for c in cards if c.category in tied), key=_age).category
+
+
+def _card_preview(card):
+    return {"id": card.pk, "title": card.title, "category": card.category}
+
+
+def simulate_groups(run, question, groups):
+    """Check the parsed ``groups`` (``ai_matrix.parse_reply``) against the
+    board; one preview dict per group in order: ``{index, status ("ok" |
+    "skip"), skip_reason?, zone, cards [{id, title, category}] (the distinct
+    tops), title, description, reason, top_summary_id?, category, x, y}``.
+    Member ids map to their top. A group is skipped when a card is unknown or
+    hidden, its tops lie in different zones, a top is already in an earlier
+    ok group, or it has fewer than two distinct tops. An existing summary top
+    in the group is kept (its title/description/category/position); else the
+    new summary card takes the oldest top's position and the most frequent
+    category of all cards incl. stack members (tie: the oldest card's)."""
+    by_id, members = _board(run, question)
+    used = set()
+    result = []
+    for group in groups:
+        tops, reason = [], None
+        for card_id in group["cards"]:
+            top, reason = _resolve_top(by_id.get(card_id), by_id)
+            if reason:
+                break
+            if top not in tops:
+                tops.append(top)
+        preview = {
+            "index": group["index"],
+            "status": "ok",
+            "zone": tops[0].zone if tops else None,
+            "cards": [_card_preview(t) for t in tops],
+            "title": group["title"],
+            "description": group.get("description", "") if question.matrix_descriptions else "",
+            "reason": group.get("reason", ""),
+        }
+        if not reason:
+            if len({t.zone for t in tops}) > 1:
+                reason = SKIP_ZONES
+            elif any(t.pk in used for t in tops):
+                reason = SKIP_DUPLICATE
+            elif len(tops) < 2:
+                reason = SKIP_TOO_FEW
+        if reason:
+            preview.update(status="skip", skip_reason=reason)
+            result.append(preview)
+            continue
+        used.update(t.pk for t in tops)
+        everyone = [
+            *tops,
+            *(m for t in tops for m in members.get(t.pk, []) if not m.hidden),
+        ]
+        summaries = [t for t in tops if t.summary]
+        if summaries:
+            anchor = min(summaries, key=_age)
+            preview.update(
+                top_summary_id=anchor.pk, title=anchor.title,
+                description=anchor.description, category=anchor.category,
+            )
+        else:
+            anchor = min(tops, key=_age)
+            preview["category"] = _group_category(question, everyone)
+        preview.update(x=anchor.x, y=anchor.y)
+        result.append(preview)
+    return result
+
+
+def simulate_hints(run, question, hints):
+    """The parsed ``hints`` with only valid ids (existing, visible; members
+    map to their top, duplicates dropped): ``{index, cards [{id, title,
+    category, zone}], reason}``. Hints whose cards no longer span at least
+    two zones are dropped."""
+    by_id, _ = _board(run, question)
+    result = []
+    for hint in hints:
+        tops = []
+        for card_id in hint["cards"]:
+            top, reason = _resolve_top(by_id.get(card_id), by_id)
+            if not reason and top not in tops:
+                tops.append(top)
+        if len({t.zone for t in tops}) < 2:
+            continue
+        result.append({
+            "index": hint["index"],
+            "cards": [{**_card_preview(t), "zone": t.zone} for t in tops],
+            "reason": hint.get("reason", ""),
+        })
+    return result
+
+
+def sign_proposal(run, question, groups, hints, malformed=0):
+    """Signed (not encrypted) parsed proposal for ai-apply, bound to run +
+    question, valid for PROPOSAL_MAX_AGE."""
+    return signing.dumps(
+        {"run": run.pk, "question": question.pk, "groups": groups, "hints": hints,
+         "malformed": malformed},
+        salt=PROPOSAL_SALT, compress=True,
+    )
+
+
+def unsign_proposal(run, question, blob):
+    """``(groups, hints, malformed)`` of a signed proposal; MatrixError (400)
+    when tampered, expired or made for another run/question."""
+    if not isinstance(blob, str):
+        raise MatrixError("Invalid proposal.")
+    try:
+        data = signing.loads(blob, salt=PROPOSAL_SALT, max_age=PROPOSAL_MAX_AGE)
+    except signing.SignatureExpired as error:
+        raise MatrixError("This proposal has expired.") from error
+    except signing.BadSignature as error:
+        raise MatrixError("Invalid proposal.") from error
+    if (
+        not isinstance(data, dict)
+        or data.get("run") != run.pk
+        or data.get("question") != question.pk
+    ):
+        raise MatrixError("Invalid proposal.")
+    return data.get("groups", []), data.get("hints", []), data.get("malformed", 0)

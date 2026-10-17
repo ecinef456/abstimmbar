@@ -241,7 +241,7 @@ def participant_payload(run, question):
         "multi": question.matrix_rating_multi,
         "cards": [
             {"id": c.pk, "title": c.title, "description": c.description,
-             "category": c.category, "zone": c.zone}
+             "category": c.category, "zone": c.zone, "summary": c.summary}
             for c in tops
         ],
     }
@@ -273,7 +273,7 @@ def ranking(question, cards, scores):
         result.append({
             "id": card["id"], "title": card["title"],
             "description": card["description"], "category": card["category"],
-            "zone": card["zone"], **score,
+            "zone": card["zone"], "summary": card.get("summary", False), **score,
         })
     result.sort(
         key=lambda r: (-(r["balance"] if updown else r["points"]), r["title"], r["id"])
