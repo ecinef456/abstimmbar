@@ -418,7 +418,8 @@ class MatrixCard(models.Model):
     hidden = models.BooleanField(default=False)
     teacher = models.BooleanField(default=False)
     # A presenter card created by the AI grouping on top of its stack; it is
-    # deleted when its stack is dissolved by hand (see ``live.matrix._detach``).
+    # deleted when its stack is dissolved by hand, unless rated (see
+    # ``live.matrix._detach``).
     summary = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

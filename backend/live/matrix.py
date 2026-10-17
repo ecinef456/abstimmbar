@@ -579,7 +579,9 @@ def simulate_groups(run, question, groups):
     """Check the parsed ``groups`` (``ai_matrix.parse_reply``) against the
     board; one preview dict per group in order: ``{index, status ("ok" |
     "skip"), skip_reason?, zone, cards [{id, title, category}] (the distinct
-    tops), title, description, reason, top_summary_id?, category, x, y}``.
+    tops), title, description, reason, top_summary_id?, category, anchor_id,
+    x, y, placed}`` (``anchor_id`` = the card whose position/``placed`` the
+    summary card takes).
     Member ids map to their top. A group is skipped when a card is unknown or
     hidden, its tops lie in different zones, a top is already in an earlier
     ok group, or it has fewer than two distinct tops. An existing summary top
@@ -632,7 +634,7 @@ def simulate_groups(run, question, groups):
         else:
             anchor = min(tops, key=_age)
             preview["category"] = _group_category(question, everyone)
-        preview.update(x=anchor.x, y=anchor.y)
+        preview.update(anchor_id=anchor.pk, x=anchor.x, y=anchor.y, placed=anchor.placed)
         result.append(preview)
     return result
 
@@ -671,14 +673,14 @@ def sign_proposal(run, question, groups, hints, malformed=0):
 
 
 def unsign_proposal(run, question, blob):
-    """``(groups, hints, malformed)`` of a signed proposal; MatrixError (400)
-    when tampered, expired or made for another run/question."""
+    """``(groups, hints, malformed)`` of a signed proposal; MatrixError 400
+    when tampered or made for another run/question, 409 when expired."""
     if not isinstance(blob, str):
         raise MatrixError("Invalid proposal.")
     try:
         data = signing.loads(blob, salt=PROPOSAL_SALT, max_age=PROPOSAL_MAX_AGE)
     except signing.SignatureExpired as error:
-        raise MatrixError("This proposal has expired.") from error
+        raise MatrixError("This proposal has expired.", 409) from error
     except signing.BadSignature as error:
         raise MatrixError("Invalid proposal.") from error
     if (
@@ -748,7 +750,7 @@ def _apply_group(run, question, preview, edit):
         top = MatrixCard.objects.create(
             run=run, question=question, token=None, teacher=True, summary=True,
             zone=preview["zone"], x=preview["x"], y=preview["y"],
-            title=title or preview["title"],
+            placed=preview["placed"], title=title or preview["title"],
             description=(
                 (preview["description"] if description is None else description)
                 if question.matrix_descriptions else ""
@@ -787,11 +789,12 @@ def apply_groups(run, question, groups, selected, edits):
     other card/stack of the group under it. ``edits``: ``{index: {title?,
     description?, category?}}`` for the new summary cards (title validated
     like a presenter card — 400; an invalid category falls back to the
-    proposal's). Refused while rating (409). Returns ``{applied: [index],
-    skipped: [{index, reason}], undo}``."""
+    proposal's; edits of a group that keeps an existing summary top are
+    ignored). Refused while rating (409); allowed on a finished run, like
+    the mind map's ai-apply and manual stack moderation. Returns
+    ``{applied: [index], skipped: [{index, reason}], undo}``."""
     chosen = sorted(set(selected))
     by_index = {g["index"]: g for g in groups}
-    prepared = {i: _ai_edit(question, edits.get(i) or {}) for i in chosen}
     with transaction.atomic():
         _lock_run(run)
         _lock_stacks(run, question)
@@ -806,7 +809,11 @@ def apply_groups(run, question, groups, selected, edits):
             if reason:
                 skipped.append({"index": index, "reason": reason})
                 continue
-            entry = _apply_group(run, question, preview, prepared[index])
+            edit = (
+                (None, None, None) if "top_summary_id" in preview
+                else _ai_edit(question, edits.get(index) or {})
+            )
+            entry = _apply_group(run, question, preview, edit)
             count += int(entry["created"]) - len(entry["deleted"])
             applied.append(index)
             undo.append(entry)

@@ -9304,14 +9304,13 @@ class MatrixAiSimulateTests(MatrixTestCase):
             mxs.unsign_proposal(self.run, other_q, blob)
 
     def test_expired(self):
-        from django.core import signing
-
         blob = mxs.sign_proposal(self.run, self.xq, [], [], 0)
-        expired = signing.SignatureExpired("old")
-        with patch.object(signing, "loads", side_effect=expired), \
+        later = timezone.now() + timezone.timedelta(hours=25)
+        with patch("django.core.signing.time.time", return_value=later.timestamp()), \
                 self.assertRaises(MatrixError) as cm:
             mxs.unsign_proposal(self.run, self.xq, blob)
-        self.assertEqual(cm.exception.status, 400)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertIn("expired", cm.exception.detail)
 
 
 class MatrixAiApplyTests(MatrixTestCase):
@@ -9510,6 +9509,54 @@ class MatrixAiApplyTests(MatrixTestCase):
         with self.assertRaises(MatrixError) as cm:
             mxs.undo_groups(self.run, self.xq, undo)
         self.assertEqual(cm.exception.status, 409)
+
+    def test_new_summary_inherits_placed(self):
+        mxs.move_card(self.run, self.xq, self.a.pk, 0.7, 0.7)
+        self.a.refresh_from_db()
+        self.apply(self.groups([self.a, self.b]))
+        top = MatrixCard.objects.get(run=self.run, summary=True)
+        self.assertTrue(top.placed)
+        self.assertEqual((top.x, top.y), (self.a.x, self.a.y))
+        self.apply(self.groups([self.d, self.e]))
+        self.assertFalse(MatrixCard.objects.get(run=self.run, summary=True, zone="q2").placed)
+
+    def test_limit_skip(self):
+        old = self.summary()
+        self.stacked(old, self.c)
+        count = MatrixCard.objects.filter(run=self.run).count()
+        with patch.object(mxs, "MATRIX_MAX_CARDS", count):
+            result = self.apply(self.groups([self.a, self.b]))
+            self.assertEqual(result["skipped"], [{"index": 0, "reason": "limit"}])
+            # Keeping an existing summary needs no new card.
+            [g] = self.groups([self.c, self.a])
+            self.assertEqual(self.apply([g])["applied"], [0])
+
+    def test_edits_ignored_when_summary_kept(self):
+        old = self.summary()
+        self.stacked(old, self.c)
+        result = self.apply(self.groups([self.c, self.a]), edits={0: {"title": "x" * 99}})
+        self.assertEqual(result["applied"], [0])
+        old.refresh_from_db()
+        self.assertEqual(old.title, "Old")
+
+    def test_undo_refused_when_created_summary_rated(self):
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        top = MatrixCard.objects.get(run=self.run, summary=True)
+        MatrixRating.objects.create(card=top, token=self.tok, value=1)
+        before = self.snapshot()
+        with self.assertRaises(MatrixError) as cm:
+            mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_undo_expired(self):
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        later = timezone.now() + timezone.timedelta(hours=25)
+        with patch("django.core.signing.time.time", return_value=later.timestamp()), \
+                self.assertRaises(MatrixError) as cm:
+            mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertTrue(MatrixCard.objects.filter(summary=True).exists())
 
     def test_undo_invalid(self):
         undo = self.apply(self.groups([self.a, self.b]))["undo"]
