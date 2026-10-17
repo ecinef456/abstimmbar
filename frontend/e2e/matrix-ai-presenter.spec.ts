@@ -206,7 +206,8 @@ test('propose (mocked), edit, hint highlight, apply → summary card, undo, undo
   const top = card(page, summary.id);
   await expect(top).toHaveAttribute('data-summary', 'true');
   await expect(top.locator('[data-card-summary]')).toHaveText('Zusammenfassung');
-  await expect(top.getByTestId('matrix-stack-badge')).toHaveText('×4');
+  // The badge counts the cards beneath the summary card.
+  await expect(top.getByTestId('matrix-stack-badge')).toHaveText('×3');
   await expect(card(page, ids.podcast).locator('[data-card-summary]')).toHaveCount(0);
   await shot(page, 'mx-ai-applied');
 
@@ -229,15 +230,60 @@ test('propose (mocked), edit, hint highlight, apply → summary card, undo, undo
   await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/unstack`, { card: ids.chatbot2 });
   await panel(page).getByRole('button', { name: 'Rückgängig' }).click();
   await expect(panel(page).getByRole('alert')).toContainText('Rückgängig ist nicht mehr möglich');
+  // A refused undo is gone for good: the button disappears, the message stays.
+  await expect(panel(page).getByRole('button', { name: 'Rückgängig' })).toHaveCount(0);
+  await expect(panel(page).getByRole('alert')).toBeVisible();
   expect((await s.cards()).some((c) => c.id === again.id)).toBe(true);
 
-  // Closing the panel drops the undo step.
+  // Closing the panel; the summary card on the board passes axe (violet
+  // label on the category tint).
   await page.keyboard.press('Escape');
   await expect(panel(page)).not.toBeInViewport();
   await page.waitForTimeout(1200); // the new-card flash is over
+  await expectNoAxe(page);
   await shot(page, 'mx-ai-board');
-  await handle(page).click();
-  await expect(panel(page).getByRole('button', { name: 'Rückgängig' })).toHaveCount(0);
+});
+
+test('keyboard opening focuses the level; skipped groups keep the edited title; category fallback', async ({
+  page,
+  trackRoom,
+}) => {
+  test.setTimeout(90_000);
+  await login(page);
+  const s = await seed(page, trackRoom);
+  const { ids } = s;
+  const body = signedProposal(s.runId, s.questionId, [
+    { cards: [ids.chatbot, ids.chatbot2], title: 'Chatbot' },
+    { cards: [ids.assistant, ids.altlast], title: 'Assistenz' },
+  ]) as { groups: { category?: string }[] };
+  // A preview whose category is not one of the question's (e.g. categories
+  // changed meanwhile): the select shows the first category and sends it.
+  body.groups[1].category = '';
+  await page.route(/\/api\/runs\/\d+\/matrix\/\d+\/ai-propose$/, (route) => route.fulfill({ json: body }));
+  await openPresenter(page, s.room.setId);
+
+  await handle(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(panel(page).getByRole('radio', { name: 'Inhaltlich gleich' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(panel(page).getByRole('radio', { name: 'Konzeptionell ähnlich' })).toBeFocused();
+  await expect(panel(page).getByRole('radio', { name: 'Konzeptionell ähnlich' })).toBeChecked();
+
+  await panel(page).getByRole('button', { name: 'Vorschlag holen' }).click();
+  const groups = panel(page).getByTestId('mx-ai-group');
+  await expect(groups).toHaveCount(2);
+  const category = groups.nth(1).getByRole('combobox', { name: 'Kategorie der Sammelkarte' });
+  await expect(category).toHaveValue('blue');
+  await expect(category.locator('option:checked')).toHaveText('Idee');
+  await groups.nth(1).getByRole('textbox', { name: 'Titel der Sammelkarte' }).fill('Assistenz-Ideen');
+  // Meanwhile a card of the second group is hidden → skipped on apply.
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/hide`, { card: ids.altlast, hidden: true });
+  const applied = page.waitForResponse((r) => /\/ai-apply$/.test(r.url()));
+  await panel(page).getByRole('button', { name: 'Übernehmen (2)' }).click();
+  const req = (await applied).request().postDataJSON();
+  expect(req.edits['1']).toMatchObject({ title: 'Assistenz-Ideen', category: 'blue' });
+  const toast = page.getByRole('status').filter({ hasText: '1 Vorschlag übernommen' });
+  await expect(toast).toContainText('Übersprungen: Assistenz-Ideen – Eine Karte ist ausgeblendet.');
 });
 
 test('AI error and too few cards', async ({ page, trackRoom }) => {

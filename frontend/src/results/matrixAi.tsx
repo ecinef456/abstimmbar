@@ -29,7 +29,7 @@ import type {
 } from "../api";
 import { AI_MARK } from "./MindMap";
 import { matrixStacks } from "./Matrix";
-import { requestDetail } from "./mindmapModeration";
+import { requestBody, requestDetail } from "./mindmapModeration";
 
 const TITLE_MAX = 60;
 const DESCRIPTION_MAX = 200;
@@ -105,6 +105,11 @@ export function useMatrixAi({
   }, [rating]);
 
   const tops = matrixStacks(board.cards).filter((s) => !s.card.hidden).length;
+  const withCategory = settings.category_mode !== "off" && settings.categories.length > 0;
+  /** The category the select shows (and apply sends): the proposal's when it
+   *  is one of the question's, else the first. */
+  const shownCategory = (key: string | undefined) =>
+    !withCategory ? "" : settings.categories.some((c) => c.key === key) ? key! : settings.categories[0].key;
   const blockedReason = rating ? RATING_LOCK : tops < 3 ? "At least 3 cards are needed." : null;
 
   const propose = async () => {
@@ -120,7 +125,7 @@ export function useMatrixAi({
       const edits: Record<number, MatrixAiEdit> = {};
       for (const g of res.groups) {
         if (g.status === "ok" && g.top_summary_id == null) {
-          edits[g.index] = { title: g.title, description: g.description, category: g.category ?? "" };
+          edits[g.index] = { title: g.title, description: g.description, category: shownCategory(g.category) };
         }
       }
       setProposal({
@@ -145,7 +150,6 @@ export function useMatrixAi({
   const edit = (index: number, change: Partial<MatrixAiEdit>) =>
     setProposal((p) => p && { ...p, edits: { ...p.edits, [index]: { ...p.edits[index], ...change } } });
 
-  const withCategory = settings.category_mode !== "off" && settings.categories.length > 0;
   const emptyTitle = !!proposal?.selected.some((i) => proposal.edits[i] && !proposal.edits[i].title.trim());
 
   const apply = async () => {
@@ -168,7 +172,9 @@ export function useMatrixAi({
       if (mine !== seq.current) return;
       showBoard(res.matrix);
       setUndo(res.applied.length > 0 ? res.undo : null);
-      const title = (i: number) => proposal.groups.find((g) => g.index === i)?.title ?? "";
+      // The title as the presenter edited it (else the proposal's).
+      const title = (i: number) =>
+        proposal.edits[i]?.title.trim() || proposal.groups.find((g) => g.index === i)?.title || "";
       notify(
         [
           res.applied.length > 0
@@ -204,7 +210,11 @@ export function useMatrixAi({
       setUndo(null);
       notify(t("The grouping was undone."));
     } catch (err) {
-      if (mine === seq.current) setError(requestDetail(err));
+      if (mine !== seq.current) return;
+      setError(requestDetail(err));
+      // The server refused (stack changed, expired): this step is gone for
+      // good — only a network error leaves "Undo" to try again.
+      if (requestBody(err)) setUndo(null);
     } finally {
       if (mine === seq.current) setBusy(null);
     }

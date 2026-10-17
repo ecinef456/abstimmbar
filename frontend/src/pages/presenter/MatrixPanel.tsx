@@ -659,7 +659,16 @@ export default function MatrixPanel({
               if (ai.open) ai.close();
               else {
                 ai.setOpen(true);
-                if (byKeyboard) focusFirstIn(aiDrawerRef);
+                // Keyboard: the chosen level (else the first control).
+                if (byKeyboard)
+                  window.requestAnimationFrame(() =>
+                    window.requestAnimationFrame(() =>
+                      (
+                        aiDrawerRef.current?.querySelector<HTMLElement>("[role='radio'][aria-checked='true']") ??
+                        aiDrawerRef.current?.querySelector<HTMLElement>("button")
+                      )?.focus({ preventScroll: true }),
+                    ),
+                  );
               }
             }}
             aria-label={t("AI grouping")}
