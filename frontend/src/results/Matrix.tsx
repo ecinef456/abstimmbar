@@ -266,6 +266,28 @@ export function matrixStacks(cards: MatrixCard[]): MatrixStack[] {
 export const stackSize = (stack: MatrixStack) =>
   1 + stack.members.filter((m) => !m.hidden).length;
 
+/** Number shown for a stack ("×n", "stack of n"): an AI summary card on top
+ *  only summarises — it counts the cards beneath it, not itself. */
+export const stackCount = (stack: MatrixStack) => stackSize(stack) - (stack.card.summary ? 1 : 0);
+
+/** "Summary" mark of an AI summary card (sparkles + label), sized by the
+ *  surrounding text (em). `dark`: also the light ink for dark surfaces
+ *  (management UI only — the beamer stays light). */
+export function MatrixSummaryMark({ dark, className = "" }: { dark: boolean; className?: string }) {
+  const { t } = useTranslation();
+  return (
+    <span
+      data-card-summary=""
+      className={`items-center gap-[0.25em] font-semibold text-[oklch(0.42_0.17_290)] ${
+        dark ? "dark:text-[oklch(0.82_0.11_290)]" : ""
+      } ${className}`}
+    >
+      <Sparkles aria-hidden className="h-[1em] w-[1em] flex-none" />
+      {t("Summary")}
+    </span>
+  );
+}
+
 function useBox<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [box, setBox] = useState<Box | null>(null);
@@ -893,13 +915,7 @@ export default function Matrix({
                 >
                   {card.summary && (
                     // AI summary card: symbol + label above the title.
-                    <span
-                      data-card-summary=""
-                      className={`mb-[0.15em] flex items-center gap-[0.25em] text-[0.7em] font-semibold text-[oklch(0.42_0.17_290)] ${dk("dark:text-[oklch(0.8_0.12_290)]")}`}
-                    >
-                      <Sparkles aria-hidden className="h-[1em] w-[1em] flex-none" />
-                      {t("Summary")}
-                    </span>
+                    <MatrixSummaryMark dark={results} className="mb-[0.15em] flex text-[0.7em]" />
                   )}
                   <span className={`flex items-start gap-[0.3em] ${narrow ? "flex-wrap" : ""}`}>
                     <span data-card-title className="line-clamp-2 min-w-0 font-semibold [overflow-wrap:anywhere]">
@@ -910,7 +926,7 @@ export default function Matrix({
                         data-testid="matrix-stack-badge"
                         className="ml-auto flex-none rounded-full bg-slate-800 px-1.5 text-[0.7em] font-semibold text-white"
                       >
-                        ×{n}
+                        ×{stackCount(stack)}
                       </span>
                     )}
                   </span>

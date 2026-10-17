@@ -66,3 +66,21 @@ export function signedProposal(
   if (!line) throw new Error(`No proposal from the backend: ${out}`);
   return JSON.parse(line.slice(2));
 }
+
+/** Apply AI groups for real (signed via `signedProposal`, then ai-apply as
+ *  the presenter): the summary cards exist without any UI or LLM. Returns
+ *  the ai-apply body (`applied`, `skipped`, `undo`, `matrix`). */
+export async function applySummary(
+  api: { post: (url: string, body?: unknown) => Promise<any> },
+  runId: number,
+  questionId: number,
+  groups: ParsedGroup[],
+  edits: Record<number, { title?: string; description?: string; category?: string }> = {},
+) {
+  const body = signedProposal(runId, questionId, groups);
+  return api.post(`/api/runs/${runId}/matrix/${questionId}/ai-apply`, {
+    proposal: body.proposal,
+    selected: groups.map((_, i) => i),
+    edits,
+  });
+}

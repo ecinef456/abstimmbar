@@ -8,7 +8,7 @@
 import { useTranslation } from "react-i18next";
 import type { MatrixBoard, MatrixSettingsPayload } from "../api";
 import { categoryLabel } from "../matrixPalette";
-import { matrixStacks, matrixZoneName, stackSize } from "./Matrix";
+import { MatrixSummaryMark, matrixStacks, matrixZoneName, stackCount } from "./Matrix";
 import { ZONES } from "./matrixGeometry";
 
 export default function MatrixList({
@@ -53,6 +53,7 @@ export default function MatrixList({
                         {category}
                       </span>
                     )}
+                    {c.summary && <MatrixSummaryMark dark className="mr-1.5 inline-flex text-xs" />}
                     <span className="font-medium [overflow-wrap:anywhere]">{c.title}</span>
                     {c.description && (
                       <span className="text-slate-600 dark:text-slate-300"> – {c.description}</span>
@@ -64,7 +65,7 @@ export default function MatrixList({
                     )}
                     {!top && stack.members.length > 0 && (
                       <span className="ml-1.5 text-xs text-slate-500 dark:text-slate-400">
-                        {t("stack of {{n}}", { n: stackSize(stack) })}
+                        {t("stack of {{n}}", { n: stackCount(stack) })}
                       </span>
                     )}
                     {c.teacher && (

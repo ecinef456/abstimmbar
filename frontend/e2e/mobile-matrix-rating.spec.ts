@@ -7,6 +7,7 @@ import type { Page, APIRequestContext } from '@playwright/test';
 import { test, expect, API_BASE_URL, deleteRooms } from './fixtures';
 import { AUTH, apiClient, control, createMatrixQuestion, createRoomWithQuestions, joinParticipants, startRun } from './helpers/seed';
 import { expectNoHorizontalOverflow } from './helpers/layout';
+import { applySummary } from './helpers/matrixAi';
 
 const SHOTS = process.env.MATRIX_RATING_SHOTS ?? '';
 
@@ -140,6 +141,51 @@ for (const scheme of ['light', 'dark'] as const) {
         await expectNoHorizontalOverflow(page, `matrix rating closed (${scheme})`);
       } finally {
         await page.close();
+        await deleteRooms(demoApi, created);
+        await demoApi.dispose();
+      }
+    });
+
+    test('an AI summary card is marked in the rating list', async ({ page, playwright }) => {
+      test.setTimeout(120_000);
+      const demoApi = await playwright.request.newContext({ storageState: AUTH.demo });
+      const created: number[] = [];
+      try {
+        const room = await createRoomWithQuestions(demoApi, [], 'Matrix', (id) => created.push(id), 'E2E Matrix');
+        const api = apiClient(demoApi);
+        const questionId = await createMatrixQuestion(api, room.setId, {
+          matrix_max_per_person: 3, matrix_rating_mode: 'points', matrix_rating_budget: 3,
+        });
+        const runId = await startRun(api, room.setId);
+        await control(api, runId, 'open', questionId);
+        const tokens = await joinParticipants(demoApi, room.code, 2);
+        const csrf = (await demoApi.storageState()).cookies.find((c) => c.name === 'abstimmbar_csrftoken')?.value ?? '';
+        const add = async (token: string, zone: string, title: string, category: string) => {
+          const response = await demoApi.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/add/`, {
+            data: { token, question: questionId, zone, title, category, description: '' },
+            headers: { 'X-CSRFToken': csrf },
+          });
+          expect(response.ok(), await response.text()).toBeTruthy();
+          return (await response.json()).card_id as number;
+        };
+        const a = await add(tokens[0], 'q1', 'Chatbot', 'blue');
+        const b = await add(tokens[1], 'q1', 'Chat-Bot', 'blue');
+        await add(tokens[0], 'q3', 'Altlast', 'orange');
+        await applySummary(api, runId, questionId, [{ cards: [a, b], title: 'Chatbots' }]);
+        await api.post(`/api/runs/${runId}/matrix/${questionId}/stage`, { stage: 'rate' });
+        await page.goto(`${API_BASE_URL}/p/${room.code}/`);
+        const list = page.locator('#mx-rate-list');
+        await expect(list.locator('li')).toHaveCount(2);
+        const mark = row(page, 'Chatbots').locator('.mx-rsum');
+        await expect(mark).toBeVisible();
+        await expect(mark).toHaveText('Zusammenfassung');
+        await expect(mark.locator('svg')).toHaveAttribute('aria-hidden', 'true');
+        await expect(row(page, 'Altlast').locator('.mx-rsum')).toHaveCount(0);
+        await expectNoHorizontalOverflow(page);
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/participant-summary-${scheme}.png`, fullPage: true });
+        const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+        expect(violations.map((v) => v.id)).toEqual([]);
+      } finally {
         await deleteRooms(demoApi, created);
         await demoApi.dispose();
       }

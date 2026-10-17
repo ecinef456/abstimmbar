@@ -630,6 +630,10 @@ msgid "Your card"
 msgstr "Ihre Karte"
 
 #: live/templates/live/participant.html
+msgid "Summary"
+msgstr "Zusammenfassung"
+
+#: live/templates/live/participant.html
 msgid "This card is no longer available."
 msgstr "Diese Karte ist nicht mehr verfügbar."
 

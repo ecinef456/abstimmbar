@@ -417,6 +417,49 @@ test('rating section: mode, budget, switches persist; plus/minus hides the multi
   expect((await api.get(`/api/questions/${q}/`)).matrix_rating_mode).toBe('');
 });
 
+test('AI switch (grouping on the beamer) persists; hidden without AI or in easy mode', async ({ page, trackRoom }) => {
+  const seed = await createRoomWithQuestions(page.request, [], 'Matrix', trackRoom, 'E2E Matrix');
+  const api = apiClient(page.request);
+  const q = await createMatrixQuestion(api, seed.setId);
+  const whoami = (patch: Record<string, unknown>) =>
+    page.route(/\/api\/whoami\/(\?.*)?$/, async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const response = await route.fetch();
+      const json = await response.json();
+      if (json.username) Object.assign(json, { onboarding_tour_seen: true, easy_mode: false }, patch);
+      await route.fulfill({ response, json });
+    });
+  await whoami({ ai_enabled: true });
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  const toggle = page.getByRole('switch', { name: 'KI-Funktionen aktivieren' });
+  await expect(page.getByText('Karten mit KI zusammenfassen (Präsentation)')).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByText(/welche Karten eines Feldes zusammengehören/)).toBeVisible();
+  await toggle.click();
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  expect((await api.get(`/api/questions/${q}/`)).wordcloud_ai_enabled).toBe(true);
+
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await toggle.click();
+  await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/sets/${seed.setId}$`));
+  expect((await api.get(`/api/questions/${q}/`)).wordcloud_ai_enabled).toBe(false);
+
+  // No AI configured / easy mode: no switch.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await whoami({ ai_enabled: false });
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  await expect(page.getByRole('group', { name: 'Bewertungsphase' })).toBeVisible();
+  await expect(toggle).toHaveCount(0);
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await whoami({ ai_enabled: true, easy_mode: true });
+  await page.goto(`/sets/${seed.setId}/questions/${q}`);
+  await expect(page.locator('[data-tour="question.editor"]')).toBeVisible();
+  await expect(toggle).toHaveCount(0);
+});
+
 test('a superseded load of the question does not overwrite the author\'s edits', async ({
   page,
   trackRoom,

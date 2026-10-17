@@ -219,6 +219,10 @@ Sie übernehmen.
   KI schlägt Einzel-, Mehrfachauswahl- und Freitextfragen vor.
 - **Wortwolke optimieren** — Rechtschreibung und Synonyme zusammenführen,
   thematisch gruppieren.
+- **Matrix-Karten zusammenfassen** — in der Präsentation einer
+  Vier-Felder-Matrix gleiche oder ähnliche Karten eines Feldes unter einer
+  Sammelkarte stapeln (Schalter **KI-Funktionen aktivieren** im Editor der
+  Frage; siehe Abschnitt 8).
 - **Freitext auswerten (live)** — offene Antworten automatisch in 2–5 selbst
   gewählte Kategorien einordnen.
 - **Kurzbericht erstellen** — eine kompakte Zusammenfassung der Ergebnisse.
@@ -391,6 +395,35 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     verschiebt nur die Karte; Teilnehmende können keine Karten ergänzen oder
     zurücknehmen); Verschieben und Ausblenden bleiben möglich. **Zurück zum
     Sammeln** öffnet das Brett wieder; die Bewertungen bleiben erhalten.
+  - **KI-Zusammenfassen (Experten-Modus):** Ist die KI an Ihrer Hochschule
+    eingerichtet und haben Sie im Editor bei der Matrix **KI-Funktionen
+    aktivieren** eingeschaltet, erscheint unter dem Stift ein **Stern**. Dort
+    wählen Sie zuerst, wie streng die KI vorgeht: **Nur Schreibweise**
+    (Tippfehler, Groß-/Kleinschreibung, Singular/Plural), **Inhaltlich gleich**
+    (gleicher Inhalt in anderen Worten) oder **Konzeptionell ähnlich**
+    (gemeinsames Thema). **Vorschlag holen** (ab drei Karten, nicht während
+    der Bewertung) zeigt die vorgeschlagenen Gruppen – immer nur Karten
+    **desselben Feldes**. Jede Gruppe bekommt eine **Sammelkarte**: Titel
+    (und, wenn eingeschaltet, Beschreibung und Kategorie) schlägt die KI vor,
+    Sie können sie vor dem Übernehmen ändern. Die Sammelkarte liegt oben auf
+    dem Stapel, an der Stelle der ältesten Karte; die übrigen Karten liegen
+    darunter. Gibt es in einer Gruppe schon eine Sammelkarte, bleibt sie
+    (keine zweite). Gruppen, die nicht mehr zum Brett passen (Karte
+    ausgeblendet, in verschiedenen Feldern …), sind ausgegraut und nennen den
+    Grund. Unter **Inhaltlich gleich, aber unterschiedlich eingeordnet**
+    nennt die KI gleiche Inhalte in verschiedenen Feldern – **Zeigen** hebt
+    diese Karten auf dem Brett hervor, geändert wird dabei nichts – ein guter
+    Anlass zur Diskussion. **Übernehmen** stapelt alle angehakten Gruppen in
+    einem Schritt; **Rückgängig** im Panel nimmt genau diesen Schritt zurück,
+    solange Sie das Panel nicht schließen und den Stapel nicht von Hand
+    verändert haben. Sammelkarten tragen auf dem Beamer, auf der
+    Ergebnisseite und in der Bewertungsliste der Teilnehmenden einen Stern
+    und „Zusammenfassung“; sie lassen sich bewerten wie jede andere Karte,
+    und die Zahl am Stapel („×3“) zählt nur die Karten darunter. Lösen Sie
+    einen Stapel von Hand ganz auf, verschwindet seine Sammelkarte. An das
+    KI-Modell gehen nur Inhalte – Frage, Achsen, Feldnamen und die Karten
+    (Titel, Beschreibung, Kategorie) –, keine Namen oder sonstigen Daten der
+    Teilnehmenden.
 - **Wortwolken bearbeiten (Experten-Modus):** Ziehen Sie einen Begriff auf
   einen anderen, um beide zusammenzuführen; mit × blenden Sie einen Begriff aus.
   Der Stift am rechten Rand öffnet die Liste zum Wiederherstellen, Trennen und
@@ -424,7 +457,8 @@ Fragenset über **„Ergebnisse"**. Dort können Sie:
 
 - die Auswertung je Frage einsehen (inkl. Wortwolke, Likert-Balken, Prioritäten,
   Sortierung und Vier-Felder-Matrix – dort als Brett und als Liste der Karten
-  nach Feldern gruppiert; ausgeblendete Karten sind markiert; mit
+  nach Feldern gruppiert; ausgeblendete Karten und KI-Sammelkarten
+  („Zusammenfassung“) sind markiert; mit
   Bewertung zusätzlich Balken an den Karten und eine Rangliste – solange die
   Bewertung noch verborgen läuft, erscheint stattdessen ein Hinweis);
   richtige Antworten sind hier immer grün mit „Richtig“ markiert,

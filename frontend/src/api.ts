@@ -232,6 +232,8 @@ export type MatrixRankingEntry = {
   description: string;
   category: string;
   zone: string;
+  /** An AI summary card. */
+  summary?: boolean;
 } & ({ points: number } | { up: number; down: number; balance: number });
 
 /** Rating phase of a matrix question (present only with a rating mode).

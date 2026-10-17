@@ -1260,5 +1260,7 @@
   "Highlight": "Zeigen",
   "Apply ({{n}})": "Übernehmen ({{n}})",
   "Every summary card needs a title.": "Jede Sammelkarte braucht einen Titel.",
-  "Summary": "Zusammenfassung"
+  "Summary": "Zusammenfassung",
+  "Group cards with AI (presentation)": "Karten mit KI zusammenfassen (Präsentation)",
+  "In presentation mode, the star below the pencil asks the AI which cards of a field belong together. You check the proposal, edit the summary cards and decide what to apply.": "In der Präsentation fragt der Stern unter dem Stift die KI, welche Karten eines Feldes zusammengehören. Sie prüfen den Vorschlag, bearbeiten die Sammelkarten und entscheiden, was übernommen wird."
 }
