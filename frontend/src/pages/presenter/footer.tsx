@@ -85,6 +85,10 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   next: { name: "Next question", text: "Moves on to the next question.", keys: "→" },
   help: { name: "Help", text: "Labels every control.", keys: "? / H" },
   "handle.moderate": { name: "Moderate", text: "Hide, merge or restore entries." },
+  "handle.mm-moderate": {
+    name: "Moderate",
+    text: "Show hidden terms again; reset single merges, moves, renames and AI changes.",
+  },
   "handle.ai": { name: "AI settings", text: "AI on/off and how it merges or groups." },
   "handle.mm-ai": { name: "AI mind map", text: "Let AI tidy up the mind map." },
   "handle.zoom": { name: "Zoom", text: "Zoom, fit, compact or detailed.", keys: "+ − 0" },
