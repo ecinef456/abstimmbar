@@ -500,6 +500,65 @@ class ControlTests(LiveTestCase):
         self.assertEqual(MatrixPhase.objects.get(run=run).stage, MatrixPhase.Stage.RATE)
         self.assertEqual(MindmapPhase.objects.get(run=run).stage, MindmapPhase.Stage.RATE)
 
+    def _away_on(self, kind, **fields):
+        """A run of the current session on a ``kind`` question, left via ✕
+        while open (the vote closes)."""
+        self.login()
+        question = Question.objects.create(
+            question_set=self.question_set, kind=kind, text="<p>Q</p>", **fields,
+        )
+        run = self.open_question(question)
+        Run.objects.filter(pk=run.pk).update(opened_at=timezone.now())
+        response = self.client.post(
+            f"/api/runs/{run.pk}/control/", {"away": True}, content_type="application/json",
+        )
+        self.assertEqual(response.json()["phase"], Run.Phase.CLOSED)
+        return run, question
+
+    def _resume(self):
+        self.client.post(
+            f"/api/question-sets/{self.question_set.pk}/start-run/",
+            {"existing": "continue"},
+            content_type="application/json",
+        )
+
+    def test_recent_resume_shows_the_matrix_board(self):
+        # Re-entering after ✕ on a matrix: the board (results phase, as after
+        # Stop), not the bare question with "voting closed".
+        run, _ = self._away_on(Question.Kind.MATRIX)
+        self._resume()
+        run.refresh_from_db()
+        self.assertEqual(run.phase, Run.Phase.RESULTS)
+        self.assertFalse(run.presenter_away)
+
+    def test_recent_resume_shows_the_mind_map(self):
+        run, _ = self._away_on(Question.Kind.MINDMAP)
+        self._resume()
+        run.refresh_from_db()
+        self.assertEqual(run.phase, Run.Phase.RESULTS)
+
+    def test_recent_resume_keeps_a_closed_matrix_rating(self):
+        # A closed rating with hidden scores already shows the board; results
+        # would reveal the scores.
+        run, question = self._away_on(Question.Kind.MATRIX, matrix_rating_mode="updown")
+        MatrixPhase.objects.create(run=run, question=question, stage=MatrixPhase.Stage.RATE)
+        self._resume()
+        run.refresh_from_db()
+        self.assertEqual(run.phase, Run.Phase.CLOSED)
+
+    def test_recent_resume_keeps_a_closed_mind_map_rating(self):
+        run, question = self._away_on(Question.Kind.MINDMAP, mindmap_rating_mode="updown")
+        MindmapPhase.objects.create(run=run, question=question, stage=MindmapPhase.Stage.RATE)
+        self._resume()
+        run.refresh_from_db()
+        self.assertEqual(run.phase, Run.Phase.CLOSED)
+
+    def test_recent_resume_keeps_other_closed_questions(self):
+        run, _ = self._away_on(Question.Kind.SINGLE_CHOICE)
+        self._resume()
+        run.refresh_from_db()
+        self.assertEqual(run.phase, Run.Phase.CLOSED)
+
     def test_easy_mode_archives_when_last_run_another_day(self):
         # Effective easy mode + no explicit ``existing``: a finished run from
         # a previous calendar day is kept as an archive, a fresh run starts.

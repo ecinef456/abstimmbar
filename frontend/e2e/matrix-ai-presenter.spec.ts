@@ -4,7 +4,8 @@
  *  description / category, skipped groups with their reason, hints with a
  *  board highlight — "Übernehmen" (summary card marked on the board),
  *  "Rückgängig" (also refused once a stack changed), the cross-field switch
- *  (moved cards, no hints), errors, the rating lock, help labels, axe.
+ *  (moved cards, no hints), errors, the rating lock, help labels, axe; and
+ *  re-entering the presentation after ✕ shows the board.
  *
  *  Never calls the LLM: `/ai-propose` is route-mocked with a body the
  *  backend simulated and signed itself (`helpers/matrixAi.ts`), so apply
@@ -364,6 +365,22 @@ test('cross-field switch: sent per request, moved cards marked, no hints, apply 
   server = await s.cards();
   expect(server.find((c) => c.id === ids.assistant)).toMatchObject({ stack: null, zone: 'q3' });
   expect(server.some((c) => c.summary)).toBe(false);
+});
+
+test('re-entering a running presentation after ✕ shows the board', async ({ page, trackRoom }) => {
+  await login(page);
+  const s = await seed(page, trackRoom);
+  // Open phase: the board is current anyway.
+  await openPresenter(page, s.room.setId);
+  await expect(card(page, s.ids.chatbot)).toBeVisible();
+  // ✕ closes the vote (presenter away); re-entering in the same session
+  // lands on the board, not on the bare question with "voting closed".
+  await s.api.post(`/api/runs/${s.runId}/control/`, { away: true });
+  await page.goto('/');
+  await page.goto(`/sets/${s.room.setId}/present`);
+  await expect(board(page)).toBeVisible();
+  await expect(card(page, s.ids.chatbot)).toBeVisible();
+  await expect(page.getByText('Beantwortung geschlossen')).toHaveCount(0);
 });
 
 test('AI error and too few cards', async ({ page, trackRoom }) => {

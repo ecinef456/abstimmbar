@@ -1803,6 +1803,20 @@ def check_page(request, token):
 RECENT_START_WINDOW = timezone.timedelta(minutes=120)
 
 
+def _board_question_closed(run):
+    """The run's active question is a matrix / mind map outside its rating
+    stage: on "closed" the beamer shows only the question text (a closed
+    rating keeps the board, and "results" would reveal its scores)."""
+    question = run.active_question
+    if question is None:
+        return False
+    if question.kind == Question.Kind.MATRIX:
+        return not matrix.is_rating(run, question)
+    if question.kind == Question.Kind.MINDMAP:
+        return not mindmap.is_rating(run, question)
+    return False
+
+
 def _recently_started(question_set):
     cutoff = timezone.now() - RECENT_START_WINDOW
     return (
@@ -2015,6 +2029,12 @@ def start_run(request, set_id):
                         if question_set.quiz_time_limit
                         else None
                     )
+            elif run.phase == Run.Phase.CLOSED and _board_question_closed(run):
+                # Same session, left via ✕ while a matrix / mind map was
+                # open (✕ closes the vote): re-entering shows the board /
+                # map again — the results phase, as after Stop — instead of
+                # the bare question with "voting closed".
+                run.phase = Run.Phase.RESULTS
             run.ended_at = None
             # The presenter is back: participants leave the „paused" screen.
             run.presenter_away = False

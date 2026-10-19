@@ -284,7 +284,8 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   des Fragensets zurück, und die Teilnehmenden sehen „Die Präsentation ist
   gerade pausiert – es können noch weitere Fragen folgen.“ (mit einem Knopf,
   um ihre Antworten anzusehen). Präsentieren Sie innerhalb von zwei Stunden
-  erneut, geht es dort weiter, wo Sie aufgehört haben; sobald Sie eine neue
+  erneut, geht es dort weiter, wo Sie aufgehört haben – bei einer Matrix oder
+  Mindmap sehen Sie dann direkt das Brett bzw. die Mindmap; sobald Sie eine neue
   Abstimmung starten, springen die Geräte der Teilnehmenden automatisch zur
   Frage. Blättern Sie mit → über die letzte Frage hinaus, erscheint der
   Schlussbildschirm; eine beliebige Taste beendet dann die Umfrage.
