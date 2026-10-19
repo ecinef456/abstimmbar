@@ -522,42 +522,20 @@ class ControlTests(LiveTestCase):
             content_type="application/json",
         )
 
-    def test_recent_resume_shows_the_matrix_board(self):
-        # Re-entering after ✕ on a matrix: the board (results phase, as after
-        # Stop), not the bare question with "voting closed".
-        run, _ = self._away_on(Question.Kind.MATRIX)
-        self._resume()
-        run.refresh_from_db()
-        self.assertEqual(run.phase, Run.Phase.RESULTS)
-        self.assertFalse(run.presenter_away)
-
-    def test_recent_resume_shows_the_mind_map(self):
-        run, _ = self._away_on(Question.Kind.MINDMAP)
-        self._resume()
-        run.refresh_from_db()
-        self.assertEqual(run.phase, Run.Phase.RESULTS)
-
-    def test_recent_resume_keeps_a_closed_matrix_rating(self):
-        # A closed rating with hidden scores already shows the board; results
-        # would reveal the scores.
-        run, question = self._away_on(Question.Kind.MATRIX, matrix_rating_mode="updown")
-        MatrixPhase.objects.create(run=run, question=question, stage=MatrixPhase.Stage.RATE)
-        self._resume()
-        run.refresh_from_db()
-        self.assertEqual(run.phase, Run.Phase.CLOSED)
-
-    def test_recent_resume_keeps_a_closed_mind_map_rating(self):
-        run, question = self._away_on(Question.Kind.MINDMAP, mindmap_rating_mode="updown")
-        MindmapPhase.objects.create(run=run, question=question, stage=MindmapPhase.Stage.RATE)
-        self._resume()
-        run.refresh_from_db()
-        self.assertEqual(run.phase, Run.Phase.CLOSED)
-
-    def test_recent_resume_keeps_other_closed_questions(self):
-        run, _ = self._away_on(Question.Kind.SINGLE_CHOICE)
-        self._resume()
-        run.refresh_from_db()
-        self.assertEqual(run.phase, Run.Phase.CLOSED)
+    def test_recent_resume_keeps_a_closed_board_question_closed(self):
+        # Re-entering after ✕ never changes the phase: "results" would reveal
+        # hidden rating scores (beamer, and participants if the set shows
+        # results). The beamer shows the board on such a resume by itself.
+        for kind, fields in (
+            (Question.Kind.MATRIX, {"matrix_rating_mode": "updown"}),
+            (Question.Kind.MINDMAP, {"mindmap_rating_mode": "updown"}),
+        ):
+            Run.objects.update(phase=Run.Phase.FINISHED)
+            run, _ = self._away_on(kind, **fields)
+            self._resume()
+            run.refresh_from_db()
+            self.assertEqual(run.phase, Run.Phase.CLOSED, kind)
+            self.assertFalse(run.presenter_away)
 
     def test_easy_mode_archives_when_last_run_another_day(self):
         # Effective easy mode + no explicit ``existing``: a finished run from
@@ -9701,6 +9679,34 @@ class MatrixAiApplyTests(MatrixTestCase):
         self.assertEqual(result["skipped"], [{"index": 0, "reason": "changed"}])
         self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
 
+    def signed_groups(self, *card_lists, cross_field=False):
+        groups = self.groups(*card_lists)
+        previews = mxs.simulate_groups(self.run, self.xq, groups, cross_field)
+        return mxs.with_tops(groups, previews)
+
+    def test_with_tops_records_the_zones(self):
+        [g] = self.signed_groups([self.a, self.d], cross_field=True)
+        self.assertEqual(g["tops"], [self.a.pk, self.d.pk])
+        self.assertEqual(g["zones"], ["q1", "q2"])
+
+    def test_skipped_when_a_top_changed_field_since_proposal(self):
+        # Cross mode: D was in q2 at propose time, now it lies in q3 → the
+        # preview the presenter saw (target field, "moved from") is stale.
+        groups = self.signed_groups([self.a, self.b, self.d], cross_field=True)
+        MatrixCard.objects.filter(pk=self.d.pk).update(zone="q3")
+        result = mxs.apply_groups(self.run, self.xq, groups, [0], {}, cross_field=True)
+        self.assertEqual(result["skipped"], [{"index": 0, "reason": "changed"}])
+        # Same-field mode: both tops moved on together → also stale.
+        groups = self.signed_groups([self.a, self.b])
+        MatrixCard.objects.filter(pk__in=[self.a.pk, self.b.pk]).update(zone="q4")
+        self.assertEqual(self.apply(groups)["skipped"], [{"index": 0, "reason": "changed"}])
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
+
+    def test_unchanged_zones_apply(self):
+        groups = self.signed_groups([self.a, self.d], cross_field=True)
+        result = mxs.apply_groups(self.run, self.xq, groups, [0], {}, cross_field=True)
+        self.assertEqual(result["applied"], [0])
+
     def test_undo_recreates_deleted_summary(self):
         first = self.summary("First")
         second = self.summary("Second")
@@ -9942,6 +9948,16 @@ class MatrixAiApiTests(MatrixTestCase):
         self.assertEqual(data["groups"][1]["skip_reason"], "duplicate")
         self.assertEqual(data["hints"], [])
         self.assertEqual(data["dropped"], 2)  # one malformed + one skipped
+
+    def test_cross_field_ignores_malformed_hints(self):
+        reply = self.reply()
+        reply["hints"] = [{"cards": [self.a.pk]}, "nope"]
+        with patch(self.CHAT, return_value=reply):
+            data = self.post("ai-propose", {"level": "same", "cross_field": True}).json()
+        self.assertEqual(data["dropped"], 2)  # the malformed group + the skipped one
+        with patch(self.CHAT, return_value=reply):
+            data = self.post("ai-propose", {"level": "same"}).json()
+        self.assertEqual(data["dropped"], 4)  # + two malformed hints
 
     def test_cross_field_apply_and_undo(self):
         reply = {"groups": [{"cards": [self.a.pk, self.d.pk], "title": "Wind"}], "hints": []}

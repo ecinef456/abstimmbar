@@ -692,11 +692,17 @@ def simulate_hints(run, question, hints, cross_field=False):
     return result
 
 
+def _top_zones(preview):
+    """The zone of each top of a preview, in card order."""
+    return [c.get("moved_from", preview["zone"]) for c in preview["cards"]]
+
+
 def with_tops(groups, previews):
     """The parsed ``groups`` with the tops they resolved to at propose time
-    (``tops``), so apply can tell when a stack changed in between."""
+    (``tops``) and those tops' zones (``zones``), so apply can tell when a
+    stack or a top's field changed in between."""
     return [
-        {**group, "tops": [c["id"] for c in preview["cards"]]}
+        {**group, "tops": [c["id"] for c in preview["cards"]], "zones": _top_zones(preview)}
         for group, preview in zip(groups, previews, strict=True)
     ]
 
@@ -859,10 +865,17 @@ def apply_groups(run, question, groups, selected, edits, cross_field=False):
             index = preview["index"]
             reason = preview.get("skip_reason")
             signed = by_index[index].get("tops")
+            signed_zones = by_index[index].get("zones")
+            now = dict(zip((c["id"] for c in preview["cards"]), _top_zones(preview)))
             if not reason and signed is not None and (
-                {c["id"] for c in preview["cards"]} != set(signed)
+                set(now) != set(signed)
+                or (signed_zones is not None and any(
+                    now[pk] != zone for pk, zone in zip(signed, signed_zones)
+                ))
             ):
-                # E.g. a card was stacked into an unreviewed stack since.
+                # E.g. a card was stacked into an unreviewed stack since, or
+                # a top was moved to another field (the preview — target
+                # field, "moved from" — would be stale).
                 reason = SKIP_CHANGED
             if not reason and "top_summary_id" not in preview and count >= MATRIX_MAX_CARDS:
                 reason = SKIP_LIMIT

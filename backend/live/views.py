@@ -1171,9 +1171,11 @@ def matrix_ai_propose(request, run_id, question_id):
         reply = ai.chat_json(system, user)
     except ai.AIError as exc:
         return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+    if cross_field and isinstance(reply, dict):
+        # Hints are not asked for (such cards are grouped instead): neither
+        # shown nor counted as dropped.
+        reply = {**reply, "hints": []}
     groups, hints, malformed = ai_matrix.parse_reply(reply)
-    if cross_field:
-        hints = []  # not asked for; such cards are grouped instead
     previews = matrix.simulate_groups(run, question, groups, cross_field)
     hint_previews = matrix.simulate_hints(run, question, hints, cross_field)
     skipped = sum(1 for g in previews if g["status"] != "ok")
@@ -1803,20 +1805,6 @@ def check_page(request, token):
 RECENT_START_WINDOW = timezone.timedelta(minutes=120)
 
 
-def _board_question_closed(run):
-    """The run's active question is a matrix / mind map outside its rating
-    stage: on "closed" the beamer shows only the question text (a closed
-    rating keeps the board, and "results" would reveal its scores)."""
-    question = run.active_question
-    if question is None:
-        return False
-    if question.kind == Question.Kind.MATRIX:
-        return not matrix.is_rating(run, question)
-    if question.kind == Question.Kind.MINDMAP:
-        return not mindmap.is_rating(run, question)
-    return False
-
-
 def _recently_started(question_set):
     cutoff = timezone.now() - RECENT_START_WINDOW
     return (
@@ -2029,12 +2017,6 @@ def start_run(request, set_id):
                         if question_set.quiz_time_limit
                         else None
                     )
-            elif run.phase == Run.Phase.CLOSED and _board_question_closed(run):
-                # Same session, left via ✕ while a matrix / mind map was
-                # open (✕ closes the vote): re-entering shows the board /
-                # map again — the results phase, as after Stop — instead of
-                # the bare question with "voting closed".
-                run.phase = Run.Phase.RESULTS
             run.ended_at = None
             # The presenter is back: participants leave the „paused" screen.
             run.presenter_away = False
