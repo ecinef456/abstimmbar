@@ -27,7 +27,11 @@ Vier-Felder-Matrix wird vom Backend simuliert und signiert
 - Desktop/Beamer: 1440 × 900 CSS-Pixel bei Skalierung 1,5 (2160 × 1350 px),
   Handy: 390 × 844 bei Skalierung 2 (780 × 1688 px); helles Design.
 - Einmalige Hinweise (KI-Datenschutzhinweis, Tipps) sind ausgeblendet; die
-  Beitritts-URL auf dem Beamer wird als `abstimmbar.example.org` angezeigt.
+  Beitritts-URL auf dem Beamer wird als `abstimmbar.example.org` angezeigt,
+  und der QR-Code kodiert `https://abstimmbar.example.org/p/<code>` (erzeugt
+  mit der QR-Bibliothek des Backends per `docker compose exec`).
+- `DOCS_SHOTS_ONLY=beamer-beitritt npm run docs:shots` schreibt nur die
+  genannten Bilder (Komma-Liste); der Lauf selbst ist derselbe.
 - `DOCS_SHOTS_DIR=<ordner> npm run docs:shots` schreibt in einen anderen
   Ordner (z. B. zum Vergleichen).
 
@@ -39,7 +43,11 @@ normales `npx playwright test` führt das Skript also nicht aus.
 Die Website ist eine [MkDocs-Material](https://squidfunk.github.io/mkdocs-material/)-Seite
 (`mkdocs.yml` in diesem Ordner). Der Workflow `.github/workflows/docs.yml`
 baut sie bei Änderungen auf `main` und veröffentlicht sie auf GitHub Pages.
-Lokal, in einer eigenen virtuellen Umgebung:
+Lokal, in einer eigenen virtuellen Umgebung — alle `mkdocs`-Befehle **im
+Repo-Root** ausführen und die Konfiguration relativ angeben
+(`-f website/mkdocs.yml`); die Einbindungen von `docs/*.md` und der
+Ausgabeordner `site/` (Repo-Root, per `.gitignore` ausgenommen) beziehen
+sich auf diesen Aufbau:
 
 ```bash
 python3 -m venv /tmp/abstimmbar-docs && . /tmp/abstimmbar-docs/bin/activate

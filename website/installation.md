@@ -16,7 +16,7 @@ Keycloak); Teilnehmende brauchen kein Konto.
     Der folgende Text ist die Betriebsanleitung aus dem Repository
     ([`docs/deployment.md`](https://github.com/virtUOS/abstimmbar/blob/main/docs/deployment.md))
     und wird bei jedem Website-Build von dort übernommen. Die Einbindung in
-    Moodle oder Stud.IP beschreibt die Seite
+    Lernplattformen wie Moodle beschreibt die Seite
     [LMS-Einbindung (LTI 1.3)](lti.md).
 
 --8<-- "docs/deployment.md:2"

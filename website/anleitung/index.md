@@ -70,6 +70,7 @@ angemeldete Lehrperson können Sie außerdem jederzeit einen
 
 </div>
 
-Zum Schluss: [Tipps für die Lehre](tipps.md). Die Einbindung in Moodle oder
-Stud.IP richtet Ihre Administration ein; was Sie als Lehrperson dort tun,
+Zum Schluss: [Tipps für die Lehre](tipps.md). Die Einbindung in Ihre
+Lernplattform (z. B. Moodle; Stud.IP, sobald dort LTI 1.3 verfügbar ist)
+richtet Ihre Administration ein; was Sie als Lehrperson dort tun,
 steht unter [LMS-Einbindung](../lti.md#anleitung-für-lehrende).

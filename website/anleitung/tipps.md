@@ -14,7 +14,8 @@ description: Kurze Tipps für den Einsatz von Abstimmbar in der Lehrveranstaltun
   können.
 - Mit [Vorher-Nachher-Fragen](fragen.md#vorher-nachher-fragen-experten-modus)
   machen Sie Lerneffekte sichtbar.
-- Für Ideensammlungen eignen sich Wortwolke, Mindmap und Vier-Felder-Matrix —
-  mit anschließender Bewertungsphase entsteht daraus direkt eine Priorisierung.
+- Für Ideensammlungen eignen sich Wortwolke, Mindmap und Vier-Felder-Matrix.
+  Bei Mindmap und Vier-Felder-Matrix entsteht mit einer anschließenden
+  Bewertungsphase direkt eine Priorisierung.
 - Für die Nachbereitung zu Hause: eine [Lernkontrolle](durchfuehrung.md#lernkontrolle)
   mit Dauer-Link, z. B. verlinkt im LMS.

@@ -11,8 +11,9 @@ haben im Raum dieselben Rechte.
 
 - Öffnen Sie im Raum über das Menü **⋮** **Gemeinsam bearbeiten** und
   fügen Sie eine weitere Person über deren **Kennung oder E-Mail-Adresse**
-  hinzu. Die Person muss sich zuvor einmal angemeldet haben. Personen, mit
-  denen Sie schon einen Raum teilen, schlägt Abstimmbar direkt vor.
+  hinzu. Die Person muss sich zuvor einmal angemeldet haben. Als Vorschläge
+  erscheinen Personen, die Sie schon einmal per E-Mail-Adresse hinzugefügt
+  haben.
 - Geteilte Räume erscheinen bei der eingeladenen Person unter
   **„Mit mir geteilt“**.
 - Die Besitzrolle lässt sich bei Bedarf übergeben (**Zum Besitzer machen**).

@@ -9,7 +9,11 @@
  *  Light theme; desktop/beamer 1440×900 and phone 390×844, rendered at
  *  device scale 1.5 / 2. Never calls an LLM: the matrix AI proposal is simulated
  *  and signed by the backend (`helpers/matrixAi.ts`) and route-mocked.
- *  DOCS_SHOTS_DIR=<dir> writes elsewhere (default: ../website/bilder). */
+ *  DOCS_SHOTS_DIR=<dir> writes elsewhere (default: ../website/bilder);
+ *  DOCS_SHOTS_ONLY=<name>,<name> writes only those shots (the run is the same).
+ *  The beamer's join QR encodes the public placeholder URL, generated with the
+ *  backend's own QR code library (needs `docker compose` in the repo root). */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +24,10 @@ import { applySummary, signedProposal } from './helpers/matrixAi';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(process.env.DOCS_SHOTS_DIR ?? path.join(HERE, '../../website/bilder'));
+const ONLY = (process.env.DOCS_SHOTS_ONLY ?? '').split(',').map((n) => n.trim()).filter(Boolean);
 const PREFIX = 'E2E Docs';
+/** Host shown (and encoded in the QR) instead of the dev stack's localhost:8002. */
+const PUBLIC_HOST = 'abstimmbar.example.org';
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 const PHONE_UA =
@@ -63,6 +70,7 @@ const HIDE_TRANSIENT = `
 `;
 
 async function shot(page: Page, name: string) {
+  if (ONLY.length && !ONLY.includes(name)) return;
   await settle(page);
   await page.addStyleTag({ content: HIDE_TRANSIENT });
   await page.mouse.move(0, 0);
@@ -70,6 +78,20 @@ async function shot(page: Page, name: string) {
   const file = path.join(OUT, `${name}.png`);
   fs.writeFileSync(file, png);
   console.log(`  ${name}.png  ${Math.round(png.length / 1024)} KB`);
+}
+
+/** The room QR as production would render it: same library and settings as
+ *  `live.views.room_qr`, but for https://<PUBLIC_HOST>/p/<code> instead of
+ *  the dev host (the backend builds it from the request host). */
+function publicRoomQr(code: string): Buffer {
+  const script =
+    'import sys, qrcode; ' +
+    'qrcode.make(sys.argv[1], box_size=12, border=1).save(sys.stdout.buffer, format="PNG")';
+  return execFileSync(
+    'docker',
+    ['compose', 'exec', '-T', 'backend', 'python', '-c', script, `https://${PUBLIC_HOST}/p/${code}`],
+    { cwd: path.join(HERE, '../..') },
+  );
 }
 
 /** whoami as the screenshots want it: tour seen, expert mode, AI on. */
@@ -429,16 +451,20 @@ test('website screenshots', async ({ page, browser }) => {
     contexts.push(audience);
     for (let i = 0; i < 4; i++) await (await audience.newPage()).goto(`${API_BASE_URL}/p/${workshop.code}/`);
 
-    // Beamer join screen (no question open yet).
+    // Beamer join screen (no question open yet), QR for the public URL.
+    const qrPng = publicRoomQr(workshop.code);
+    await page.route(`**/p/${workshop.code}/qr.png`, (route) =>
+      route.fulfill({ status: 200, contentType: 'image/png', body: qrPng }),
+    );
     await page.goto(`/sets/${main.id}/present?resume=continue`);
     await expect(page.getByText(workshop.code).first()).toBeVisible();
     // The dev stack's join URL would read "localhost:8002".
-    await page.evaluate(() => {
+    await page.evaluate((host) => {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode())
         if (node.nodeValue?.includes('localhost:8002'))
-          node.nodeValue = node.nodeValue.replace(/https?:\/\/|localhost:8002/g, (m) => (m.startsWith('http') ? '' : 'abstimmbar.example.org'));
-    });
+          node.nodeValue = node.nodeValue.replace(/https?:\/\/|localhost:8002/g, (m) => (m.startsWith('http') ? '' : host));
+    }, PUBLIC_HOST);
     await shot(page, 'beamer-beitritt');
 
     // Phone: join page.

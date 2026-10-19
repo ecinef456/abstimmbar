@@ -39,7 +39,7 @@ Dort können Sie:
 Im CSV-Export hat jede sichtbare Karte einer Vier-Felder-Matrix eine Zeile mit
 den Spalten **beschreibung**, **kategorie**, **zone**, **x**, **y** und
 **stapel** (x und y liegen zwischen −1 und 1; ausgeblendete Karten fehlen).
-Mit Bewertung kommt die Spalte **bewertung** hinzu: bei Punkten die Summe, bei
+Mit Bewertung ist die Spalte **bewertung** gefüllt: bei Punkten die Summe, bei
 Plus/Minus im Format „+3/−1 (2)“ (Zustimmung/Ablehnung und Saldo) – wie bei
 der Mindmap.
 

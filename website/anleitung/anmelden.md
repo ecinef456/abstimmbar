@@ -7,9 +7,10 @@ description: Anmeldung per Single Sign-on oder LMS, einfacher und Experten-Modus
 
 ## Anmelden
 
-Melden Sie sich mit Ihrer gewohnten Uni-Kennung an (Single Sign-on). Wenn Ihre
-Lehrveranstaltung in Stud.IP oder Moodle liegt, können Sie Abstimmbar dort auch
-direkt als Aktivität einbinden (LTI 1.3) und ersparen sich das separate Login
+Melden Sie sich mit Ihrer gewohnten Uni-Kennung an (Single Sign-on). Sie
+können Abstimmbar auch direkt als Aktivität in Ihre Lernplattform einbinden
+(LTI 1.3; z. B. Moodle; Stud.IP, sobald dort LTI 1.3 verfügbar ist) und
+ersparen sich so das separate Login
 — wie das geht, steht unter [LMS-Einbindung](../lti.md#anleitung-für-lehrende).
 Räume, die aus dem LMS heraus entstanden sind, tragen auf der Startseite den
 Hinweis **„aus LMS“**.

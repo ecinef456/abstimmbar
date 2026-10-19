@@ -37,8 +37,8 @@ bis zur gemeinsam gebauten Mindmap.
 <ul class="ab-facts">
   <li><strong>Anonym</strong><span>kein Konto, keine IP-Adressen zu den Stimmen</span></li>
   <li><strong>Zehn Fragetypen</strong><span>vom Quiz bis zur Vier-Felder-Matrix</span></li>
-  <li><strong>LTI 1.3</strong><span>Einbindung in Moodle und Stud.IP</span></li>
-  <li><strong>1000 Teilnehmende</strong><span>gleichzeitig im Lasttest</span></li>
+  <li><strong>LTI 1.3</strong><span>Einbindung in Lernplattformen wie Moodle</span></li>
+  <li><strong>1000 simulierte Teilnehmende</strong><span>gleichzeitig im Lasttest</span></li>
   <li><strong>Deutsch &amp; Englisch</strong><span>Oberfläche und Inhalte</span></li>
 </ul>
 
@@ -199,7 +199,8 @@ gleich.
 
     Alle KI-Funktionen sind abschaltbar und laufen nur über den Dienst, den
     Ihre Einrichtung konfiguriert — auch ein selbst betriebenes Modell ist
-    möglich. Ans Modell gehen Inhalte, keine Personendaten.
+    möglich. Ans Modell gehen nur Inhalte wie Fragen und Antworten – keine
+    Namen, Kennungen oder Konten der Teilnehmenden.
 
 -   :material-scale-balance: __Open Source__
 

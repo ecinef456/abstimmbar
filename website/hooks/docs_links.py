@@ -43,7 +43,13 @@ class _Rewrite(Treeprocessor):
             target = posixpath.normpath(posixpath.join(page_dir, path))
             if _state["files"].get_file_from_path(target) is not None:
                 continue
-            link.set("href", GITHUB_DOCS + path + (f"#{anchor}" if anchor else ""))
+            # Included files live in docs/: resolve against that folder so
+            # "./x.md" or "sub/../x.md" end up as a clean docs/ path.
+            repo_path = posixpath.normpath(posixpath.join("docs", path))
+            if not repo_path.startswith("docs/"):
+                continue  # points outside docs/ — leave it to MkDocs' check
+            url = GITHUB_DOCS + repo_path[len("docs/"):]
+            link.set("href", url + (f"#{anchor}" if anchor else ""))
 
 
 class _RewriteExtension(Extension):
