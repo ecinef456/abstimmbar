@@ -421,10 +421,12 @@ Buildzeit** fest ins Bundle — das funktioniert nur, wenn Sie selbst bauen
 Standardwert gebaut und lässt sich nicht nachträglich umkonfigurieren.
 
 **`VITE_GUIDE_URL`** (optional) ist das Ziel des Menüpunkts „Anleitung“ im
-„?“-Menü der App; Standard ist die öffentliche Projekt-Website
-(`https://virtuos.github.io/abstimmbar/anleitung/`). Wie
-`VITE_API_BASE_URL` wird der Wert zur **Buildzeit** festgelegt (Build-Argument
-im `app`-Service, nur mit `up -d --build` wirksam).
+„?“-Menü der App bei deutscher Oberfläche; Standard ist die öffentliche
+Projekt-Website (`https://virtuos.github.io/abstimmbar/anleitung/`).
+**`VITE_GUIDE_URL_EN`** (optional) ist dasselbe für die englische Oberfläche
+(Standard `https://virtuos.github.io/abstimmbar/en/guide/`). Wie
+`VITE_API_BASE_URL` werden beide Werte zur **Buildzeit** festgelegt
+(Build-Argumente im `app`-Service, nur mit `up -d --build` wirksam).
 
 Gegenprüfen, was im laufenden Container ankommt:
 

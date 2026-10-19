@@ -41,6 +41,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_GUIDE_URL: ${VITE_GUIDE_URL:-}
+        VITE_GUIDE_URL_EN: ${VITE_GUIDE_URL_EN:-}
     container_name: abstimmbar_app
     restart: unless-stopped
     # uvicorn (ASGI), deliberately a SINGLE process: the SSE hub (ADR-0003)
