@@ -15,7 +15,14 @@ from django.db.models import Count
 from common.i18n_fields import translated_map
 from rooms.models import Question
 
-from . import ai_wordcloud_live, matrix, matrix_rating, mindmap, mindmap_rating
+from . import (
+    ai_wordcloud_live,
+    matrix,
+    matrix_rating,
+    mindmap,
+    mindmap_log,
+    mindmap_rating,
+)
 from .hub import hub
 from .models import Run, WordCloudModeration
 from .results import (
@@ -234,6 +241,8 @@ def build_payloads(room):
             rating = mindmap_rating.payload(run, question, presenter=True)
             if rating is not None:
                 presenter["mindmap"]["rating"] = rating
+            # Presenter-only: active moderation-log entries (#201, drawer).
+            presenter["mindmap"]["moderation_log"] = mindmap_log.payload(run, question)
             # "votes" of a mind map = distinct contributing participants.
             presenter["votes"] = mindmap.contributor_count(run, question)
             # Presenter-only: the AI optimisation settings (beamer star panel).

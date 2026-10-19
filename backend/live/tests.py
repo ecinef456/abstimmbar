@@ -6645,7 +6645,7 @@ class MindmapMergeTests(MindmapModerationTestCase):
         response = self.owner_mod("merge", source=source, target=target)
         self.assertEqual(response.status_code, 200, response.content)
         body = response.json()
-        self.assertEqual(set(body), {"undo"})
+        self.assertEqual(set(body), {"undo", "log_id"})
         self.assertIsInstance(body["undo"], str)
         self.assertFalse(MindmapNode.objects.filter(pk=source).exists())
         # Distinct contributors: t2's duplicate is dropped.
@@ -6824,10 +6824,10 @@ class MindmapMoveTests(MindmapModerationTestCase):
         c = self.contribute("C", parent=a)
         response = self.owner_mod("move", node=c, parent=b)
         self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.json(), {"undo": {"node": c, "parent": a}})
+        self.assertEqual(response.json()["undo"], {"node": c, "parent": a})
         self.assertEqual(MindmapNode.objects.get(pk=c).parent_id, b)
         response = self.owner_mod("move", node=c, parent=None)
-        self.assertEqual(response.json(), {"undo": {"node": c, "parent": b}})
+        self.assertEqual(response.json()["undo"], {"node": c, "parent": b})
         self.assertIsNone(MindmapNode.objects.get(pk=c).parent_id)
 
     def test_move_not_into_own_subtree(self):
@@ -6871,7 +6871,7 @@ class MindmapMoveTests(MindmapModerationTestCase):
         a = self.contribute("A")
         response = self.owner_mod("move", node=a, parent=None)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"undo": {"node": a, "parent": None}})
+        self.assertEqual(response.json(), {"undo": {"node": a, "parent": None}, "log_id": None})
 
 
 class MindmapRenameTests(MindmapModerationTestCase):

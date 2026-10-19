@@ -46,6 +46,7 @@ from . import (
     ai_report,
     ai_wordcloud,
     ai_wordcloud_live,
+    mindmap_log,
     mindmap_rating,
 )
 from .ai_freetext import clean_categories
@@ -2374,12 +2375,14 @@ def mindmap_teacher_delete(request, run_id, question_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def mindmap_merge(request, run_id, question_id):
-    """``{source, target}`` → 200 ``{undo: "<signed>"}``."""
+    """``{source, target}`` → 200 ``{undo: "<signed>", log_id}`` (``log_id``
+    = its moderation-log entry)."""
 
     def action(run, question, data):
         source = _strict_id(data, "source")
         target = _strict_id(data, "target")
-        return {"undo": mindmap.merge_nodes(run, question, source, target)}
+        undo, log_id = mindmap.merge_nodes(run, question, source, target, log=True)
+        return {"undo": undo, "log_id": log_id}
 
     return _mindmap_moderate(request, run_id, question_id, action)
 
@@ -2400,12 +2403,15 @@ def mindmap_unmerge(request, run_id, question_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def mindmap_move(request, run_id, question_id):
-    """``{node, parent: id|null}`` → 200 ``{undo: {node, parent}}``."""
+    """``{node, parent: id|null}`` → 200 ``{undo: {node, parent}, log_id}``
+    (``log_id`` null for a no-op move or one that reverses the term's last
+    logged move — that entry is marked reset)."""
 
     def action(run, question, data):
         node = _strict_id(data, "node")
         parent = _strict_id(data, "parent", nullable=True)
-        return {"undo": mindmap.move_node(run, question, node, parent)}
+        undo, log_id = mindmap.move_node(run, question, node, parent, log=True)
+        return {"undo": undo, "log_id": log_id}
 
     return _mindmap_moderate(request, run_id, question_id, action)
 
@@ -2413,13 +2419,16 @@ def mindmap_move(request, run_id, question_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def mindmap_rename(request, run_id, question_id):
-    """``{node, text}`` → 200 ``{node_id, merged, undo: "<signed>"}``."""
+    """``{node, text}`` → 200 ``{node_id, merged, undo: "<signed>",
+    log_id}``."""
 
     def action(run, question, data):
         node = _strict_id(data, "node")
         text = _strict_str(data, "text")
-        node_id, merged, undo = mindmap.rename_node(run, question, node, text)
-        return {"node_id": node_id, "merged": merged, "undo": undo}
+        node_id, merged, undo, log_id = mindmap.rename_node(
+            run, question, node, text, log=True
+        )
+        return {"node_id": node_id, "merged": merged, "undo": undo, "log_id": log_id}
 
     return _mindmap_moderate(request, run_id, question_id, action)
 
@@ -2534,15 +2543,17 @@ def mindmap_ai_preview(request, run_id, question_id):
 @permission_classes([IsAuthenticated])
 def mindmap_ai_apply(request, run_id, question_id):
     """Apply the selected ops of a proposal as one batch: ``{proposal,
-    selected: [index]}`` → 200 ``{applied, skipped, undo: [{type, data}]}``
-    (``skipped`` = selected ops that no longer fit the map). One broadcast."""
+    selected: [index]}`` → 200 ``{applied, skipped, undo: [{type, data}],
+    log_id}`` (``skipped`` = selected ops that no longer fit the map;
+    ``log_id`` = the batch's moderation-log entry, null when nothing was
+    applied). One broadcast."""
 
     def action(run, question, data):
         selected = _strict_indices(data)
         ops, options, _malformed = mindmap.unsign_proposal(run, question, data.get("proposal"))
         if any(not 0 <= index < len(ops) for index in selected):
             raise _BadField("selected must be a list of proposal indices.")
-        return mindmap.apply_ops(run, question, ops, options, selected)
+        return mindmap.apply_ops(run, question, ops, options, selected, log=True)
 
     return _mindmap_moderate(request, run_id, question_id, action)
 
@@ -2557,6 +2568,22 @@ def mindmap_ai_undo(request, run_id, question_id):
     def action(run, question, data):
         mindmap.undo_ops(run, question, data.get("undo"))
         return {"status": "ok"}
+
+    return _mindmap_moderate(request, run_id, question_id, action)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mindmap_log_reset(request, run_id, question_id, entry_id):
+    """Selectively reset one moderation-log entry (#201; the list comes with
+    the presenter payload, ``mindmap.moderation_log``) → 200 ``{status:
+    "ok", id, kind}``; 404 unknown entry; 409 ``{detail}`` (nothing changed,
+    the entry stays active) when it was reset already, during the rating
+    stage or when the map changed so that it no longer applies cleanly."""
+
+    def action(run, question, data):
+        kind = mindmap_log.reset(run, question, entry_id)
+        return {"status": "ok", "id": entry_id, "kind": kind}
 
     return _mindmap_moderate(request, run_id, question_id, action)
 

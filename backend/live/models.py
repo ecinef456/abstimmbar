@@ -383,6 +383,50 @@ class MindmapRating(models.Model):
         ]
 
 
+class MindmapModerationEntry(models.Model):
+    """One logged presenter moderation step of a run's mind map (#201):
+    merge, move, rename or an applied AI proposal — listed in the beamer's
+    moderation drawer and resettable one by one.
+
+    ``label`` holds only term texts at the time of the action (no
+    participant data): merge ``{source, target}``, move ``{node, from, to}``
+    (null = main branch), rename ``{old, new}`` — each a term ``{text,
+    text_i18n?}`` — and ai ``{count}``. ``undo`` is the step's undo data as
+    the moderation endpoints hand it out (merge/rename: the signed string;
+    move: ``{node, parent, to}``; ai: the ``[{type, data}]`` list). Never
+    sent to clients."""
+
+    class Kind(models.TextChoices):
+        MERGE = "merge", "Merge"
+        MOVE = "move", "Move"
+        RENAME = "rename", "Rename"
+        AI = "ai", "AI proposal"
+
+    class State(models.TextChoices):
+        ACTIVE = "active", "Active"
+        RESET = "reset", "Reset"
+
+    run = models.ForeignKey(
+        Run, on_delete=models.CASCADE, related_name="mindmap_moderation_entries"
+    )
+    question = models.ForeignKey(
+        "rooms.Question", on_delete=models.CASCADE, related_name="+"
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    label = models.JSONField(default=dict)
+    undo = models.JSONField()
+    state = models.CharField(max_length=10, choices=State.choices, default=State.ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes: ClassVar = [
+            models.Index(fields=["run", "question", "state"], name="mindmaplog_run_q_state")
+        ]
+
+    def __str__(self):
+        return f"{self.kind} (run {self.run_id}, {self.state})"
+
+
 class MatrixCard(models.Model):
     """One card on a run's four-field matrix board (see ``live.matrix``).
 
