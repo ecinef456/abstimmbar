@@ -207,9 +207,10 @@ stimmen. Spätere Änderungen am Caddyfile übernehmen Sie mit
 `sudo docker compose -f docker-compose.prod.yml restart caddy`.
 
 An Django weitergereicht werden die Pfade `/api/`, `/admin/`, `/oidc/`,
-`/lti/`, `/p/`, `/r/`, `/c/`, `/question-preview/`, `/metrics`, `/static/` und
-`/media/`; alles andere liefert die Oberfläche aus. Setzen Sie einen eigenen
-Reverse-Proxy ein, muss er diese Pfade genauso weiterleiten.
+`/lti/`, `/p/`, `/r/`, `/c/`, `/question-preview/` und `/metrics`;
+`/static/` und `/media/` liefert Caddy direkt aus den Volumes `static` und
+`media` aus; alles andere liefert die Oberfläche aus. Setzen Sie einen eigenen
+Reverse-Proxy ein, muss er beides genauso handhaben.
 
 ### Schritt 9 — Dateien für SELinux freigeben
 

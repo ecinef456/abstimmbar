@@ -892,6 +892,13 @@ class SecretKeyGuardTests(SimpleTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("DJANGO_SECRET_KEY", result.stderr)
 
+    def test_prod_with_example_placeholder_key_refuses_to_start(self):
+        result = self._import_settings(
+            DJANGO_DEBUG="0", DJANGO_SECRET_KEY="change-me-to-a-long-random-string"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DJANGO_SECRET_KEY", result.stderr)
+
     def test_prod_with_secret_key_imports(self):
         result = self._import_settings(DJANGO_DEBUG="0", DJANGO_SECRET_KEY="x" * 50)
         self.assertEqual(result.returncode, 0, result.stderr)

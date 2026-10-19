@@ -41,8 +41,13 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", _DEV_SECRET_KEY)
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
-if not DEBUG and SECRET_KEY == _DEV_SECRET_KEY:
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=0")
+_INSECURE_SECRET_KEYS = (_DEV_SECRET_KEY, "change-me-to-a-long-random-string")
+
+if not DEBUG and SECRET_KEY in _INSECURE_SECRET_KEYS:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=0 "
+        "(the dev default and the .env.prod.example placeholder are refused)"
+    )
 
 ALLOWED_HOSTS = _env_list(
     "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend"

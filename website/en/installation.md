@@ -223,9 +223,10 @@ right. Apply later changes to the Caddyfile with
 `sudo docker compose -f docker-compose.prod.yml restart caddy`.
 
 The paths passed on to Django are `/api/`, `/admin/`, `/oidc/`, `/lti/`,
-`/p/`, `/r/`, `/c/`, `/question-preview/`, `/metrics`, `/static/` and
-`/media/`; everything else is served as the web interface. If you use your
-own reverse proxy, it must forward these paths the same way.
+`/p/`, `/r/`, `/c/`, `/question-preview/` and `/metrics`; `/static/` and
+`/media/` are served by Caddy directly from the `static` and `media` volumes;
+everything else is served as the web interface. If you use your own reverse
+proxy, it must handle both the same way.
 
 ### Step 9 — Allow file access under SELinux
 

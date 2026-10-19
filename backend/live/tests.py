@@ -8178,7 +8178,7 @@ class MatrixServiceTests(MatrixTestCase):
             {k: rows[0][k] for k in ("title", "description", "category", "zone", "stack")},
             {"title": "Top", "description": "", "category": "Idee", "zone": "q1", "stack": ""},
         )
-        self.assertRegex(rows[0]["x"], r"^-?\d\.\d\d$")
+        self.assertIsInstance(rows[0]["x"], float)
         self.assertEqual(rows[1]["category"], "Risiko")
         self.assertEqual(rows[1]["stack"], "Top")
         self.configure(matrix_category_mode="colors")
@@ -8370,7 +8370,7 @@ class MatrixFinalReviewTests(MatrixTestCase):
         )
         row = next(r for r in mxs.csv_rows(self.run, self.xq) if r["title"] == "Member")
         self.assertEqual(
-            (row["zone"], row["x"], row["y"]), (top.zone, f"{top.x:.2f}", f"{top.y:.2f}")
+            (row["zone"], row["x"], row["y"]), (top.zone, round(top.x, 2), round(top.y, 2))
         )
 
     def test_stacking_copies_target_position_onto_moving_stack(self):
@@ -8528,6 +8528,7 @@ class MatrixResultsTests(MatrixTestCase):
         self.stacked(top, member)
         hidden = self.add(title="Hidden card")
         mxs.set_hidden(self.run, self.xq, hidden.pk, True)
+        self.add(zone="q3", title="Negative card")
         self.client.force_login(self.owner)
         body = self.client.get(
             f"/api/question-sets/{self.question_set.pk}/results.csv"
@@ -8538,14 +8539,20 @@ class MatrixResultsTests(MatrixTestCase):
         for row in rows[1:]:
             self.assertEqual(len(row), len(header), row)
         cards = [dict(zip(header, r, strict=True)) for r in rows[1:] if r[3] == "Where?"]
-        self.assertEqual(len(cards), 2)
+        self.assertEqual(len(cards), 3)
         by_title = {c["antwort"]: c for c in cards}
         self.assertNotIn("Hidden card", by_title)
+        neg = by_title["Negative card"]
+        self.assertEqual(neg["zone"], "q3")
+        for axis in ("x", "y"):
+            self.assertFalse(neg[axis].startswith("'"), neg[axis])
+            self.assertTrue(neg[axis].startswith("-"), neg[axis])
+            self.assertRegex(neg[axis], r"^-?\d(\.\d{1,2})?$")
         self.assertEqual(by_title["'=Top card"]["stapel"], "")
         self.assertEqual(by_title["Member"]["stapel"], "'=Top card")
         self.assertEqual(by_title["Member"]["stimmen"], "1")
         self.assertEqual(by_title["Member"]["zone"], "q1")
-        self.assertRegex(by_title["Member"]["x"], r"^-?\d\.\d\d$")
+        self.assertRegex(by_title["Member"]["x"], r"^-?\d(\.\d{1,2})?$")
 
     def test_vote_endpoint_refuses_matrix(self):
         r = self.vote(self.tok.key, question=self.xq.pk, text="x")
