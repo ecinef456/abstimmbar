@@ -21,21 +21,28 @@ Entry = MindmapModerationEntry
 
 ALREADY_RESET = "This change has already been reset."
 TERM_GONE = "The term no longer exists."
-MOVED_AGAIN = "The term has been moved again since."
+# The term's parent changed since (moved again, its parent merged away, an
+# AI restructuring, ...) — neutral wording.
+PLACE_CHANGED = "The term's place has changed since."
 PLACE_GONE = "The original place no longer exists."
 PLACE_TAKEN = "A term with this name already exists at the original place."
 
 
+PAYLOAD_MAX = 100
+
+
 def payload(run, question):
-    """Active entries, newest first: ``[{id, kind, label, created_at}]``
-    (presenter payload; the undo data stays on the server)."""
+    """The ``PAYLOAD_MAX`` newest active entries, newest first: ``[{id,
+    kind, label, created_at}]`` (presenter payload; the undo data stays on
+    the server). Entries go with their run (and question): every path that
+    clears a run's map deletes the run, which cascades."""
     return [
         {"id": pk, "kind": kind, "label": label, "created_at": created.isoformat()}
         for pk, kind, label, created in Entry.objects.filter(
             run=run, question=question, state=Entry.State.ACTIVE
         )
         .order_by("-created_at", "-pk")
-        .values_list("pk", "kind", "label", "created_at")
+        .values_list("pk", "kind", "label", "created_at")[:PAYLOAD_MAX]
     ]
 
 
@@ -53,9 +60,10 @@ def reset(run, question, entry_id):
             raise mindmap.MindmapError(ALREADY_RESET, 409)
         mindmap._refuse_while_rating(run, question)
         if entry.kind in (Entry.Kind.MERGE, Entry.Kind.RENAME):
-            mindmap.restore(run, question, entry.undo)
+            # The undo data never left the server: no 24 h expiry.
+            mindmap.restore(run, question, entry.undo, max_age=None)
         elif entry.kind == Entry.Kind.AI:
-            mindmap.undo_ops(run, question, entry.undo)
+            mindmap.undo_ops(run, question, entry.undo, max_age=None)
         else:
             _reset_move(run, question, entry.undo)
         Entry.objects.filter(pk=entry.pk).update(state=Entry.State.RESET)
@@ -67,7 +75,7 @@ def _reset_move(run, question, undo):
     if node is None:
         raise mindmap.MindmapError(TERM_GONE, 409)
     if node.parent_id != undo["to"]:
-        raise mindmap.MindmapError(MOVED_AGAIN, 409)
+        raise mindmap.MindmapError(PLACE_CHANGED, 409)
     try:
         mindmap.move_node(run, question, node.pk, undo["parent"])
     except mindmap.MindmapError as error:

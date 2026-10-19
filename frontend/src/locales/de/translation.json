@@ -975,7 +975,7 @@
   "This undo step has expired.": "Dieser Schritt kann nicht mehr rückgängig gemacht werden (abgelaufen).",
   "This change has already been reset.": "Diese Änderung wurde bereits zurückgesetzt.",
   "The term no longer exists.": "Den Begriff gibt es nicht mehr.",
-  "The term has been moved again since.": "Der Begriff wurde seitdem erneut verschoben.",
+  "The term's place has changed since.": "Der Platz des Begriffs hat sich seitdem geändert.",
   "The original place no longer exists.": "Den ursprünglichen Platz gibt es nicht mehr.",
   "A term with this name already exists at the original place.": "Am ursprünglichen Platz gibt es inzwischen einen Begriff mit diesem Namen.",
   "Unknown entry.": "Unbekannter Eintrag.",

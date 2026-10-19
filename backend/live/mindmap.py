@@ -995,11 +995,14 @@ def rename_node(run, question, node_id, text, *, log=False):
     return node.pk, False, blob
 
 
-def _unsign(run, question, blob):
+def _unsign(run, question, blob, max_age=UNDO_MAX_AGE):
+    """The signed undo data (signature and run/question binding checked);
+    ``max_age=None`` skips the expiry — only for undo data kept on the
+    server (the moderation log), never for a blob handed in by a client."""
     if not isinstance(blob, str):
         raise MindmapError("Invalid undo data.")
     try:
-        data = signing.loads(blob, salt=UNDO_SALT, max_age=UNDO_MAX_AGE)
+        data = signing.loads(blob, salt=UNDO_SALT, max_age=max_age)
     except signing.SignatureExpired as error:
         raise MindmapError("This undo step has expired.", 409) from error
     except signing.BadSignature as error:
@@ -1125,13 +1128,13 @@ def _check_restored_tree(tree, depth):
             current = tree[current][0]
 
 
-def restore(run, question, blob):
+def restore(run, question, blob, *, max_age=UNDO_MAX_AGE):
     """Undo a merge or rename from its signed ``undo`` string — all or
     nothing (409 + rollback when the map changed in between).
 
     Intentionally bypasses the per-person quota and the total node cap: it
     puts back exactly what was there before the merge/rename."""
-    data = _unsign(run, question, blob)
+    data = _unsign(run, question, blob, max_age)
     try:
         with transaction.atomic():
             _lock_run(run)
@@ -1691,7 +1694,7 @@ def _undo_item(item):
     return kind, data
 
 
-def undo_ops(run, question, items):
+def undo_ops(run, question, items, *, max_age=UNDO_MAX_AGE):
     """Reverse an ``apply_ops`` batch (its ``undo`` list) in reverse order —
     all or nothing: 409 + rollback when the map changed in a way that makes
     exact restoration impossible (like ``restore``)."""
@@ -1699,7 +1702,7 @@ def undo_ops(run, question, items):
         raise MindmapError("Invalid undo data.")
     steps = [_undo_item(item) for item in items]
     signed = {
-        index: _unsign(run, question, data)
+        index: _unsign(run, question, data, max_age)
         for index, (kind, data) in enumerate(steps)
         if kind in ("merge", "rename")
     }

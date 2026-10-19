@@ -8,7 +8,9 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import override_settings
+from django.utils import timezone
 
+from . import mindmap_log
 from . import tests as base
 from .models import MindmapModerationEntry, MindmapNode, MindmapPhase
 from .state import build_payloads
@@ -234,7 +236,7 @@ class MindmapLogResetTests(MindmapLogTestCase):
         # Moved on since: the older move can't be reset on its own.
         response = self.reset(first)
         self.assertEqual(response.status_code, 409)
-        self.assertEqual(response.json()["detail"], "The term has been moved again since.")
+        self.assertEqual(response.json()["detail"], "The term's place has changed since.")
         self.assertEqual(self.parent_of(rotor), sun)
 
     def test_move_conflict_original_place_gone(self):
@@ -389,3 +391,91 @@ class MindmapLogTopUndoTests(MindmapLogTestCase):
         self.contribute("A")
         self.assertEqual(self.owner_mod("unmerge", undo=undo).status_code, 409)
         self.assertEqual(len(self.log()), 1)
+
+
+class MindmapLogReviewFixTests(MindmapLogTestCase):
+    def later(self):
+        later = timezone.now() + timezone.timedelta(hours=25)
+        return patch("django.core.signing.time.time", return_value=later.timestamp())
+
+    def test_parent_merged_away_gives_neutral_reason(self):
+        tech = self.contribute("Technik")
+        wind = self.contribute("Wind")
+        energie = self.contribute("Energie")
+        rotor = self.contribute("Rotor", parent=tech)
+        log_id = self.owner_mod("move", node=rotor, parent=wind).json()["log_id"]
+        self.owner_mod("merge", source=wind, target=energie)
+        response = self.reset(log_id)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], "The term's place has changed since.")
+        self.assertEqual(self.parent_of(rotor), energie)
+
+    def test_log_reset_ignores_token_expiry(self):
+        a, b = self.contribute("A"), self.contribute("B")
+        c = self.contribute("Wnd")
+        merge_id = self.owner_mod("merge", source=a, target=b).json()["log_id"]
+        merge_undo = MindmapModerationEntry.objects.get(pk=merge_id).undo
+        rename_id = self.owner_mod("rename", node=c, text="Wind").json()["log_id"]
+        with self.later():
+            # Client-held blobs still expire ...
+            response = self.owner_mod("unmerge", undo=merge_undo)
+            self.assertEqual(response.status_code, 409)
+            self.assertIn("expired", response.json()["detail"])
+            # ... the log's server-side undo data does not.
+            self.assertEqual(self.reset(merge_id).status_code, 200)
+            self.assertEqual(self.reset(rename_id).status_code, 200)
+        self.assertTrue(MindmapNode.objects.filter(pk=a).exists())
+        self.assertEqual(MindmapNode.objects.get(pk=c).text, "Wnd")
+
+    @override_settings(**base.AI_ON)
+    def test_ai_log_reset_ignores_token_expiry(self):
+        self.mq.wordcloud_ai_enabled = True
+        self.mq.save()
+        wind = self.contribute("Wind")
+        windkraft = self.contribute("Windkraft")
+        self.contribute("Energy")
+        ops = [{"type": "merge", "source": windkraft, "target": wind, "reason": "x"}]
+        self.client.force_login(self.owner)
+        with patch(CHAT, return_value={"ops": ops}), patch("live.views.broadcast"):
+            proposal = self.mod("ai-optimize").json()["proposal"]
+            body = self.mod("ai-apply", proposal=proposal, selected=[0]).json()
+        with self.later():
+            self.client.force_login(self.owner)
+            with patch("live.views.broadcast"):
+                response = self.mod("ai-undo", undo=body["undo"])
+            self.assertEqual(response.status_code, 409)
+            self.assertIn("expired", response.json()["detail"])
+            self.assertEqual(self.reset(body["log_id"]).status_code, 200)
+        self.assertTrue(MindmapNode.objects.filter(pk=windkraft).exists())
+
+    def test_tampered_log_undo_still_refused(self):
+        a = self.contribute("Wnd")
+        log_id = self.owner_mod("rename", node=a, text="Wind").json()["log_id"]
+        MindmapModerationEntry.objects.filter(pk=log_id).update(undo="tampered")
+        self.assertEqual(self.reset(log_id).status_code, 400)
+        self.assertEqual(MindmapNode.objects.get(pk=a).text, "Wind")
+
+    def test_payload_capped_at_newest(self):
+        a = self.contribute("A")
+        entries = [
+            MindmapModerationEntry(
+                run=self.run, question=self.mq, kind="ai", label={"count": i}, undo=[]
+            )
+            for i in range(mindmap_log.PAYLOAD_MAX + 5)
+        ]
+        MindmapModerationEntry.objects.bulk_create(entries)
+        newest = self.owner_mod("rename", node=a, text="B").json()["log_id"]
+        log = self.log()
+        self.assertEqual(len(log), mindmap_log.PAYLOAD_MAX)
+        self.assertEqual(log[0]["id"], newest)
+
+    def test_entries_go_with_deleted_results(self):
+        a = self.contribute("A")
+        self.owner_mod("rename", node=a, text="B")
+        self.client.force_login(self.owner)
+        with patch("live.views.broadcast"):
+            response = self.client.post(
+                f"/api/question-sets/{self.question_set.pk}/delete-results/"
+            )
+        self.assertIn(response.status_code, (200, 204), response.content)
+        self.assertEqual(MindmapModerationEntry.objects.count(), 0)
