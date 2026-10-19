@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: Apache-2.0
+# English version of the project website, served under /en/. Inherits
+# theme, CSS, overrides, hooks and Markdown extensions from mkdocs.yml and
+# builds into site/en/ — build the German site first (its build cleans
+# site/). Build: mkdocs build --strict -f website/mkdocs.en.yml
+INHERIT: mkdocs.yml
+site_url: https://virtuos.github.io/abstimmbar/en/
+site_description: >-
+  Anonymous live polling for university teaching — open source by virtUOS,
+  Osnabrück University.
+site_author: virtUOS, Osnabrück University
+copyright: >-
+  © 2026 Osnabrück University (virtUOS) · Abstimmbar is licensed under the
+  Apache License 2.0
+
+docs_dir: en
+site_dir: ../site/en
+# Theme assets (CSS, logo) come from ../assets via hooks/i18n.py.
+exclude_docs: ""
+
+theme:
+  language: en
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-auto
+        name: System theme
+
+extra:
+  alternate:
+    - name: Deutsch
+      link: ../
+      lang: de
+    - name: English
+      link: ./
+      lang: en
+
+nav:
+  - Home: index.md
+  - Guide:
+      - guide/index.md
+      - Signing in and modes: guide/sign-in.md
+      - The guided tour: guide/guided-tour.md
+      - Rooms: guide/rooms.md
+      - Types of question sets: guide/set-types.md
+      - Creating questions: guide/questions.md
+      - AI assistance: guide/ai-assistance.md
+      - Starting a run: guide/runs.md
+      - Inviting participants: guide/inviting-participants.md
+      - Presenting: guide/presenting.md
+      - Recorded lectures: guide/recorded-lectures.md
+      - Results: guide/results.md
+      - Rooms in a team: guide/team.md
+      - In the learning platform (LTI): guide/lms.md
+      - Bilingual content: guide/bilingual-content.md
+      - Privacy: guide/privacy.md
+      - Teaching tips: guide/teaching-tips.md
+  - Installation:
+      - installation.md
+      - LMS integration (LTI 1.3): lti.md

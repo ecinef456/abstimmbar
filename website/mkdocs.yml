@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Project website (GitHub Pages): landing page, guide for teachers,
-# installation. Build: mkdocs build --strict -f website/mkdocs.yml
+# installation — German, at the site root (English: mkdocs.en.yml, /en/).
+# Build: mkdocs build --strict -f website/mkdocs.yml
 site_name: Abstimmbar
 site_url: https://virtuos.github.io/abstimmbar/
 site_description: >-
@@ -22,12 +23,17 @@ site_dir: ../site
 exclude_docs: |
   README.md
   mkdocs.yml
+  mkdocs.en.yml
   requirements.txt
   hooks/
+  overrides/
+  en/
 
 theme:
   name: material
   language: de
+  # Shared with mkdocs.en.yml: per-page language selector (partials/).
+  custom_dir: overrides
   logo: assets/logo.svg
   favicon: assets/logo.svg
   font:
@@ -71,6 +77,19 @@ extra_css:
 
 hooks:
   - hooks/docs_links.py
+  - hooks/i18n.py
+
+# Language selector. German lives at the site root, English under /en/
+# (mkdocs.en.yml, built into site/en/). Links are relative to the site
+# root; hooks/i18n.py points them at the counterpart of each page.
+extra:
+  alternate:
+    - name: Deutsch
+      link: ./
+      lang: de
+    - name: English
+      link: en/
+      lang: en
 
 markdown_extensions:
   - admonition
