@@ -219,6 +219,10 @@ Sie übernehmen.
   KI schlägt Einzel-, Mehrfachauswahl- und Freitextfragen vor.
 - **Wortwolke optimieren** — Rechtschreibung und Synonyme zusammenführen,
   thematisch gruppieren.
+- **Matrix-Karten zusammenfassen** — in der Präsentation einer
+  Vier-Felder-Matrix gleiche oder ähnliche Karten eines Feldes unter einer
+  Sammelkarte stapeln (Schalter **KI-Funktionen aktivieren** im Editor der
+  Frage; siehe Abschnitt 8).
 - **Freitext auswerten (live)** — offene Antworten automatisch in 2–5 selbst
   gewählte Kategorien einordnen.
 - **Kurzbericht erstellen** — eine kompakte Zusammenfassung der Ergebnisse.
@@ -280,7 +284,8 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   des Fragensets zurück, und die Teilnehmenden sehen „Die Präsentation ist
   gerade pausiert – es können noch weitere Fragen folgen.“ (mit einem Knopf,
   um ihre Antworten anzusehen). Präsentieren Sie innerhalb von zwei Stunden
-  erneut, geht es dort weiter, wo Sie aufgehört haben; sobald Sie eine neue
+  erneut, geht es dort weiter, wo Sie aufgehört haben – bei einer Matrix oder
+  Mindmap sehen Sie dann direkt das Brett bzw. die Mindmap; sobald Sie eine neue
   Abstimmung starten, springen die Geräte der Teilnehmenden automatisch zur
   Frage. Blättern Sie mit → über die letzte Frage hinaus, erscheint der
   Schlussbildschirm; eine beliebige Taste beendet dann die Umfrage.
@@ -328,7 +333,11 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   links unten zeigt, wie viele bereits bewertet haben. **Stoppen** (S) beendet
   die Bewertung; die Ergebnisse bleiben verborgen, bis Sie mit **Ergebnis** (E)
   auflösen – es sei denn, Sie haben „Bewertungen während der Bewertung
-  anzeigen“ eingeschaltet (dann führt Stoppen direkt zum Ergebnis). Sobald
+  anzeigen“ eingeschaltet (dann führt Stoppen direkt zum Ergebnis). Das gilt
+  auch, wenn Sie danach **Zurück zum Sammeln** gehen: Solange verborgene
+  Bewertungen vorliegen, schließen Stoppen und der Ablauf der Zeit nur, die
+  Mindmap bleibt stehen, und auch **A** zeigt keine Bewertungen – erst
+  **Ergebnis** (E) löst auf. Sobald
   Ergebnisse sichtbar sind, zeigt die Mindmap die Punkte bzw. Plus/Minus an
   jedem Begriff: Jeder Begriff füllt sich wie ein Balken – bei Punkten im
   Verhältnis zum Spitzenreiter, bei Plus/Minus grün von links (Zustimmung)
@@ -337,7 +346,9 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   **Rangliste** listet die Spitzenreiter als Balken in der Farbe ihres Asts.
   Während der Bewertung können Sie Begriffe nur aus- und wieder einblenden;
   mit **Zurück zum Sammeln** können Teilnehmende wieder Begriffe ergänzen
-  (die Bewertungen bleiben erhalten). Auf der Ergebnisseite erscheinen die
+  (die Bewertungen bleiben erhalten). Präsentieren Sie eine nicht beendete
+  Umfrage erst später erneut (neue Sitzung), beginnt die Mindmap wieder beim
+  Sammeln. Auf der Ergebnisseite erscheinen die
   Bewertungen am Begriffsbaum, als Rangliste und im CSV-Export.
 - **Vier-Felder-Matrix:** Die Karten erscheinen live auf dem Koordinatenkreuz;
   der Beamer zeigt das Brett, solange die Abstimmung läuft und in der
@@ -390,7 +401,53 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     nicht größer. Während der Bewertung sind **Stapel gesperrt** (ein Ziehen
     verschiebt nur die Karte; Teilnehmende können keine Karten ergänzen oder
     zurücknehmen); Verschieben und Ausblenden bleiben möglich. **Zurück zum
-    Sammeln** öffnet das Brett wieder; die Bewertungen bleiben erhalten.
+    Sammeln** öffnet das Brett wieder; die Bewertungen bleiben erhalten und
+    verborgen: Stoppen (S) und der Ablauf der Zeit schließen dann nur, das
+    Brett bleibt stehen, **A** zeigt keine Bewertungen – erst **Ergebnis** (E)
+    löst auf.
+    Kehren Sie in derselben Sitzung zur Präsentation zurück, steht die Matrix
+    weiter in der Bewertung; präsentieren Sie eine nicht beendete Umfrage
+    erst später erneut (neue Sitzung), beginnt sie wieder beim Sammeln.
+  - **KI-Zusammenfassen (Experten-Modus):** Ist die KI an Ihrer Hochschule
+    eingerichtet und haben Sie im Editor bei der Matrix **KI-Funktionen
+    aktivieren** eingeschaltet, erscheint unter dem Stift ein **Stern**. Dort
+    wählen Sie zuerst, wie streng die KI vorgeht: **Nur Schreibweise**
+    (Tippfehler, Groß-/Kleinschreibung, Singular/Plural), **Inhaltlich gleich**
+    (gleicher Inhalt in anderen Worten) oder **Konzeptionell ähnlich**
+    (gemeinsames Thema). **Vorschlag holen** (ab drei Karten) zeigt die vorgeschlagenen Gruppen – immer nur Karten
+    **desselben Feldes**. Jede Gruppe bekommt eine **Sammelkarte**: Titel
+    (und, wenn eingeschaltet, Beschreibung und Kategorie) schlägt die KI vor,
+    Sie können sie vor dem Übernehmen ändern. Die Sammelkarte liegt oben auf
+    dem Stapel, an der Stelle der ältesten Karte; die übrigen Karten liegen
+    darunter. Gibt es in einer Gruppe schon eine Sammelkarte, bleibt sie
+    (keine zweite). Gruppen, die nicht mehr zum Brett passen (Karte
+    ausgeblendet, in verschiedenen Feldern …), sind ausgegraut und nennen den
+    Grund. Passende Karten in verschiedenen Feldern nennt die KI als
+    Hinweis – je nach gewählter Stufe unter **Gleiche Schreibweise, aber
+    unterschiedlich eingeordnet**, **Inhaltlich gleich, aber unterschiedlich
+    eingeordnet** oder **Ähnlich, aber unterschiedlich eingeordnet**. **Zeigen** hebt
+    diese Karten auf dem Brett hervor, geändert wird dabei nichts – ein guter
+    Anlass zur Diskussion. Schalten Sie vor **Vorschlag holen** den Schalter
+    **Auch über Feldgrenzen zusammenfassen** ein, dürfen Gruppen Karten aus
+    mehreren Feldern enthalten: Die Sammelkarte kommt in das Feld mit den
+    meisten Karten der Gruppe (bei Gleichstand in das Feld der ältesten
+    Karte), Karten aus anderen Feldern sind mit **wird verschoben aus: …**
+    gekennzeichnet und werden beim Übernehmen samt ihrem Stapel dorthin
+    gelegt; Hinweise entfallen dann. Standardmäßig ist der Schalter aus.
+    **Übernehmen** stapelt alle angehakten Gruppen in
+    einem Schritt; **Rückgängig** im Panel nimmt genau diesen Schritt zurück
+    (verschobene Karten kehren in ihr Feld und an ihre Stelle zurück) –
+    bis zum nächsten Übernehmen oder bis Sie das Panel schließen (auch Stift
+    oder Anzeige öffnen schließt es), und nur, solange die Stapel nicht von
+    Hand verändert wurden. Sammelkarten tragen auf dem Beamer, auf der
+    Ergebnisseite und in der Bewertungsliste der Teilnehmenden einen Stern
+    und „Zusammenfassung“; sie lassen sich bewerten wie jede andere Karte,
+    und die Zahl am Stapel („×3“) zählt nur die Karten darunter. Lösen Sie
+    einen Stapel von Hand ganz auf, verschwindet seine Sammelkarte. An das
+    KI-Modell gehen nur Inhalte – Frage, Achsen, Feldnamen und die Karten
+    (Titel, Beschreibung, Kategorie) –, keine Namen oder sonstigen Daten der
+    Teilnehmenden. Während der Bewertung ist der Stern gesperrt, weil die
+    Stapel in dieser Phase feststehen; ein offenes Panel schließt sich.
 - **Wortwolken bearbeiten (Experten-Modus):** Ziehen Sie einen Begriff auf
   einen anderen, um beide zusammenzuführen; mit × blenden Sie einen Begriff aus.
   Der Stift am rechten Rand öffnet die Liste zum Wiederherstellen, Trennen und
@@ -424,7 +481,8 @@ Fragenset über **„Ergebnisse"**. Dort können Sie:
 
 - die Auswertung je Frage einsehen (inkl. Wortwolke, Likert-Balken, Prioritäten,
   Sortierung und Vier-Felder-Matrix – dort als Brett und als Liste der Karten
-  nach Feldern gruppiert; ausgeblendete Karten sind markiert; mit
+  nach Feldern gruppiert; ausgeblendete Karten und KI-Sammelkarten
+  („Zusammenfassung“) sind markiert; mit
   Bewertung zusätzlich Balken an den Karten und eine Rangliste – solange die
   Bewertung noch verborgen läuft, erscheint stattdessen ein Hinweis);
   richtige Antworten sind hier immer grün mit „Richtig“ markiert,

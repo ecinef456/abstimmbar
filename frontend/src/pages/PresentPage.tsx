@@ -520,6 +520,27 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
 
   const phase = state?.phase ?? "lobby";
 
+  // Re-entering a running presentation (same session) on a matrix / mind
+  // map that was left via ✕ — which closes the vote: the first snapshot is
+  // "closed", where the beamer would show only the question. Show the board
+  // / map instead, like a closed rating, WITHOUT changing the phase (the
+  // results phase would reveal hidden rating scores). Ends with any phase or
+  // question change; "Question" shows the bare question as usual.
+  const [resumeBoard, setResumeBoard] = useState<number | null>(null);
+  const firstSnapshot = useRef(true);
+  useEffect(() => {
+    if (!state || !firstSnapshot.current) return;
+    firstSnapshot.current = false;
+    const kind = state.question?.kind;
+    if (state.phase === "closed" && (kind === "matrix" || kind === "mindmap")) {
+      setResumeBoard(state.question!.id);
+    }
+  }, [state]);
+  const resumeShown = resumeBoard != null && resumeBoard === activeId && phase === "closed";
+  useEffect(() => {
+    if (resumeBoard != null && !resumeShown) setResumeBoard(null);
+  }, [resumeBoard, resumeShown]);
+
   // --- AI panel (#Wortwolke-KI): switch AI on (expert), pick view, regroup. ---
   // Settings are saved permanently on the question; the AI views themselves
   // are activated through `wcView` (same path as the footer / `A`).
@@ -598,11 +619,18 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const mmRating = mindmap?.rating;
   const mmRate = mmRating?.stage === "rate";
   // Stopping a rating with hidden scores only closes the vote (the map stays,
-  // without scores); "Ergebnis" / E reveals. Collecting (and a live-shown
-  // rating) still goes straight to the results.
-  const mmStopCloses = activeKind === "mindmap" && mmRate && !mmRating?.live;
+  // without scores); "Ergebnis" / E reveals. That holds while rating and
+  // also back in collecting as long as hidden ratings exist (someone rated,
+  // live display off, scores not on screen — the presenter payload carries
+  // `raters` but no `scores`): Stop / the timer only close, A never reaches
+  // the scores, E is the deliberate reveal. Otherwise collecting (and a
+  // live-shown rating) still goes straight to the results.
+  const mmScoresHidden =
+    !!mmRating && !mmRating.live && (mmRate || (mmRating.raters > 0 && !mmRating.scores));
+  const mmStopCloses = activeKind === "mindmap" && mmScoresHidden;
   const mmShown =
-    !!mindmap && (phase === "open" || phase === "results" || (phase === "closed" && mmRate));
+    !!mindmap &&
+    (phase === "open" || phase === "results" || (phase === "closed" && (mmScoresHidden || resumeShown)));
   // Matrix: the board is live while open and stays on "Matrix" (results);
   // "Frage" (closed) shows the question alone. Arranging and moderating are
   // for every presenter (not expert-only).
@@ -612,11 +640,16 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // closes; the board stays on a closed rating until E reveals).
   const mxRating = matrixBoard?.rating;
   const mxRate = mxRating?.stage === "rate";
+  const mxScoresHidden =
+    !!mxRating && !mxRating.live && (mxRate || (mxRating.raters > 0 && !mxRating.scores));
   const mxShown =
     !!matrixBoard &&
     !!matrixSettings &&
-    (phase === "open" || phase === "results" || (phase === "closed" && mxRate));
-  const stopCloses = mmStopCloses || (activeKind === "matrix" && mxRate && !mxRating?.live);
+    (phase === "open" || phase === "results" || (phase === "closed" && (mxScoresHidden || resumeShown)));
+  // Matrix AI grouping (✦ handle): expert mode, AI configured, the
+  // question's AI switch on (like the mind map's).
+  const showMxAi = expert && mxShown && whoAi.ai && state?.question?.wordcloud_ai_enabled === true;
+  const stopCloses = mmStopCloses || (activeKind === "matrix" && mxScoresHidden);
   // The rating whose raters the counter shows.
   const rateStats = mmRate ? mmRating : mxRate ? mxRating : undefined;
   // Full-width layouts (compact title, content fills the height).
@@ -759,8 +792,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     (showModHandle || showMmHandle ? 1 : 0) +
       (showAiButton || mmShown ? 1 : 0) +
       (showMmAi ? 1 : 0) +
-      // Matrix: pencil + display.
-      (mxShown ? 2 : 0),
+      // Matrix: pencil, AI star, display.
+      (mxShown ? 2 : 0) +
+      (showMxAi ? 1 : 0),
   );
   const aiHandleTop = handleColumnTop + (showModHandle ? HANDLE_STEP : 0);
   // Mind map: pencil, AI star, zoom.
@@ -1240,14 +1274,18 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       : phase === "results" || liveShown
         ? resultSegment(wcView)
         : undefined) ?? viewSegments[0];
+  // The resumed board (not a closed rating): "Question" stays available —
+  // it just drops the board again (the phase is "closed" already).
+  const resumeOnly = resumeShown && !mmScoresHidden && !mxScoresHidden;
   const disabledViews = useMemo(
-    () => new Set(liveShown ? ["view.question"] : []),
-    [liveShown],
+    () => new Set(liveShown && !resumeOnly ? ["view.question"] : []),
+    [liveShown, resumeOnly],
   );
   const applyView = useCallback(
     (seg: ViewSegment<WcView>) => {
       if (seg.level === "question") {
-        if (!liveShown) void showQuestion();
+        if (resumeOnly) setResumeBoard(null);
+        else if (!liveShown) void showQuestion();
         return;
       }
       if (seg.level === "solution") {
@@ -1263,7 +1301,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         void showResults();
       }
     },
-    [liveShown, phase, revealed, showQuestion, showResults, showSolution],
+    [liveShown, resumeOnly, phase, revealed, showQuestion, showResults, showSolution],
   );
   // A click on the segment already shown does nothing (e.g. a closed rating
   // with hidden scores must not reveal them).
@@ -1279,7 +1317,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // A live cloud / map before the results phase (open vote, closed rating)
   // only switches its views, never the phase; on a closed rating it skips
   // the Ranking (the scores) — those are revealed by E or a click only.
-  const lookOnly = liveShown; // (liveShown implies phase !== "results")
+  const lookOnly = liveShown && !resumeOnly; // (liveShown implies phase !== "results")
   const cycleSegments = useMemo(
     () =>
       viewSegments.filter((sg) =>
@@ -2205,6 +2243,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               rating={mxRating}
               phase={phase}
               view={wcView === "ranking" ? "ranking" : "raw"}
+              aiAvailable={showMxAi}
             />
           )}
 
@@ -2940,7 +2979,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               </span>
             )}
             {/* A closed rating has its own "Rating closed" line above the map. */}
-            {phase === "closed" && !((mmShown && mmRate) || (mxShown && mxRate)) && (
+            {phase === "closed" && !mmShown && !mxShown && (
               <p className="text-xl">{t("Voting closed")}</p>
             )}
           </div>

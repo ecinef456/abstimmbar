@@ -32,7 +32,7 @@ interface Stacks {
 }
 
 /** JSON body of a failed request (the API throws it as the message). */
-function requestBody(err: unknown): Record<string, unknown> | null {
+export function requestBody(err: unknown): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse((err as Error).message);
     if (parsed && typeof parsed === "object") return parsed;

@@ -35,6 +35,8 @@ import {
 export interface HelpEntry {
   name: string;
   text: string;
+  /** Shown instead of `text` while the control is disabled. */
+  offText?: string;
   keys?: string;
 }
 
@@ -89,6 +91,11 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   "handle.mx-edit": {
     name: "Add card",
     text: "Add your own card; show hidden cards again.",
+  },
+  "handle.mx-ai": {
+    name: "AI grouping",
+    text: "Let AI suggest cards of a field that belong together, under a summary card.",
+    offText: "AI grouping is locked while rating – the stacks are fixed in this stage.",
   },
   "handle.mx-zoom": {
     name: "Display",

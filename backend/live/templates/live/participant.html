@@ -178,6 +178,10 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   #mx-rate-list h3{margin:18px 0 4px;font-size:15px;font-weight:700;line-height:1.3}
   #mx-rate-list ul{list-style:none;padding:0;margin:0}
   #mx-rate-list li{padding:10px 0;border-top:1px solid var(--line)}
+  .mx-rsum{display:inline-flex;align-items:center;gap:4px;margin:0 0 4px;font-size:12px;font-weight:700;color:oklch(0.42 0.17 290)}
+  .mx-rsum svg{width:13px;height:13px;flex:none}
+  .mx-rcat .mx-rsum{margin:0 0 0 8px}
+  :root[data-theme="dark"] .mx-rsum{color:oklch(0.82 0.11 290)}
   .mx-rcat{display:inline-flex;align-items:center;gap:6px;margin:0 0 4px;font-size:12px;font-weight:700;color:var(--ink-soft)}
   .mx-rdesc{margin:2px 0 0;font-size:13px;line-height:1.35;color:var(--ink-soft);overflow-wrap:anywhere}
   .mx-rmine{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand-strong);font-size:12px;font-weight:700;vertical-align:middle}
@@ -584,6 +588,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     mxRateIntroPoints: "{% trans 'Give your points to the cards you find most important.' %}",
     mxRateIntroUpdown: "{% trans 'Rate the cards: thumbs up or thumbs down.' %}",
     mxYourCard: "{% trans 'Your card' %}",
+    mxSummary: "{% trans 'Summary' %}",
     mxCardGone: "{% trans 'This card is no longer available.' %}",
     mxRatingRunning: "{% trans 'The rating is in progress — cards cannot be added or removed now.' %}",
     mxOnePoint: "{% trans 'Only one point per card.' %}",
@@ -3895,6 +3900,15 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
             tag.append(num, sr);
           }
           li.append(tag);
+        }
+        if (card.summary) {
+          // AI summary card (sums up a stack): sparkles + label.
+          const sum = document.createElement("div");
+          sum.className = "mx-rsum";
+          sum.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/><path d="M20 3v4M22 5h-4"/></svg>';
+          sum.append(document.createTextNode(I18N.mxSummary));
+          if (li.firstChild && li.firstChild.className === "mx-rcat") li.firstChild.append(sum);
+          else li.append(sum);
         }
         const title = document.createElement("div");
         title.className = "mx-card-title";

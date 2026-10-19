@@ -13,6 +13,7 @@ import {
   joinParticipants,
   startRun,
 } from './helpers/seed';
+import { applySummary } from './helpers/matrixAi';
 
 test.use({ locale: 'de-DE', viewport: { width: 1280, height: 1000 } });
 
@@ -405,6 +406,63 @@ for (const scheme of ['light', 'dark'] as const) {
       if (SHOTS) await page.screenshot({ path: `${SHOTS}/results-updown-${scheme}.png`, fullPage: true });
       await noAxe(page, `axe matrix rating results updown (${scheme})`);
     });
+  });
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test.describe(`matrix results with an AI summary card (${scheme})`, () => {
+  test.use({ colorScheme: scheme });
+  test('marked on the board, in the list and the ranking; badge counts the cards beneath', async ({ page, trackRoom }) => {
+    test.setTimeout(120_000);
+    await login(page);
+    const room = await createRoomWithQuestions(page.request, [], 'Matrix KI', trackRoom, 'E2E Matrix KI');
+    const api = apiClient(page.request);
+    const questionId = await createMatrixQuestion(api, room.setId, {
+      matrix_rating_mode: 'points', matrix_rating_budget: 5, matrix_rating_multi: true, matrix_max_per_person: 5,
+    });
+    const runId = await startRun(api, room.setId);
+    await control(api, runId, 'open', questionId);
+    const tokens = await joinParticipants(page.request, room.code, 2);
+    const csrf = (await page.request.storageState()).cookies.find((c) => c.name === 'abstimmbar_csrftoken')?.value ?? '';
+    const post = async (path: string, data: object) => {
+      const response = await page.request.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/${path}/`, {
+        data, headers: { 'X-CSRFToken': csrf },
+      });
+      expect(response.ok(), await response.text()).toBeTruthy();
+      return response.json();
+    };
+    const add = async (token: string, zone: string, title: string, category: string) =>
+      (await post('add', { token, question: questionId, zone, title, category, description: '' })).card_id as number;
+    const a = await add(tokens[0], 'q1', 'Chatbot', 'blue');
+    const b = await add(tokens[1], 'q1', 'Chat-Bot', 'blue');
+    const altlast = await add(tokens[1], 'q3', 'Altlast', 'orange');
+    const res = await applySummary(api, runId, questionId, [{ cards: [a, b], title: 'Chatbots' }]);
+    const summary = res.matrix.cards.find((c: { summary: boolean }) => c.summary).id as number;
+    await api.post(`/api/runs/${runId}/matrix/${questionId}/stage`, { stage: 'rate' });
+    for (let i = 0; i < 3; i++) await post('rate', { token: tokens[0], question: questionId, card: summary, delta: 1 });
+    await post('rate', { token: tokens[1], question: questionId, card: altlast, delta: 1 });
+    await control(api, runId, 'finished');
+
+    await page.goto(`/sets/${room.setId}/results`);
+    const board = page.locator('[data-matrix-board]');
+    const top = board.locator(`[data-card-id="${summary}"]`);
+    await expect(top).toHaveAttribute('data-summary', 'true');
+    await expect(top.locator('[data-card-summary]')).toHaveText('Zusammenfassung');
+    // The badge counts the cards beneath the summary card.
+    await expect(top.getByTestId('matrix-stack-badge')).toHaveText('×2');
+    await expect(board.locator(`[data-card-id="${altlast}"] [data-card-summary]`)).toHaveCount(0);
+    const item = page.getByTestId('matrix-list').locator(`li[data-card-id="${summary}"]`);
+    await expect(item.locator('[data-card-summary]')).toHaveText('Zusammenfassung');
+    await expect(item).toContainText('Stapel aus 2');
+    const rows = page.getByTestId('matrix-ranking').locator('[data-ranking-row]');
+    await expect(rows.nth(0)).toContainText('Chatbots');
+    await expect(rows.nth(0).locator('[data-card-summary]')).toHaveText('Zusammenfassung');
+    await expect(rows.nth(1).locator('[data-card-summary]')).toHaveCount(0);
+    for (const mark of [top, item, rows.nth(0)])
+      expect(await inkContrast(mark.locator('[data-card-summary]'))).toBeGreaterThanOrEqual(4.5);
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/results-summary-${scheme}.png`, fullPage: true });
+    await noAxe(page, `axe matrix results with a summary card (${scheme})`);
+  });
   });
 }
 

@@ -608,9 +608,10 @@ export default function QuestionPage() {
           wordcloudBatchSubmit,
         wordcloud_live: question.kind !== "word_cloud" || wordcloudLive,
         // Word clouds (AI cleanup) and free text (AI key statements) share
-        // these fields; the mind map uses the switch for its AI optimisation;
-        // other kinds reset them.
-        wordcloud_ai_enabled: (textKind || question.kind === "mindmap") && wordcloudAiEnabled,
+        // these fields; the mind map (AI optimisation) and the matrix (AI
+        // grouping) use the switch only; other kinds reset them.
+        wordcloud_ai_enabled:
+          (textKind || question.kind === "mindmap" || question.kind === "matrix") && wordcloudAiEnabled,
         wordcloud_grouping: textKind ? wordcloudGrouping : "",
         wordcloud_grouping_use_solution: groupingUseSolution,
         wordcloud_merge_variants: wordcloudMergeVariants,
@@ -1572,6 +1573,21 @@ export default function QuestionPage() {
             ratingError={ratingModeError}
             onRatingModeTouched={() => setRatingModeError("")}
           />
+        )}
+
+        {isMatrix && aiEnabled && (
+          <AiAssistPanel title={t("Group cards with AI (presentation)")}>
+            <ToggleSwitch
+              checked={wordcloudAiEnabled}
+              onChange={setWordcloudAiEnabled}
+              label={t("Enable AI features")}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              {t(
+                "In presentation mode, the star below the pencil asks the AI which cards of a field belong together. You check the proposal, edit the summary cards and decide what to apply.",
+              )}
+            </p>
+          </AiAssistPanel>
         )}
 
         {isMindmap && (

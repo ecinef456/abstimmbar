@@ -46,5 +46,9 @@
   "Rate the cards on your device: {{count}} points per person_one": "Rate the cards on your device: {{count}} point per person",
   "Rate the cards on your device: {{count}} points per person_other": "Rate the cards on your device: {{count}} points per person",
   "Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person_one": "Rate the cards on your device with 👍 / 👎: up to {{count}} rating per person",
-  "Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person_other": "Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person"
+  "Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person_other": "Rate the cards on your device with 👍 / 👎: up to {{count}} ratings per person",
+  "{{count}} proposals applied._one": "{{count}} proposal applied.",
+  "{{count}} proposals applied._other": "{{count}} proposals applied.",
+  "{{count}} groups proposed — untick what you don't want._one": "{{count}} group proposed — untick it if you don't want it.",
+  "{{count}} groups proposed — untick what you don't want._other": "{{count}} groups proposed — untick what you don't want."
 }

@@ -53,6 +53,20 @@ are measured at full opacity. Form-control borders (WCAG 1.4.11) are not an
 axe rule; they come from one token (`border-field` in the management UI,
 `--field-line` on the participant page) — change those, not single inputs.
 
+**AI without the LLM.** No spec calls a real AI model. The matrix AI grouping
+specs (`matrix-ai-presenter.spec.ts`, and the summary-card checks in
+`matrix-results.spec.ts` / `mobile-matrix-rating.spec.ts`) use
+`e2e/helpers/matrixAi.ts`: `signedProposal()` runs
+`docker compose exec -T backend python manage.py shell` from the repo root and
+lets the backend simulate and sign a fixed, already parsed AI reply
+(`live.matrix.simulate_groups` / `simulate_hints` / `with_tops` /
+`sign_proposal`) — the same steps as the `ai-propose` view after its LLM
+call, so the body has the exact response shape. Specs route-mock
+`/ai-propose` with it; `ai-apply` / `ai-undo` then run for real
+(`applySummary()` calls ai-apply directly to seed summary cards). This needs
+the dev stack's `backend` service; if `matrix_ai_propose` changes how it
+builds its response, update the helper's script to match.
+
 Tests create rooms whose titles start with "E2E" and delete them afterwards.
 A loaded Docker host (e.g. colima with little RAM) makes runs slow and can
 cause timeouts; use `--workers=2` or fewer.

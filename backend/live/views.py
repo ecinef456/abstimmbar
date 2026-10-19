@@ -51,6 +51,8 @@ from . import (
 from .ai_freetext import clean_categories
 from .hub import hub, sse_frame
 from .models import (
+    MatrixPhase,
+    MindmapPhase,
     OrderingResponse,
     ParticipantToken,
     PriorityScore,
@@ -1139,8 +1141,11 @@ def matrix_ai_propose(request, run_id, question_id):
     hints, dropped, proposal}`` (``matrix.simulate_groups``/``simulate_hints``;
     ``dropped`` = malformed reply entries + skipped groups + dropped hints;
     ``proposal`` = the signed parsed reply for ai-apply, 24 h). Nothing
-    changes. 503 AI not configured, 400 invalid level / AI switch off /
-    fewer than 3 visible cards, 409 rating stage, 502 AI error."""
+    changes. Optional ``cross_field: bool`` (default false): groups may span
+    fields — cards of other fields are marked ``moved_from`` and moved on
+    apply; no hints then (part of the signed proposal). 503 AI not
+    configured, 400 invalid level / cross_field / AI switch off / fewer
+    than 3 visible cards, 409 rating stage, 502 AI error."""
     run, _room, question = _matrix_owner(request, run_id, question_id)
     data = request.data
     if not isinstance(data, dict) or data.get("level") not in ai_matrix.LEVELS:
@@ -1148,6 +1153,9 @@ def matrix_ai_propose(request, run_id, question_id):
             {"detail": "level must be one of: " + ", ".join(ai_matrix.LEVELS) + "."},
             status=400,
         )
+    cross_field = data.get("cross_field", False)
+    if not isinstance(cross_field, bool):
+        return Response({"detail": "cross_field must be true or false."}, status=400)
     if not ai.is_enabled():
         return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
     if not question.wordcloud_ai_enabled:
@@ -1158,21 +1166,25 @@ def matrix_ai_propose(request, run_id, question_id):
         return Response({"detail": matrix.STACKS_LOCKED}, status=409)
     if len(ai_matrix.visible_cards(run, question)) < 3:
         return Response({"detail": "At least 3 cards are needed."}, status=400)
-    system, user = ai_matrix.build_prompt(run, question, data["level"])
+    system, user = ai_matrix.build_prompt(run, question, data["level"], cross_field)
     try:
         reply = ai.chat_json(system, user)
     except ai.AIError as exc:
         return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+    if cross_field and isinstance(reply, dict):
+        # Hints are not asked for (such cards are grouped instead): neither
+        # shown nor counted as dropped.
+        reply = {**reply, "hints": []}
     groups, hints, malformed = ai_matrix.parse_reply(reply)
-    previews = matrix.simulate_groups(run, question, groups)
-    hint_previews = matrix.simulate_hints(run, question, hints)
+    previews = matrix.simulate_groups(run, question, groups, cross_field)
+    hint_previews = matrix.simulate_hints(run, question, hints, cross_field)
     skipped = sum(1 for g in previews if g["status"] != "ok")
     return Response({
         "groups": previews,
         "hints": hint_previews,
         "dropped": malformed + skipped + len(hints) - len(hint_previews),
         "proposal": matrix.sign_proposal(
-            run, question, matrix.with_tops(groups, previews), hints, malformed
+            run, question, matrix.with_tops(groups, previews), hints, malformed, cross_field
         ),
     })
 
@@ -1225,7 +1237,9 @@ def matrix_ai_apply(request, run_id, question_id):
     that no longer fit the board). One broadcast; 409 while rating."""
 
     def action(run, question, data):
-        groups, _hints, _malformed = matrix.unsign_proposal(run, question, data.get("proposal"))
+        groups, _hints, _malformed, cross_field = matrix.unsign_proposal(
+            run, question, data.get("proposal")
+        )
         selected = data.get("selected")
         if not isinstance(selected, list) or not all(
             isinstance(i, int) and not isinstance(i, bool) and 0 <= i < len(groups)
@@ -1233,7 +1247,7 @@ def matrix_ai_apply(request, run_id, question_id):
         ):
             raise _BadField("selected must be a list of proposal indices.")
         edits = _matrix_ai_edits(data, len(groups))
-        return matrix.apply_groups(run, question, groups, selected, edits)
+        return matrix.apply_groups(run, question, groups, selected, edits, cross_field)
 
     return _matrix_ai_moderate(request, run_id, question_id, action)
 
@@ -1987,6 +2001,12 @@ def start_run(request, set_id):
                 run.phase = initial_phase
                 run.active_question = None
                 run.answers_revealed = False
+                # A new session also starts collecting: a matrix / mind map
+                # left in its rating stage by an earlier session must not
+                # open straight into rating (ratings are kept, as when the
+                # presenter goes back to collecting).
+                MatrixPhase.objects.filter(run=run).update(stage=MatrixPhase.Stage.COLLECT)
+                MindmapPhase.objects.filter(run=run).update(stage=MindmapPhase.Stage.COLLECT)
                 # #75: a fresh self-paced session gets a fresh overall deadline
                 # (or none); otherwise a re-run would inherit the previous run's
                 # already-passed clock.

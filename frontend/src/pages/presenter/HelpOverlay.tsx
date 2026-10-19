@@ -391,7 +391,10 @@ export default function HelpOverlay({
     const isNav = card.ids.includes("prev") || card.ids.includes("next");
     const entry = PRESENTER_HELP[card.ids[0]];
     const name = isNav ? t("Previous / next question") : t(entry.name);
-    const text = isNav ? t("Moves between the questions.") : t(entry.text);
+    const off = targets.find((tg) => tg.id === card.ids[0])?.disabled;
+    const text = isNav
+      ? t("Moves between the questions.")
+      : t(off && entry.offText ? entry.offText : entry.text);
     const keys = isNav ? "← →" : entry.keys;
     return (
       <>

@@ -13,7 +13,7 @@
 import { useTranslation } from "react-i18next";
 import type { MatrixRankingEntry, MatrixRating, MatrixSettingsPayload } from "../api";
 import { categoryLabel, paletteEntry, readableOn } from "../matrixPalette";
-import { matrixDownInkClass, matrixUpInkClass, matrixZoneName } from "./Matrix";
+import { MatrixSummaryMark, matrixDownInkClass, matrixUpInkClass, matrixZoneName } from "./Matrix";
 import { CORRECT as UP, MINUS as DOWN } from "./palette";
 
 const NO_CATEGORY_GREY = "#94a3b8";
@@ -89,6 +89,9 @@ export default function MatrixRanking({
                 </span>
                 <span className="sr-only">{t("Rank {{n}}", { n: i + 1 })}: </span>
                 <div className="min-w-0 flex-1">
+                  {e.summary && (
+                    <MatrixSummaryMark dark={!present} className={`flex ${present ? "text-base" : "text-xs"}`} />
+                  )}
                   <span
                     data-ranking-title=""
                     className={`block font-semibold leading-tight text-slate-900 [overflow-wrap:anywhere] ${
