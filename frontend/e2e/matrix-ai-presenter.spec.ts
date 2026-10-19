@@ -88,7 +88,14 @@ async function seed(page: Page, trackRoom: (id: number) => void, overrides: Reco
     const run = body.results.find((r: { run: number }) => r.run === runId);
     return run.questions.find((x: { id: number }) => x.id === questionId).matrix.cards;
   };
-  return { room, api, questionId, runId, ids, cards };
+  const rate = async (token: string, cardId: number, delta: number) => {
+    const response = await page.request.post(`${API_BASE_URL}/api/live/rooms/${room.code}/matrix/rate/`, {
+      data: { token, question: questionId, card: cardId, delta },
+      headers: csrf ? { 'X-CSRFToken': csrf } : undefined,
+    });
+    expect(response.ok(), await response.text()).toBeTruthy();
+  };
+  return { room, api, questionId, runId, ids, cards, tokens, rate };
 }
 
 const board = (page: Page) => page.locator('[data-matrix-board]');
@@ -324,13 +331,17 @@ test('cross-field switch: sent per request, moved cards marked, no hints, apply 
   await handle(page).click();
   const cross = panel(page).getByRole('switch', { name: 'Auch über Feldgrenzen zusammenfassen' });
   await expect(cross).toHaveAttribute('aria-checked', 'false');
-  await expect(panel(page)).toContainText('Karten aus anderen Feldern werden dabei verschoben.');
+  // The short hint only while the switch is on.
+  await expect(panel(page).getByTestId('mx-ai-cross-hint')).toHaveCount(0);
   // Off by default: the request says so.
   await panel(page).getByRole('button', { name: 'Vorschlag holen' }).click();
   await expect(panel(page).getByTestId('mx-ai-group')).toHaveCount(1);
   await panel(page).getByRole('button', { name: 'Verwerfen' }).click();
   await cross.click();
   await expect(cross).toHaveAttribute('aria-checked', 'true');
+  await expect(panel(page).getByTestId('mx-ai-cross-hint')).toHaveText(
+    'Karten aus anderen Feldern werden dabei verschoben.',
+  );
   await expectNoAxe(page);
   await shot(page, 'mx-ai-cross-switch');
   await panel(page).getByRole('button', { name: 'Vorschlag holen' }).click();
@@ -381,6 +392,34 @@ test('re-entering a running presentation after ✕ shows the board', async ({ pa
   await expect(board(page)).toBeVisible();
   await expect(card(page, s.ids.chatbot)).toBeVisible();
   await expect(page.getByText('Beantwortung geschlossen')).toHaveCount(0);
+});
+
+test('re-entering after ✕ keeps hidden rating scores hidden; "Frage" shows the question', async ({
+  page,
+  trackRoom,
+}) => {
+  await login(page);
+  const s = await seed(page, trackRoom, { matrix_rating_mode: 'points', matrix_rating_budget: 3 });
+  const stage = (body: Record<string, unknown>) =>
+    s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/stage`, body);
+  // A rating with hidden scores, then back to collecting, then ✕.
+  await stage({ stage: 'rate', open: true });
+  await s.rate(s.tokens[0], s.ids.chatbot, 1);
+  await stage({ stage: 'collect', open: true });
+  await s.api.post(`/api/runs/${s.runId}/control/`, { away: true });
+  await page.goto(`/sets/${s.room.setId}/present`);
+  await expect(board(page)).toBeVisible();
+  await expect(card(page, s.ids.chatbot)).toBeVisible();
+  // The phase stays "closed": no scores on the board, no ranking view.
+  await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+  await expect(page.locator('footer [data-help*="ranking"]')).toHaveCount(0);
+  await expect(page.getByText('Beantwortung geschlossen')).toHaveCount(0);
+  // "Frage" stays available and shows the bare question.
+  const question = page.locator('footer [data-help="view.question"]');
+  await expect(question).not.toHaveAttribute('aria-disabled', 'true');
+  await question.click();
+  await expect(board(page)).toHaveCount(0);
+  await expect(page.getByText('Beantwortung geschlossen')).toBeVisible();
 });
 
 test('AI error and too few cards', async ({ page, trackRoom }) => {

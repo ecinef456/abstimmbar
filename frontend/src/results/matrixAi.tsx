@@ -433,7 +433,11 @@ export function MatrixAiDrawer({
                 disabled={disabled}
                 label={<span className="font-medium text-slate-700">{t("Also group across fields")}</span>}
               />
-              <p className="mt-1 text-xs text-slate-600">{t("Cards from other fields are moved in the process.")}</p>
+              {ai.crossField && (
+                <p className="mt-1 text-xs text-slate-600" data-testid="mx-ai-cross-hint">
+                  {t("Cards from other fields are moved in the process.")}
+                </p>
+              )}
             </div>
             <div>
               <button
