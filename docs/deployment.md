@@ -206,6 +206,11 @@ erneuert das Let's-Encrypt-Zertifikat automatisch, sobald Domain und Ports
 stimmen. Spätere Änderungen am Caddyfile übernehmen Sie mit
 `sudo docker compose -f docker-compose.prod.yml restart caddy`.
 
+An Django weitergereicht werden die Pfade `/api/`, `/admin/`, `/oidc/`,
+`/lti/`, `/p/`, `/r/`, `/c/`, `/question-preview/`, `/metrics`, `/static/` und
+`/media/`; alles andere liefert die Oberfläche aus. Setzen Sie einen eigenen
+Reverse-Proxy ein, muss er diese Pfade genauso weiterleiten.
+
 ### Schritt 9 — Dateien für SELinux freigeben
 
 Rocky Linux hat SELinux aktiviert; ohne Label darf ein Container keine vom

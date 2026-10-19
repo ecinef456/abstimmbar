@@ -5,6 +5,8 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -34,9 +36,13 @@ def _float_or_default(name, default):
         return default
 
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-insecure-secret-key-change-me")
+_DEV_SECRET_KEY = "dev-insecure-secret-key-change-me"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", _DEV_SECRET_KEY)
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+
+if not DEBUG and SECRET_KEY == _DEV_SECRET_KEY:
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=0")
 
 ALLOWED_HOSTS = _env_list(
     "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0,backend"

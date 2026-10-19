@@ -1,11 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Universität Osnabrück (virtUOS)
 
+import os
+import subprocess
+import sys
 from unittest.mock import MagicMock, patch
 from urllib import error
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import translation
 
 from .markdown import render_markdown
@@ -865,3 +869,29 @@ class TourStatsTests(TestCase):
         self.assertIn('abstimmbar_tour_events{kind="aborted",mode="pro"} 1', body)
         self.assertIn('abstimmbar_tour_starts{source="help"} 2', body)
         self.assertIn("abstimmbar_tour_users_seen 1", body)
+
+
+class SecretKeyGuardTests(SimpleTestCase):
+    """DJANGO_DEBUG=0 must not boot with the insecure dev SECRET_KEY."""
+
+    def _import_settings(self, **env):
+        base = {k: v for k, v in os.environ.items() if k != "DJANGO_SECRET_KEY"}
+        base.update(DJANGO_SETTINGS_MODULE="config.settings", **env)
+        return subprocess.run(
+            [sys.executable, "-c", "import config.settings"],
+            env=base,
+            cwd=settings.BASE_DIR,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+
+    def test_prod_without_secret_key_refuses_to_start(self):
+        result = self._import_settings(DJANGO_DEBUG="0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DJANGO_SECRET_KEY", result.stderr)
+
+    def test_prod_with_secret_key_imports(self):
+        result = self._import_settings(DJANGO_DEBUG="0", DJANGO_SECRET_KEY="x" * 50)
+        self.assertEqual(result.returncode, 0, result.stderr)
