@@ -33,3 +33,24 @@ Vier-Felder-Matrix wird vom Backend simuliert und signiert
 
 Das Projekt `docs-shots` existiert nur mit gesetztem `DOCS_SHOTS`; ein
 normales `npx playwright test` führt das Skript also nicht aus.
+
+## Website bauen und ansehen
+
+Die Website ist eine [MkDocs-Material](https://squidfunk.github.io/mkdocs-material/)-Seite
+(`mkdocs.yml` in diesem Ordner). Der Workflow `.github/workflows/docs.yml`
+baut sie bei Änderungen auf `main` und veröffentlicht sie auf GitHub Pages.
+Lokal, in einer eigenen virtuellen Umgebung:
+
+```bash
+python3 -m venv /tmp/abstimmbar-docs && . /tmp/abstimmbar-docs/bin/activate
+pip install -r website/requirements.txt
+mkdocs serve -f website/mkdocs.yml          # http://127.0.0.1:8000
+mkdocs build --strict -f website/mkdocs.yml # wie in CI, Ausgabe in site/
+```
+
+- `index.md` — Startseite, `anleitung/` — Anleitung für Lehrende (ein Kapitel
+  pro Datei), `assets/` — Theme (Farben wie in der App) und Logo.
+- `installation.md` und `lti.md` binden `docs/deployment.md` bzw.
+  `docs/lti.md` per `pymdownx.snippets` ein — Änderungen dort machen, nicht
+  hier. Links aus diesen Dokumenten auf andere Dateien in `docs/` schreibt
+  `hooks/docs_links.py` auf GitHub um.
