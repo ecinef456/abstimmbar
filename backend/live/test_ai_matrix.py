@@ -160,6 +160,25 @@ class MatrixAiPromptTests(base.MatrixTestCase):
         self.assertIn("anderen Worten", similar)
         self.assertIn("Thema", similar)
 
+    def hint_rule(self, level):
+        system, _ = self.prompt(level)
+        rule = next(line for line in system.splitlines() if '"hints"' in line and "Feldern" in line)
+        return rule
+
+    def test_hints_follow_the_level(self):
+        spelling = self.hint_rule("spelling")
+        self.assertIn("Schreibweise", spelling)
+        self.assertNotIn("inhaltlich", spelling)
+        self.assertNotIn("konzeptionell", spelling)
+        same = self.hint_rule("same")
+        self.assertIn("Schreibweise", same)
+        self.assertIn("inhaltlich dasselbe", same)
+        self.assertNotIn("konzeptionell", same)
+        similar = self.hint_rule("similar")
+        self.assertIn("inhaltlich dasselbe", similar)
+        self.assertIn("konzeptionell ähnlich", similar)
+        self.assertIn("verschiedenen Feldern", similar)
+
     def test_unknown_level(self):
         with self.assertRaises(ValueError):
             self.prompt("wild")

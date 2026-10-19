@@ -341,7 +341,9 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   **Rangliste** listet die Spitzenreiter als Balken in der Farbe ihres Asts.
   Während der Bewertung können Sie Begriffe nur aus- und wieder einblenden;
   mit **Zurück zum Sammeln** können Teilnehmende wieder Begriffe ergänzen
-  (die Bewertungen bleiben erhalten). Auf der Ergebnisseite erscheinen die
+  (die Bewertungen bleiben erhalten). Präsentieren Sie eine nicht beendete
+  Umfrage erst später erneut (neue Sitzung), beginnt die Mindmap wieder beim
+  Sammeln. Auf der Ergebnisseite erscheinen die
   Bewertungen am Begriffsbaum, als Rangliste und im CSV-Export.
 - **Vier-Felder-Matrix:** Die Karten erscheinen live auf dem Koordinatenkreuz;
   der Beamer zeigt das Brett, solange die Abstimmung läuft und in der
@@ -395,14 +397,16 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     verschiebt nur die Karte; Teilnehmende können keine Karten ergänzen oder
     zurücknehmen); Verschieben und Ausblenden bleiben möglich. **Zurück zum
     Sammeln** öffnet das Brett wieder; die Bewertungen bleiben erhalten.
+    Kehren Sie in derselben Sitzung zur Präsentation zurück, steht die Matrix
+    weiter in der Bewertung; präsentieren Sie eine nicht beendete Umfrage
+    erst später erneut (neue Sitzung), beginnt sie wieder beim Sammeln.
   - **KI-Zusammenfassen (Experten-Modus):** Ist die KI an Ihrer Hochschule
     eingerichtet und haben Sie im Editor bei der Matrix **KI-Funktionen
     aktivieren** eingeschaltet, erscheint unter dem Stift ein **Stern**. Dort
     wählen Sie zuerst, wie streng die KI vorgeht: **Nur Schreibweise**
     (Tippfehler, Groß-/Kleinschreibung, Singular/Plural), **Inhaltlich gleich**
     (gleicher Inhalt in anderen Worten) oder **Konzeptionell ähnlich**
-    (gemeinsames Thema). **Vorschlag holen** (ab drei Karten, nicht während
-    der Bewertung) zeigt die vorgeschlagenen Gruppen – immer nur Karten
+    (gemeinsames Thema). **Vorschlag holen** (ab drei Karten) zeigt die vorgeschlagenen Gruppen – immer nur Karten
     **desselben Feldes**. Jede Gruppe bekommt eine **Sammelkarte**: Titel
     (und, wenn eingeschaltet, Beschreibung und Kategorie) schlägt die KI vor,
     Sie können sie vor dem Übernehmen ändern. Die Sammelkarte liegt oben auf
@@ -410,8 +414,10 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     darunter. Gibt es in einer Gruppe schon eine Sammelkarte, bleibt sie
     (keine zweite). Gruppen, die nicht mehr zum Brett passen (Karte
     ausgeblendet, in verschiedenen Feldern …), sind ausgegraut und nennen den
-    Grund. Unter **Inhaltlich gleich, aber unterschiedlich eingeordnet**
-    nennt die KI gleiche Inhalte in verschiedenen Feldern – **Zeigen** hebt
+    Grund. Passende Karten in verschiedenen Feldern nennt die KI als
+    Hinweis – je nach gewählter Stufe unter **Gleiche Schreibweise, aber
+    unterschiedlich eingeordnet**, **Inhaltlich gleich, aber unterschiedlich
+    eingeordnet** oder **Ähnlich, aber unterschiedlich eingeordnet**. **Zeigen** hebt
     diese Karten auf dem Brett hervor, geändert wird dabei nichts – ein guter
     Anlass zur Diskussion. **Übernehmen** stapelt alle angehakten Gruppen in
     einem Schritt; **Rückgängig** im Panel nimmt genau diesen Schritt zurück –
@@ -424,7 +430,8 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     einen Stapel von Hand ganz auf, verschwindet seine Sammelkarte. An das
     KI-Modell gehen nur Inhalte – Frage, Achsen, Feldnamen und die Karten
     (Titel, Beschreibung, Kategorie) –, keine Namen oder sonstigen Daten der
-    Teilnehmenden.
+    Teilnehmenden. Während der Bewertung ist der Stern gesperrt, weil die
+    Stapel in dieser Phase feststehen; ein offenes Panel schließt sich.
 - **Wortwolken bearbeiten (Experten-Modus):** Ziehen Sie einen Begriff auf
   einen anderen, um beide zusammenzuführen; mit × blenden Sie einen Begriff aus.
   Der Stift am rechten Rand öffnet die Liste zum Wiederherstellen, Trennen und

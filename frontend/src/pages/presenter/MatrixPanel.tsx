@@ -45,6 +45,7 @@ import { categoryLabel } from "../../matrixPalette";
 import { MatrixCategoryChips, MatrixZonePicker } from "../../results/MatrixZonePicker";
 import { requestDetail } from "../../results/mindmapModeration";
 import { MATRIX_AI_DRAWER_REM, MatrixAiDrawer, useMatrixAi } from "../../results/matrixAi";
+import { PRESENTER_HELP } from "./footer";
 import { useReducedMotion } from "../../results/motion";
 import { useMatrixView } from "./useMatrixView";
 
@@ -54,6 +55,8 @@ const ZOOM_STEP = 1.25;
 const TITLE_MAX = 60;
 const DESCRIPTION_MAX = 200;
 
+/** Why the ✦ handle is off while rating (same text as its help card). */
+const AI_LOCKED = PRESENTER_HELP["handle.mx-ai"].offText!;
 const HANDLE =
   "fixed right-0 z-30 rounded-l-xl border border-r-0 border-slate-200 bg-white/95 text-slate-500 shadow-md transition-opacity hover:text-slate-800";
 const ROUND_BTN =
@@ -305,6 +308,13 @@ export default function MatrixPanel({
     if (!aiAvailable && ai.open) ai.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiAvailable]);
+  // Rating stage: the stacks are fixed, so the handle is locked (it stays
+  // focusable for its explanation) and an open panel closes.
+  const aiLocked = rateStage;
+  useEffect(() => {
+    if (aiLocked && ai.open) ai.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiLocked]);
 
   // Opened from the keyboard, a drawer takes the focus; closing it returns
   // the focus to its handle when it was inside.
@@ -653,6 +663,7 @@ export default function MatrixPanel({
             {...{ [drawerAttr]: "" }}
             ref={aiHandleRef}
             onClick={(e) => {
+              if (aiLocked) return;
               const byKeyboard = e.detail === 0;
               e.currentTarget.blur();
               setDrawerOpen(false);
@@ -673,14 +684,23 @@ export default function MatrixPanel({
               }
             }}
             aria-label={t("AI grouping")}
-            title={t("AI grouping")}
+            aria-disabled={aiLocked || undefined}
+            aria-describedby={aiLocked ? "mx-ai-locked" : undefined}
+            title={aiLocked ? t(AI_LOCKED) : t("AI grouping")}
             data-help="handle.mx-ai"
             data-beamer-inset=""
             style={{ top: handleTop + handleStep }}
-            className={`${HANDLE} p-3 ${ai.open ? "pointer-events-none opacity-0" : "opacity-100"}`}
+            className={`${HANDLE} p-3 ${
+              ai.open ? "pointer-events-none opacity-0" : aiLocked ? "cursor-not-allowed text-slate-400 hover:text-slate-400" : "opacity-100"
+            }`}
           >
             <Sparkles className="h-5 w-5" />
           </button>
+          {aiLocked && (
+            <span id="mx-ai-locked" hidden>
+              {t(AI_LOCKED)}
+            </span>
+          )}
           <MatrixAiDrawer
             ai={ai}
             drawerRef={aiDrawerRef}

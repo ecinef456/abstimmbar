@@ -44,6 +44,13 @@ const LEVEL_TEXT: Record<MatrixAiLevel, { name: string; text: string }> = {
   similar: { name: "Conceptually similar", text: "A shared theme or idea." },
 };
 
+/** Heading of the hints: they follow the level the proposal was made at. */
+const HINTS_TITLE: Record<MatrixAiLevel, string> = {
+  spelling: "Same spelling, but placed differently",
+  same: "Same content, but placed differently",
+  similar: "Similar, but placed differently",
+};
+
 /** English source strings of the skip reasons (live.matrix SKIP_*). */
 export const SKIP_TEXT: Record<MatrixAiSkipReason, string> = {
   unknown: "A card no longer exists.",
@@ -59,6 +66,8 @@ export const SKIP_TEXT: Record<MatrixAiSkipReason, string> = {
 const RATING_LOCK = "Stacking and deleting are locked while rating.";
 
 interface Proposal extends MatrixAiProposal {
+  /** The level the proposal was made at (the switch may change since). */
+  level: MatrixAiLevel;
   selected: number[];
   edits: Record<number, MatrixAiEdit>;
 }
@@ -132,6 +141,7 @@ export function useMatrixAi({
       }
       setProposal({
         ...res,
+        level,
         selected: res.groups.filter((g) => g.status === "ok").map((g) => g.index),
         edits,
       });
@@ -550,7 +560,7 @@ export function MatrixAiDrawer({
             {proposal.hints.length > 0 && (
               <section data-testid="mx-ai-hints" aria-labelledby="mx-ai-hints-title" className="border-t border-slate-100 pt-3">
                 <h3 id="mx-ai-hints-title" className="font-semibold text-slate-700">
-                  {t("Same content, but placed differently")}
+                  {t(HINTS_TITLE[proposal.level])}
                 </h3>
                 <ul className="mt-1.5 space-y-2">
                   {proposal.hints.map((h) => {

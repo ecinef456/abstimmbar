@@ -7,9 +7,10 @@
 The model gets the question, the axis labels, the field (zone) names and the
 visible top cards (id, title, description, category name, zone; for stacks
 the member titles as context) in the content-canonical language, and
-answers with ``groups`` (cards of ONE field that say the same — each becomes
-a stack under a new summary card) and ``hints`` (same content in different
-fields; display only). Never participant tokens or other participant data.
+answers with ``groups`` (cards of ONE field that match at the chosen level —
+each becomes a stack under a new summary card) and ``hints`` (cards that
+match at the same level but lie in different fields; display only). Never
+participant tokens or other participant data.
 ``parse_reply`` keeps only well-formed entries; ``live.matrix.simulate_groups``
 then checks every group against the board."""
 import json
@@ -48,6 +49,27 @@ _LEVEL_RULES = {
         "(Tippfehler, Groß-/Kleinschreibung, Singular/Plural), inhaltlich "
         "dasselbe mit anderen Worten sagen oder konzeptionell ähnlich sind "
         "(ein gemeinsames Thema haben)."
+    ),
+}
+
+# Hints follow the chosen level: what may be grouped within one field is
+# reported as a hint when it lies in different fields.
+_HINT_RULES = {
+    "spelling": (
+        "- Liegen Karten, die sich nur in der Schreibweise unterscheiden, in "
+        "verschiedenen Feldern, fasse sie nicht zusammen, sondern melde sie "
+        "als Hinweis (\"hints\").\n"
+    ),
+    "same": (
+        "- Liegen Karten, die sich nur in der Schreibweise unterscheiden oder "
+        "inhaltlich dasselbe sagen, in verschiedenen Feldern, fasse sie nicht "
+        "zusammen, sondern melde sie als Hinweis (\"hints\").\n"
+    ),
+    "similar": (
+        "- Liegen Karten, die sich nur in der Schreibweise unterscheiden, "
+        "inhaltlich dasselbe sagen oder konzeptionell ähnlich sind (ein "
+        "gemeinsames Thema haben), in verschiedenen Feldern, fasse sie nicht "
+        "zusammen, sondern melde sie als Hinweis (\"hints\").\n"
     ),
 }
 
@@ -143,9 +165,8 @@ def build_prompt(run, question, level):
         "- Eine Gruppe (\"groups\") enthält mindestens zwei Karten-ids, und "
         "alle Karten einer Gruppe liegen im selben Feld (gleiche zone). Jede "
         "Karte gehört zu höchstens einer Gruppe.\n"
-        "- Liegen inhaltlich gleiche Karten in verschiedenen Feldern, fasse "
-        "sie nicht zusammen, sondern melde sie als Hinweis (\"hints\").\n"
-        "- Jede Gruppe bekommt einen kurzen Titel \"title\" (höchstens "
+        + _HINT_RULES[level]
+        + "- Jede Gruppe bekommt einen kurzen Titel \"title\" (höchstens "
         f"{MATRIX_TITLE_MAX} Zeichen, in der Sprache der Karten), optional "
         f"eine Beschreibung \"description\" (höchstens {MATRIX_DESCRIPTION_MAX} "
         "Zeichen), und einen kurzen Grund \"reason\" (Deutsch, höchstens 10 "

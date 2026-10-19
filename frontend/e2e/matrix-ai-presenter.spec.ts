@@ -171,9 +171,10 @@ test('propose (mocked), edit, hint highlight, apply → summary card, undo, undo
   await expect(skipped.getByRole('checkbox')).not.toBeChecked();
   await expect(skipped).toContainText('Die Karten liegen in verschiedenen Feldern.');
 
-  // Hint: same content in different fields → highlight on the board.
+  // Hint: a match in different fields → highlight on the board. The heading
+  // follows the level the proposal was made at.
   const hints = panel(page).getByTestId('mx-ai-hints');
-  await expect(hints).toContainText('Inhaltlich gleich, aber unterschiedlich eingeordnet');
+  await expect(hints.getByRole('heading')).toHaveText('Gleiche Schreibweise, aber unterschiedlich eingeordnet');
   await expect(hints).toContainText('Beide meinen einen Chatbot.');
   const show = hints.getByRole('button', { name: 'Zeigen' });
   await show.click();
@@ -255,7 +256,7 @@ test('keyboard opening focuses the level; skipped groups keep the edited title; 
   const body = signedProposal(s.runId, s.questionId, [
     { cards: [ids.chatbot, ids.chatbot2], title: 'Chatbot' },
     { cards: [ids.assistant, ids.altlast], title: 'Assistenz' },
-  ]) as { groups: { category?: string }[] };
+  ], [{ cards: [ids.podcast, ids.chatbot], reason: 'Beides digitale Medien.' }]) as { groups: { category?: string }[] };
   // A preview whose category is not one of the question's (e.g. categories
   // changed meanwhile): the select shows the first category and sends it.
   body.groups[1].category = '';
@@ -272,6 +273,10 @@ test('keyboard opening focuses the level; skipped groups keep the edited title; 
   await panel(page).getByRole('button', { name: 'Vorschlag holen' }).click();
   const groups = panel(page).getByTestId('mx-ai-group');
   await expect(groups).toHaveCount(2);
+  // At "conceptually similar" the hints are similar cards in other fields.
+  await expect(panel(page).getByTestId('mx-ai-hints').getByRole('heading')).toHaveText(
+    'Ähnlich, aber unterschiedlich eingeordnet',
+  );
   const category = groups.nth(1).getByRole('combobox', { name: 'Kategorie der Sammelkarte' });
   await expect(category).toHaveValue('blue');
   await expect(category.locator('option:checked')).toHaveText('Idee');
@@ -329,7 +334,28 @@ test('gating: easy mode, AI switch off, rating stage', async ({ page, trackRoom 
   await rating.api.post(`/api/runs/${rating.runId}/matrix/${rating.questionId}/stage`, { stage: 'rate', open: true });
   await openPresenter(page, rating.room.setId);
   await expect(page.getByTestId('mx-rating-banner')).toBeVisible();
+  // Rating stage: the handle itself is locked and says why (focusable for
+  // its description); clicking it opens nothing.
+  const locked = 'KI-Zusammenfassen ist während der Bewertung gesperrt – die Stapel sind in dieser Phase fest.';
+  await expect(handle(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(handle(page)).toHaveAccessibleName('KI-Zusammenfassen');
+  await expect(handle(page)).toHaveAccessibleDescription(locked);
+  await expect(handle(page)).toHaveAttribute('title', locked);
+  await handle(page).click({ force: true });
+  await handle(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(panel(page)).not.toBeInViewport();
+  // The "?" help card says the same.
+  await page.keyboard.press('?');
+  await expect(page.locator('[data-testid="help-card"][data-help-for~="handle.mx-ai"]')).toContainText(locked);
+  await page.keyboard.press('Escape');
+
+  // An open panel closes when rating starts; back to collecting unlocks.
+  await rating.api.post(`/api/runs/${rating.runId}/matrix/${rating.questionId}/stage`, { stage: 'collect', open: true });
+  await expect(handle(page)).not.toHaveAttribute('aria-disabled', 'true');
   await handle(page).click();
-  await expect(panel(page)).toContainText('Stapeln und Löschen sind während der Bewertung gesperrt.');
-  await expect(panel(page).getByRole('button', { name: 'Vorschlag holen' })).toBeDisabled();
+  await expect(panel(page)).toBeInViewport();
+  await rating.api.post(`/api/runs/${rating.runId}/matrix/${rating.questionId}/stage`, { stage: 'rate', open: true });
+  await expect(panel(page)).not.toBeInViewport();
+  await expect(handle(page)).toHaveAttribute('aria-disabled', 'true');
 });
