@@ -255,7 +255,9 @@ export function useMindmapModeration(
    *  (shown inline by the caller, not as a toast). */
   const resetLog = (entryId: number) =>
     new Promise<string | null>((resolve) => {
-      if (runId == null || questionId == null || key === null) return resolve(null);
+      // No run/question (yet): nothing was reset — say so instead of
+      // reporting success.
+      if (runId == null || questionId == null || key === null) return resolve("Not possible right now.");
       const rid = runId;
       const qid = questionId;
       const stacks = stacksFor(key);

@@ -2109,7 +2109,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               className="mx-auto mt-2 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm text-slate-700">
               <Info className="h-4 w-4 shrink-0 text-brand-600" aria-hidden />
               <p className="flex-1">
-                {t("Tip: + adds a term. Drag a term onto another to merge them, or onto “Attach here” beside it to move it there; double-click renames, × hides (the pencil on the right lists hidden terms). Ctrl+Z undoes.")}
+                {t("Tip: + adds a term. Drag a term onto another to merge them, or onto “Attach here” beside it to move it there; double-click renames, × hides (the pencil on the right shows hidden terms and your moderation steps for selective reset). Ctrl+Z undoes.")}
               </p>
               <button
                 type="button"

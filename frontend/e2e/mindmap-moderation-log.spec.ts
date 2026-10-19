@@ -133,14 +133,14 @@ test('lists merges, moves, renames and AI changes; resets one in the middle', as
 
   await openDrawer(page);
   await expect(section(page, 'Ausgeblendet')).toContainText('Papier');
-  await expect(section(page, 'Zusammengelegt')).toContainText('‚Windkraft‘ in ‚Windenergie‘ zusammengelegt');
-  await expect(section(page, 'Verschoben')).toContainText('‚Rotor‘ verschoben: Technik → Windenergie');
-  await expect(section(page, 'Umbenannt')).toContainText('‚Wnd‘ → ‚Wind‘ umbenannt');
+  await expect(section(page, 'Zusammengeführt')).toContainText('„Windkraft“ in „Windenergie“ zusammengeführt');
+  await expect(section(page, 'Verschoben')).toContainText('„Rotor“ verschoben: Technik → Windenergie');
+  await expect(section(page, 'Umbenannt')).toContainText('„Wnd“ → „Wind“ umbenannt');
   await expect(section(page, 'KI-Änderungen')).toContainText('KI: 1 Änderung');
-  // Section order: Ausgeblendet, Zusammengelegt, Verschoben, Umbenannt, KI-Änderungen.
+  // Section order: Ausgeblendet, Zusammengeführt, Verschoben, Umbenannt, KI-Änderungen.
   await expect(drawer(page).getByRole('heading', { level: 3 })).toHaveText([
     'Ausgeblendet',
-    'Zusammengelegt',
+    'Zusammengeführt',
     'Verschoben',
     'Umbenannt',
     'KI-Änderungen',
@@ -166,15 +166,15 @@ test('lists merges, moves, renames and AI changes; resets one in the middle', as
   await expect
     .poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="mm-mod-drawer"]')))
     .toBe(true);
-  await expect(section(page, 'Zusammengelegt')).toBeVisible();
+  await expect(section(page, 'Zusammengeführt')).toBeVisible();
   await expect(section(page, 'Umbenannt')).toBeVisible();
   await expect(section(page, 'KI-Änderungen')).toBeVisible();
 
   // Reset the AI batch and the merge from the list as well.
   await section(page, 'KI-Änderungen').getByRole('button', { name: /Zurücksetzen/ }).click();
   await expect(section(page, 'KI-Änderungen')).toHaveCount(0);
-  await section(page, 'Zusammengelegt').getByRole('button', { name: /Zurücksetzen/ }).click();
-  await expect(section(page, 'Zusammengelegt')).toHaveCount(0);
+  await section(page, 'Zusammengeführt').getByRole('button', { name: /Zurücksetzen/ }).click();
+  await expect(section(page, 'Zusammengeführt')).toHaveCount(0);
   await expect.poll(s.parents).toMatchObject({ Sonne: 'Solar', Windkraft: null, Wind: null });
 });
 
@@ -196,6 +196,7 @@ test('a conflicting reset says why and changes nothing', async ({ page, trackRoo
   await older.getByRole('button', { name: /Zurücksetzen/ }).click();
   await expect(older).toContainText(/Nicht mehr möglich: Der Platz des Begriffs hat sich seitdem geändert/);
   await expect(older.getByRole('button', { name: /Zurücksetzen/ })).toBeFocused();
+  await expect(page.getByTestId('mm-mod-announce')).toHaveText(/Nicht mehr möglich: Der Platz des Begriffs/);
   await shot(page, 'mm-log-conflict');
   expect((await s.parents()).Rotor).toBe('Solar');
   await expect(moved.getByRole('listitem')).toHaveCount(2);
@@ -218,7 +219,7 @@ test('top undo removes the entry; a reset from the list drops its undo step', as
   // Top undo marks the entry reset: it leaves the list.
   await rename('Wnd', 'Wind');
   await openDrawer(page);
-  await expect(section(page, 'Umbenannt')).toContainText('‚Wnd‘ → ‚Wind‘ umbenannt');
+  await expect(section(page, 'Umbenannt')).toContainText('„Wnd“ → „Wind“ umbenannt');
   await drawer(page).getByRole('button', { name: 'Rückgängig' }).click();
   await expect(section(page, 'Umbenannt')).toHaveCount(0);
   await expect.poll(s.parents).toHaveProperty('Wnd', null);
@@ -233,7 +234,7 @@ test('top undo removes the entry; a reset from the list drops its undo step', as
   await expect(renamed.getByRole('listitem')).toHaveCount(2);
   await renamed
     .getByRole('listitem')
-    .filter({ hasText: '‚Wnd‘ → ‚Wind‘' })
+    .filter({ hasText: '„Wnd“ → „Wind“' })
     .getByRole('button', { name: /Zurücksetzen/ })
     .click();
   await expect(renamed.getByRole('listitem')).toHaveCount(1);
@@ -256,6 +257,6 @@ test('locked while rating', async ({ page, trackRoom }) => {
   await openPresenter(page, s.room.setId);
   await openDrawer(page);
   await expect(drawer(page)).toContainText('Während der Bewertung nicht möglich.');
-  await expect(section(page, 'Zusammengelegt').getByRole('button', { name: /Zurücksetzen/ })).toBeDisabled();
+  await expect(section(page, 'Zusammengeführt').getByRole('button', { name: /Zurücksetzen/ })).toBeDisabled();
   await shot(page, 'mm-log-rating');
 });

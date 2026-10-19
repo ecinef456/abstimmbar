@@ -86,20 +86,20 @@ def build_prompt(tree, question, options):
     if options.get("restructure"):
         allowed.append(
             '- "add" {"ref", "parent", "text"}: neuer Oberbegriff unter '
-            '"parent" (Begriffs-id oder null = Hauptast); "ref" ist eine neue '
+            '"parent" (Begriffs-id oder null = Hauptzweig); "ref" ist eine neue '
             'Kennung wie "n1", die spätere Operationen statt einer id '
             'verwenden (als "parent" oder "node").'
         )
         allowed.append(
             '- "move" {"node", "parent"}: Begriff (mit seinen Unterbegriffen) '
             'unter einen passenderen Begriff, einen neuen Oberbegriff ("ref") '
-            "oder null (Hauptast) verschieben. Nie für Begriffe mit "
+            "oder null (Hauptzweig) verschieben. Nie für Begriffe mit "
             "\"fixed\": true."
         )
     system = (
         "Du hilfst Lehrenden, eine gemeinsam von Studierenden erstellte "
         "Mindmap aufzuräumen. Du erhältst die Frage und die Begriffe als "
-        "Baum (id, parent = id des Oberbegriffs oder null für einen Hauptast, "
+        "Baum (id, parent = id des Oberbegriffs oder null für einen Hauptzweig, "
         "text, optional description, level = Ebene ab 1, fixed = von den "
         "Lehrenden vorgegeben).\n"
         "Schlage Operationen vor; erlaubt sind ausschließlich:\n"

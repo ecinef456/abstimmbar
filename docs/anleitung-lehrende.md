@@ -308,7 +308,7 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   Teilbaum aus. Mit Strg/Cmd+Z machen Sie den letzten Schritt rückgängig.
   Der **Stift** am rechten Rand öffnet die Moderationsansicht: Unter
   **Ausgeblendet** holen Sie ausgeblendete Begriffe zurück, darunter listen
-  **Zusammengelegt**, **Verschoben**, **Umbenannt** und **KI-Änderungen** Ihre
+  **Zusammengeführt**, **Verschoben**, **Umbenannt** und **KI-Änderungen** Ihre
   bisherigen Eingriffe (neueste oben). Mit **Zurücksetzen** nehmen Sie gezielt
   einen einzelnen davon zurück, auch einen älteren, ohne die späteren
   anzutasten. Passt er nicht mehr, weil sich die Mindmap seitdem verändert hat,
