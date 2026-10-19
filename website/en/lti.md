@@ -50,7 +50,8 @@ In the "Add platform" form, enter the details provided by the LMS:
 - **Deployment IDs (comma-separated)**: assigned by the LMS **only after the
   tool has been saved** (see the Moodle instructions below), e.g. `1` or
   `1, 2`. Often it is simply `1`.
-- **"Link users by email"**: checkbox, **default: on**. See the section
+- **"Link users by email"**: checkbox, **default: off** (enable only for platforms that confirm
+  email changes). See the section
   [Account linking](#account-linking) below for the security note, which
   the form also displays while the option is enabled.
 - **Active**: only active platforms may perform a launch. To disable a
@@ -120,7 +121,7 @@ LMS instance; the Tool endpoints panel is the same for all of them.
 The LTI `sub` is local to the platform and never matches the OIDC subject;
 without linking, the same teacher would end up with two accounts. For this,
 each platform has the option **"Link users by email"** (`link_by_email`, set
-on the platform in the web admin, **default: on**): on the first launch of
+on the platform in the web admin, **default: off**; enable it only for platforms that confirm email changes): on the first launch of
 an unknown LTI `sub`, an existing account with the same email address is
 reused, provided the match is unique (exactly one account; otherwise a new
 LTI account is created as before). The resolved mapping is stored
@@ -131,9 +132,12 @@ overwrite the profile.
 
 **Security trade-off:** with this option, the LMS becomes the authority for
 account matching. An email address manipulated in the LMS could take over
-someone else's account that has not been linked yet. So only enable it for
-your own, trusted platforms (your university's Stud.IP/Moodle, whose
-addresses come from the identity management system). The web admin also
+someone else's account that has not been linked yet. So the option is off by
+default and should only be enabled for your own, trusted platforms that
+confirm email changes (e.g. Moodle with email change confirmation;
+addresses from the identity management system). Otherwise an LMS
+instructor who can edit their own email address could take over an
+unlinked account. The web admin also
 shows this note directly in the form while the option is enabled.
 
 ## Cookies & iframes { #cookies-iframes }

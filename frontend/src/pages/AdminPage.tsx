@@ -935,8 +935,9 @@ function LtiPlatformForm({
   const [deploymentIds, setDeploymentIds] = useState(
     platform?.deployment_ids.join(", ") ?? "",
   );
-  // On add, default to true — but the warning below makes the trade-off clear.
-  const [linkByEmail, setLinkByEmail] = useState(platform?.link_by_email ?? true);
+  // Opt-in: e-mail linking makes the LMS the authority for account matching
+  // (matches the model default, security F3).
+  const [linkByEmail, setLinkByEmail] = useState(platform?.link_by_email ?? false);
   const [isActive, setIsActive] = useState(platform?.is_active ?? true);
   const [error, setError] = useState("");
 
