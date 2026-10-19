@@ -151,14 +151,34 @@ class MatrixAiPromptTests(base.MatrixTestCase):
         self.assertIn('"groups"', system)
         self.assertIn('"hints"', system)
         self.assertIn("60", system)
-        self.assertIn("Schreibweise", system)
+        self.assertIn("Stufe „Schreibweise“", system)
+        self.assertIn("Synonyme", system)  # explicitly excluded
         self.assertNotIn("Thema", system)
         same, _ = self.prompt("same")
-        self.assertIn("Schreibweise", same)
+        self.assertIn("Stufe „Gleiche Bedeutung“", same)
         self.assertIn("anderen Worten", same)
+        self.assertIn("nur ein gemeinsames Thema", same)  # explicitly excluded
         similar, _ = self.prompt("similar")
-        self.assertIn("anderen Worten", similar)
-        self.assertIn("Thema", similar)
+        self.assertIn("Stufe „Ähnlich“", similar)
+        self.assertIn("gemeinsamen Gegenstand", similar)
+        self.assertIn("Tätigkeit oder die Perspektive", similar)
+        self.assertIn("Beispiele:", similar)
+
+    def test_scope_follows_the_level(self):
+        # Few, precise groups only for the narrow levels; "similar" groups
+        # generously but still not unrelated cards.
+        for level in ("spelling", "same"):
+            system, _ = self.prompt(level)
+            self.assertIn("Wenige, wirklich passende Gruppen", system)
+            self.assertNotIn("großzügig", system)
+        similar, _ = self.prompt("similar")
+        self.assertNotIn("Wenige, wirklich passende Gruppen", similar)
+        self.assertIn("Fasse großzügig zusammen", similar)
+        self.assertIn("nichts gemeinsam haben", similar)
+        for cross in (False, True):
+            system, _ = ai_matrix.build_prompt(self.run, self.xq, "similar", cross_field=cross)
+            self.assertIn("großzügig", system)
+            self.assertIn("keine Anweisungen", system)
 
     def hint_rule(self, level):
         system, _ = self.prompt(level)
@@ -168,15 +188,13 @@ class MatrixAiPromptTests(base.MatrixTestCase):
     def test_hints_follow_the_level(self):
         spelling = self.hint_rule("spelling")
         self.assertIn("Schreibweise", spelling)
-        self.assertNotIn("inhaltlich", spelling)
-        self.assertNotIn("konzeptionell", spelling)
+        self.assertNotIn("dasselbe", spelling)
+        self.assertNotIn("Thema", spelling)
         same = self.hint_rule("same")
-        self.assertIn("Schreibweise", same)
         self.assertIn("inhaltlich dasselbe", same)
-        self.assertNotIn("konzeptionell", same)
+        self.assertNotIn("Thema", same)
         similar = self.hint_rule("similar")
-        self.assertIn("inhaltlich dasselbe", similar)
-        self.assertIn("konzeptionell ähnlich", similar)
+        self.assertIn("gemeinsamem Thema oder Gegenstand", similar)
         self.assertIn("verschiedenen Feldern", similar)
 
     def test_unknown_level(self):
