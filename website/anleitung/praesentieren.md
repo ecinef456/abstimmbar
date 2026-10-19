@@ -102,16 +102,50 @@ Mitte stehen alle Tasten auf einen Blick. Ein Klick, ++esc++, **?** oder
 ![Wortwolke am Beamer zur Frage „Was macht für Sie gute Lehre aus?“ mit 59 Antworten](../bilder/beamer-wortwolke.png)
 
 Die Wolke wächst live mit den Beiträgen (sofern im Editor eingestellt) —
-häufige Begriffe erscheinen größer.
+häufige Begriffe erscheinen größer. Gleiche Begriffe fasst Abstimmbar von
+selbst zusammen, auch bei unterschiedlicher Groß- und Kleinschreibung.
 
-**Bearbeiten (Experten-Modus):** Ziehen Sie einen Begriff auf einen anderen,
-um beide zusammenzuführen; mit × blenden Sie einen Begriff aus. Der **Stift**
-am rechten Rand öffnet die Liste zum Wiederherstellen, Trennen und Umbenennen.
-Der **Stern** darunter enthält die KI-Einstellungen; die KI-Ansichten
-erscheinen dann im Ansichts-Schalter: **Aufgeräumt** fasst Schreibvarianten,
-Synonyme und auf Wunsch ähnliche Konzepte zusammen, **Gruppiert** ordnet die
-Begriffe nach einer Anweisung, die Sie im Stern-Panel spontan anpassen können.
-Beides wird an der Frage gespeichert.
+### Begriffe zusammenführen und ausblenden (Experten-Modus)
+
+Oft meinen Teilnehmende dasselbe mit verschiedenen Wörtern („Feedback“,
+„Rückmeldung“). Solche Begriffe führen Sie direkt am Beamer zusammen:
+
+- **Zusammenführen:** Ziehen Sie einen Begriff auf einen anderen. Beide
+  erscheinen dann als ein Begriff mit der Summe ihrer Nennungen.
+- **Ausblenden:** Fahren Sie mit der Maus über einen Begriff und klicken Sie
+  auf **×** — etwa bei unpassenden Beiträgen.
+- **Moderationsliste:** Der **Stift** am rechten Rand öffnet die Liste Ihrer
+  Eingriffe. Unter **Ausgeblendet** holen Sie Begriffe mit **Wieder
+  einblenden** zurück. Unter **Zusammengeführt** stehen Ihre
+  Zusammenführungen: Sie können ihre **Bezeichnung ändern** (so erscheint sie
+  auf dem Beamer) oder die Zusammenführung **aufheben**, dann stehen die
+  Begriffe wieder einzeln da.
+
+Alle Eingriffe sind umkehrbar und verändern keine Stimmen. Sie gelten für
+diese Durchführung überall: am Beamer, auf den Geräten der Teilnehmenden, auf
+der Ergebnisseite und im CSV-Export.
+
+### Mit KI aufräumen und gruppieren (Experten-Modus)
+
+Ist die KI an Ihrer Einrichtung eingerichtet und haben Sie im Editor bei der
+Frage **„Wortwolke mit KI aufräumen (Präsentation)“** eingeschaltet, kommen im
+Ansichts-Schalter zwei Ansichten hinzu:
+
+- **Aufgeräumt** — die KI fasst ähnliche Begriffe zusammen. Was sie
+  zusammenfassen darf, legen Sie im **Stern** am rechten Rand fest:
+  **Schreibvarianten und Tippfehler** (müde / muede / mühde), **Synonyme und
+  Wortformen** (einsam / Einsamkeit) und auf Wunsch **ähnliche Konzepte**
+  (Gebäude / Haus / Wohnung). **Neu zusammenfassen** wendet geänderte
+  Einstellungen an.
+- **Gruppiert (KI)** — die KI ordnet die Begriffe Themen zu. Die
+  **Gruppierungs-Anweisung** (z. B. „nach Lehrformat“) passen Sie im
+  Stern-Panel spontan an; **Neu gruppieren** übernimmt sie.
+
+**Original** zeigt jederzeit wieder die Wolke ohne KI. Die KI-Ansichten
+ändern nichts an den Stimmen; die Einstellungen werden an der Frage
+gespeichert. Auch auf der [Ergebnisseite](ergebnisse.md) lässt sich eine
+Wortwolke nachträglich **mit KI optimieren** und zwischen Original und
+optimierter Fassung umschalten.
 
 ## Freitext
 

@@ -110,6 +110,7 @@ nav:
       - Anmelden und Modus: anleitung/anmelden.md
       - Der geführte Rundgang: anleitung/rundgang.md
       - Räume: anleitung/raeume.md
+      - Arten von Fragensets: anleitung/set-arten.md
       - Fragen erstellen: anleitung/fragen.md
       - KI-Assistenz: anleitung/ki-assistenz.md
       - Durchführung starten: anleitung/durchfuehrung.md
@@ -118,6 +119,8 @@ nav:
       - Aufgezeichnete Vorlesungen: anleitung/aufzeichnung.md
       - Ergebnisse: anleitung/ergebnisse.md
       - Räume im Team: anleitung/team.md
+      - In der Lernplattform (LTI): anleitung/lms.md
+      - Zweisprachigkeit: anleitung/zweisprachigkeit.md
       - Datenschutz: anleitung/datenschutz.md
       - Tipps für die Lehre: anleitung/tipps.md
   - Installation:

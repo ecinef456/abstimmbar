@@ -35,7 +35,7 @@ bis zur gemeinsam gebauten Mindmap.
 </div>
 
 <ul class="ab-facts">
-  <li><strong>Anonym</strong><span>kein Konto, keine IP-Adressen zu den Stimmen</span></li>
+  <li><strong>Anonym</strong><span>kein Konto, keine IP-Adressen der Abstimmenden</span></li>
   <li><strong>Zehn Fragetypen</strong><span>vom Quiz bis zur Vier-Felder-Matrix</span></li>
   <li><strong>LTI 1.3</strong><span>Einbindung in Lernplattformen wie Moodle</span></li>
   <li><strong>1000 simulierte Teilnehmende</strong><span>gleichzeitig im Lasttest</span></li>
@@ -139,7 +139,7 @@ gleich.
 -   :material-translate: __Zweisprachig__
 
     Oberfläche auf Deutsch und Englisch; Fragen und Antworten lassen sich in
-    beiden Sprachen hinterlegen.
+    beiden Sprachen hinterlegen. [Mehr zur Zweisprachigkeit](anleitung/zweisprachigkeit.md)
 
 -   :material-account-group-outline: __Im Team__
 
@@ -192,8 +192,8 @@ gleich.
 
 -   :material-incognito: __Anonym by design__
 
-    Teilnehmende brauchen kein Konto, und zu den Stimmen werden keine
-    IP-Adressen gespeichert.
+    Teilnehmende brauchen kein Konto, und IP-Adressen der Abstimmenden
+    werden nicht gespeichert.
 
 -   :material-robot-outline: __KI nur, wenn gewollt__
 

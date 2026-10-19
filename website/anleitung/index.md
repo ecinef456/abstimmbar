@@ -32,9 +32,13 @@ angemeldete Lehrperson können Sie außerdem jederzeit einen
 
     Der dauerhafte Zugang für Ihre Veranstaltung — mit festem Code.
 
+-   :material-shape-outline: **[Arten von Fragensets](set-arten.md)**
+
+    Live-Umfrage, Quiz-Block oder Lernkontrolle — was wann passt.
+
 -   :material-pencil-box-multiple: **[Fragen erstellen](fragen.md)**
 
-    Fragensets, Abschnitte, zehn Fragetypen, Import und Export.
+    Abschnitte, zehn Fragetypen, Vorher-Nachher, Import und Export.
 
 -   :material-creation: **[KI-Assistenz](ki-assistenz.md)**
 
@@ -42,7 +46,7 @@ angemeldete Lehrperson können Sie außerdem jederzeit einen
 
 -   :material-play-circle: **[Durchführung starten](durchfuehrung.md)**
 
-    Live-Umfrage, Quiz-Block oder Lernkontrolle.
+    Präsentieren, Quiz starten, Lernkontrolle veröffentlichen.
 
 -   :material-qrcode: **[Teilnehmende einladen](teilnehmende.md)**
 
@@ -58,11 +62,19 @@ angemeldete Lehrperson können Sie außerdem jederzeit einen
 
 -   :material-chart-bar: **[Ergebnisse](ergebnisse.md)**
 
-    Auswertung, frühere Durchführungen, CSV-Export, Archiv.
+    Durchführungen, CSV-Export, archivieren und löschen.
 
 -   :material-account-group: **[Räume im Team](team.md)**
 
     Räume gemeinsam bearbeiten und präsentieren.
+
+-   :material-school: **[In der Lernplattform](lms.md)**
+
+    Aus Moodle heraus starten (Stud.IP, sobald dort LTI 1.3 verfügbar ist).
+
+-   :material-translate: **[Zweisprachigkeit](zweisprachigkeit.md)**
+
+    Oberfläche und Inhalte auf Deutsch und Englisch.
 
 -   :material-shield-check: **[Datenschutz](datenschutz.md)**
 
@@ -70,7 +82,4 @@ angemeldete Lehrperson können Sie außerdem jederzeit einen
 
 </div>
 
-Zum Schluss: [Tipps für die Lehre](tipps.md). Die Einbindung in Ihre
-Lernplattform (z. B. Moodle; Stud.IP, sobald dort LTI 1.3 verfügbar ist)
-richtet Ihre Administration ein; was Sie als Lehrperson dort tun,
-steht unter [LMS-Einbindung](../lti.md#anleitung-für-lehrende).
+Zum Schluss: [Tipps für die Lehre](tipps.md).

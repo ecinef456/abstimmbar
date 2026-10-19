@@ -9,37 +9,17 @@ Innerhalb eines [Raums](raeume.md) legen Sie ein oder mehrere **Fragensets**
 an — etwa eines je Sitzung. Ein Fragenset ist das, was Sie später
 präsentieren oder freigeben.
 
-## Art des Fragensets
+## Art und Einstellungen des Fragensets
 
-Beim Anlegen wählen Sie die **Art** des Fragensets — sie legt fest, wie es
-durchgeführt wird und welche Fragetypen möglich sind:
-
-| Art | So läuft es | Fragetypen |
-|---|---|---|
-| **Live-Umfrage** | Live am Beamer, Sie steuern Frage für Frage. | alle |
-| **Quiz-Block** | Ihre Teilnehmenden beantworten die Fragen in Stillarbeit im eigenen Tempo; Sie starten den Block und sehen die Auswertung. | alle außer Mindmap und Vier-Felder-Matrix |
-| **Lernkontrolle** | Lernende üben eigenständig über einen dauerhaften Link und erhalten sofort Rückmeldung. | Einzel- und Mehrfachauswahl, Sortierung, Freitext |
-
-Wie Sie die drei Arten durchführen, beschreibt
-[Durchführung starten](durchfuehrung.md).
-
-## Einstellungen des Fragensets
+Beim Anlegen wählen Sie die **Art** des Fragensets — **Live-Umfrage**,
+**Quiz-Block** oder **Lernkontrolle**. Sie legt fest, wie das Set
+durchgeführt wird und welche Fragetypen möglich sind; Einzelheiten und
+Einsatzbeispiele stehen unter [Arten von Fragensets](set-arten.md).
 
 Über das Menü **⋮** des Sets → **Einstellungen** ändern Sie Titel,
-Beschreibung und unter **Antworten & Ergebnisse** das Verhalten des Sets:
-
-- **Live-Umfrage:** wann die richtigen Antworten aufgedeckt werden
-  (**sofort**, **nach dem Schließen** der Frage oder **nie**), ob Fragen beim
-  Aufrufen **sofort beantwortbar** sind (ohne separates Starten), ob
-  Teilnehmende die **Ergebnisse auch auf dem eigenen Gerät** sehen und ob die
-  Ergebnisse **erst am Ende in einer Zusammenfassung** erscheinen.
-- **Quiz-Block:** ob die richtigen Antworten **schon nach dem Beantworten**
-  angezeigt werden, ob Sie **im Anschluss die Ergebnisse in der
-  Präsentation** durchgehen, ob Teilnehmende **vor- und zurückblättern** (und
-  Antworten ändern) dürfen und eine optionale **Gesamtdauer**.
-
-Unter dem Titel des Sets fasst eine Zeile die wichtigsten Einstellungen
-zusammen.
+Beschreibung und (im Experten-Modus) unter **Antworten & Ergebnisse** das
+Verhalten des Sets — welche Optionen es gibt, hängt von der Art ab. Unter dem
+Titel des Sets fasst eine Zeile die wichtigsten Einstellungen zusammen.
 
 ## Abschnitte (Experten-Modus)
 
@@ -159,23 +139,43 @@ Lösung angezeigt wird, legen Sie je Set fest und können es je Frage
 ## Zweisprachige Inhalte (Experten-Modus)
 
 Fragen, Antworten, Titel und Beschreibungen können Sie auf **Deutsch und
-Englisch** hinterlegen (Sprach-Reiter am Feld). Ihre Teilnehmenden sehen die
-Sprache, die sie auf ihrem Gerät gewählt haben. Die Leiste **DE · EN** unten
-rechts zeigt alle Felder in einer Sprache und füllt, falls an Ihrer
-Einrichtung eingerichtet, fehlende Übersetzungen aus („Alle Felder
-übersetzen“). Verdeckt sie etwas, verschieben Sie sie an ihrem Griff
-(Doppelklick setzt sie zurück); auf dem Smartphone steht sie oben im
-Formular.
+Englisch** hinterlegen (Sprach-Reiter **DE · EN** am Feld). Wie das geht und
+was Teilnehmende dann sehen, beschreibt
+[Zweisprachigkeit](zweisprachigkeit.md).
 
 ## Vorher-Nachher-Fragen (Experten-Modus)
 
-Zu einer Auswahl- oder Likert-Frage können Sie eine **Nachher-Frage**
-hinzufügen (Zeilenmenü der Frage → „Nachher-Frage hinzufügen“). Deren Inhalt
-spiegelt automatisch die Vorher-Frage. Stellen Sie so dieselbe Frage einmal
-**vor** und einmal **nach** einem Input — im Präsentationsmodus und in der
-Ergebnisansicht werden beide Ergebnisse direkt **gegenübergestellt**. Das
-macht Meinungs- oder Wissensänderungen sichtbar (z. B. Einstieg vs. nach der
-Erklärung).
+Mit einer Vorher-Nachher-Frage stellen Sie **dieselbe Frage zweimal** — etwa
+zum Einstieg und noch einmal nach Ihrer Erklärung oder einer Diskussion — und
+zeigen beide Ergebnisse direkt nebeneinander. So werden Lernfortschritte oder
+Meinungsänderungen sichtbar.
+
+Möglich ist das bei **Einzelauswahl** (auch Ja/Nein), **Mehrfachauswahl** und
+**Likert-Skala**.
+
+**So legen Sie eine an:**
+
+1. Erstellen Sie die Frage wie gewohnt — sie wird die **Vorher-Frage**.
+2. Öffnen Sie in der Fragenliste das Zeilenmenü **⋮** dieser Frage und wählen
+   Sie **„Nachher-Frage hinzufügen“**.
+3. Abstimmbar legt eine Kopie am **Ende des Sets** an. Ziehen Sie sie an die
+   Stelle, an der Sie die Frage erneut stellen möchten — z. B. hinter den
+   Abschnitt mit Ihrem Input.
+
+Beide Fragen tragen in der Liste die Kennzeichen **Vorher** und **Nachher**.
+Den Inhalt bearbeiten Sie nur an der Vorher-Frage; die Nachher-Frage
+übernimmt jede Änderung automatisch (sie zeigt eine schreibgeschützte
+Vorschau mit dem Link **„Vorher-Frage öffnen“**). Löschen Sie die
+Vorher-Frage, wird die Nachher-Frage mitgelöscht. Jede Frage kann nur eine
+Nachher-Frage haben.
+
+**In der Präsentation** stellen Sie beide Fragen wie jede andere. Zeigen Sie
+die Ergebnisse der Nachher-Frage, steht bei jeder Antwort das
+Vorher-Ergebnis als hellerer Balken über dem Nachher-Ergebnis, bei einer
+Likert-Skala die Vorher-Verteilung gedämpft über der neuen. **Auf der
+Ergebnisseite** erscheinen beide Ergebnisse ebenfalls gegenübergestellt,
+gekennzeichnet mit **Vorher** und **Nachher**. Die Stimmen werden getrennt
+gezählt.
 
 ## Fragen wiederverwenden
 
