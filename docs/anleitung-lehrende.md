@@ -333,7 +333,11 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
   links unten zeigt, wie viele bereits bewertet haben. **Stoppen** (S) beendet
   die Bewertung; die Ergebnisse bleiben verborgen, bis Sie mit **Ergebnis** (E)
   auflösen – es sei denn, Sie haben „Bewertungen während der Bewertung
-  anzeigen“ eingeschaltet (dann führt Stoppen direkt zum Ergebnis). Sobald
+  anzeigen“ eingeschaltet (dann führt Stoppen direkt zum Ergebnis). Das gilt
+  auch, wenn Sie danach **Zurück zum Sammeln** gehen: Solange verborgene
+  Bewertungen vorliegen, schließen Stoppen und der Ablauf der Zeit nur, die
+  Mindmap bleibt stehen, und auch **A** zeigt keine Bewertungen – erst
+  **Ergebnis** (E) löst auf. Sobald
   Ergebnisse sichtbar sind, zeigt die Mindmap die Punkte bzw. Plus/Minus an
   jedem Begriff: Jeder Begriff füllt sich wie ein Balken – bei Punkten im
   Verhältnis zum Spitzenreiter, bei Plus/Minus grün von links (Zustimmung)
@@ -397,7 +401,10 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     nicht größer. Während der Bewertung sind **Stapel gesperrt** (ein Ziehen
     verschiebt nur die Karte; Teilnehmende können keine Karten ergänzen oder
     zurücknehmen); Verschieben und Ausblenden bleiben möglich. **Zurück zum
-    Sammeln** öffnet das Brett wieder; die Bewertungen bleiben erhalten.
+    Sammeln** öffnet das Brett wieder; die Bewertungen bleiben erhalten und
+    verborgen: Stoppen (S) und der Ablauf der Zeit schließen dann nur, das
+    Brett bleibt stehen, **A** zeigt keine Bewertungen – erst **Ergebnis** (E)
+    löst auf.
     Kehren Sie in derselben Sitzung zur Präsentation zurück, steht die Matrix
     weiter in der Bewertung; präsentieren Sie eine nicht beendete Umfrage
     erst später erneut (neue Sitzung), beginnt sie wieder beim Sammeln.

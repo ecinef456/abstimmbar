@@ -322,3 +322,49 @@ test('mind map: Mind map · Ranking after a rating, rating action as icon', asyn
   // The old "View" dropdown is gone.
   await expect(footer(page).locator('select')).toHaveCount(0);
 });
+
+test('mind map, hidden rating then back to collecting: S only closes, A skips the ranking, E reveals', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await seedSet(page, ['mindmap'], 'MM', trackRoom);
+  const api = apiClient(page.request);
+  const q = seed.questions[0];
+  const runId = await startRun(api, seed.setId);
+  await control(api, runId, 'open', q.id);
+  const [participant] = await joinParticipants(page.request, seed.code, 1);
+  const token = await csrfToken(page.request);
+  const headers = token ? { 'X-CSRFToken': token } : undefined;
+  const added = await page.request.post(`${API_BASE_URL}/api/live/rooms/${seed.code}/mindmap/add/`, {
+    data: { token: participant, question: q.id, parent: null, text: 'Alpha' },
+    headers,
+  });
+  expect(added.ok(), await added.text()).toBeTruthy();
+  const body = await added.json();
+  const node = body.node_id ?? body.node ?? body.id;
+  await api.post(`/api/runs/${runId}/mindmap/${q.id}/stage`, { stage: 'rate', open: true });
+  const rated = await page.request.post(`${API_BASE_URL}/api/live/rooms/${seed.code}/mindmap/rate/`, {
+    data: { token: participant, question: q.id, node, delta: 1 },
+    headers,
+  });
+  expect(rated.ok(), await rated.text()).toBeTruthy();
+  await api.post(`/api/runs/${runId}/mindmap/${q.id}/stage`, { stage: 'collect', open: true });
+  const phase = async () =>
+    (await api.get(`/api/question-sets/${seed.setId}/live-status/`)).active_run_phase as string;
+
+  await page.goto(`/sets/${seed.setId}/present?resume=continue`);
+  await expectActive(page, 'view.mm.raw');
+  await page.keyboard.press('s');
+  await expect.poll(phase).toBe('closed');
+  // The map stays on screen (closed, like a closed rating), no scores.
+  await expectActive(page, 'view.mm.raw');
+  await expect(page.getByText('Alpha')).toBeVisible();
+  await expect(seg(page, 'view.mm.ranking')).toHaveCount(0);
+  await page.keyboard.press('a');
+  await page.waitForTimeout(1000);
+  expect(await phase()).toBe('closed');
+  await expect(seg(page, 'view.mm.ranking')).toHaveCount(0);
+  await page.keyboard.press('e');
+  await expect.poll(phase).toBe('results');
+  await expect(seg(page, 'view.mm.ranking')).toBeVisible();
+});

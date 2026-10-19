@@ -394,7 +394,7 @@ test('re-entering a running presentation after ✕ shows the board', async ({ pa
   await expect(page.getByText('Beantwortung geschlossen')).toHaveCount(0);
 });
 
-test('re-entering after ✕ keeps hidden rating scores hidden; "Frage" shows the question', async ({
+test('re-entering after ✕ keeps hidden rating scores hidden; E reveals', async ({
   page,
   trackRoom,
 }) => {
@@ -414,7 +414,19 @@ test('re-entering after ✕ keeps hidden rating scores hidden; "Frage" shows the
   await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
   await expect(page.locator('footer [data-help*="ranking"]')).toHaveCount(0);
   await expect(page.getByText('Beantwortung geschlossen')).toHaveCount(0);
-  // "Frage" stays available and shows the bare question.
+  // Hidden ratings hold the board like a closed rating: "Frage" is off,
+  // E is the deliberate reveal.
+  await expect(page.locator('footer [data-help="view.question"]')).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('e');
+  await expect(board(page).locator('[data-card-score]').first()).toBeVisible();
+});
+
+test('re-entering after ✕ without hidden ratings: "Frage" shows the bare question', async ({ page, trackRoom }) => {
+  await login(page);
+  const s = await seed(page, trackRoom);
+  await s.api.post(`/api/runs/${s.runId}/control/`, { away: true });
+  await page.goto(`/sets/${s.room.setId}/present`);
+  await expect(board(page)).toBeVisible();
   const question = page.locator('footer [data-help="view.question"]');
   await expect(question).not.toHaveAttribute('aria-disabled', 'true');
   await question.click();

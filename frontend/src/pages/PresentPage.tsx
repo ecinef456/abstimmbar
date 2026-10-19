@@ -619,12 +619,18 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const mmRating = mindmap?.rating;
   const mmRate = mmRating?.stage === "rate";
   // Stopping a rating with hidden scores only closes the vote (the map stays,
-  // without scores); "Ergebnis" / E reveals. Collecting (and a live-shown
-  // rating) still goes straight to the results.
-  const mmStopCloses = activeKind === "mindmap" && mmRate && !mmRating?.live;
+  // without scores); "Ergebnis" / E reveals. That holds while rating and
+  // also back in collecting as long as hidden ratings exist (someone rated,
+  // live display off, scores not on screen — the presenter payload carries
+  // `raters` but no `scores`): Stop / the timer only close, A never reaches
+  // the scores, E is the deliberate reveal. Otherwise collecting (and a
+  // live-shown rating) still goes straight to the results.
+  const mmScoresHidden =
+    !!mmRating && !mmRating.live && (mmRate || (mmRating.raters > 0 && !mmRating.scores));
+  const mmStopCloses = activeKind === "mindmap" && mmScoresHidden;
   const mmShown =
     !!mindmap &&
-    (phase === "open" || phase === "results" || (phase === "closed" && (mmRate || resumeShown)));
+    (phase === "open" || phase === "results" || (phase === "closed" && (mmScoresHidden || resumeShown)));
   // Matrix: the board is live while open and stays on "Matrix" (results);
   // "Frage" (closed) shows the question alone. Arranging and moderating are
   // for every presenter (not expert-only).
@@ -634,14 +640,16 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // closes; the board stays on a closed rating until E reveals).
   const mxRating = matrixBoard?.rating;
   const mxRate = mxRating?.stage === "rate";
+  const mxScoresHidden =
+    !!mxRating && !mxRating.live && (mxRate || (mxRating.raters > 0 && !mxRating.scores));
   const mxShown =
     !!matrixBoard &&
     !!matrixSettings &&
-    (phase === "open" || phase === "results" || (phase === "closed" && (mxRate || resumeShown)));
+    (phase === "open" || phase === "results" || (phase === "closed" && (mxScoresHidden || resumeShown)));
   // Matrix AI grouping (✦ handle): expert mode, AI configured, the
   // question's AI switch on (like the mind map's).
   const showMxAi = expert && mxShown && whoAi.ai && state?.question?.wordcloud_ai_enabled === true;
-  const stopCloses = mmStopCloses || (activeKind === "matrix" && mxRate && !mxRating?.live);
+  const stopCloses = mmStopCloses || (activeKind === "matrix" && mxScoresHidden);
   // The rating whose raters the counter shows.
   const rateStats = mmRate ? mmRating : mxRate ? mxRating : undefined;
   // Full-width layouts (compact title, content fills the height).
@@ -1268,7 +1276,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         : undefined) ?? viewSegments[0];
   // The resumed board (not a closed rating): "Question" stays available —
   // it just drops the board again (the phase is "closed" already).
-  const resumeOnly = resumeShown && !mmRate && !mxRate;
+  const resumeOnly = resumeShown && !mmScoresHidden && !mxScoresHidden;
   const disabledViews = useMemo(
     () => new Set(liveShown && !resumeOnly ? ["view.question"] : []),
     [liveShown, resumeOnly],
@@ -2971,7 +2979,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               </span>
             )}
             {/* A closed rating has its own "Rating closed" line above the map. */}
-            {phase === "closed" && !resumeShown && !((mmShown && mmRate) || (mxShown && mxRate)) && (
+            {phase === "closed" && !mmShown && !mxShown && (
               <p className="text-xl">{t("Voting closed")}</p>
             )}
           </div>

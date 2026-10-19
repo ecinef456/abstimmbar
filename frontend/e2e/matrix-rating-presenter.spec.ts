@@ -383,6 +383,71 @@ test('time limit, hidden scores: expiry only closes the rating, no reveal', asyn
   await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
 });
 
+test('hidden ratings, back to collecting: S / footer Stop only close, A skips the scores, E reveals', async ({
+  page,
+  trackRoom,
+}) => {
+  const s = await seed(page, trackRoom, { matrix_rating_mode: 'points', matrix_rating_budget: 3, matrix_rating_live: false });
+  const stage = (body: Record<string, unknown>) =>
+    s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/stage`, body);
+  await stage({ stage: 'rate', open: true });
+  await s.rate(s.tokens[0], s.ids.chatbot, { delta: 1 });
+  await stage({ stage: 'collect', open: true }); // „Zurück zum Sammeln“
+  await openPresenter(page, s.room.setId);
+  const phase = async () =>
+    (await s.api.get(`/api/question-sets/${s.room.setId}/live-status/`)).active_run_phase as string;
+
+  // S closes only: the board stays, no scores (beamer; participants get
+  // none in "closed" either), no ranking.
+  await page.keyboard.press('s');
+  await expect.poll(phase).toBe('closed');
+  await expect(board(page)).toBeVisible();
+  await expect(card(page, s.ids.chatbot)).toBeVisible();
+  await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+  await expect(seg(page, 'view.mx.ranking')).toHaveCount(0);
+  // A only looks: no reveal.
+  await page.keyboard.press('a');
+  await page.waitForTimeout(1000);
+  expect(await phase()).toBe('closed');
+  await expect(seg(page, 'view.mx.ranking')).toHaveCount(0);
+  await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+  // The footer's Stop does the same.
+  await page.keyboard.press('s');
+  await expect.poll(phase).toBe('open');
+  await seg(page, 'toggle').click();
+  await expect.poll(phase).toBe('closed');
+  await expect(board(page)).toBeVisible();
+  await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+  // E is the deliberate reveal.
+  await page.keyboard.press('e');
+  await expect.poll(phase).toBe('results');
+  await expect(card(page, s.ids.chatbot).locator('[data-score-text]')).toHaveText('1 Punkt');
+  await expect(seg(page, 'view.mx.ranking')).toBeVisible();
+});
+
+test('hidden ratings, back to collecting: the timer only closes', async ({ page, trackRoom }) => {
+  const s = await seed(page, trackRoom, { matrix_rating_mode: 'points', matrix_rating_budget: 3, matrix_rating_live: false });
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/stage`, { stage: 'rate', open: true });
+  await s.rate(s.tokens[0], s.ids.chatbot, { delta: 1 });
+  const csrf = await csrfToken(page.request);
+  const patched = await page.request.fetch(`${API_BASE_URL}/api/questions/${s.questionId}/`, {
+    method: 'PATCH',
+    headers: csrf ? { 'X-CSRFToken': csrf } : undefined,
+    data: { time_limit: 4 },
+  });
+  expect(patched.ok(), await patched.text()).toBeTruthy();
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/stage`, { stage: 'collect', open: true });
+  await openPresenter(page, s.room.setId);
+  const phase = async () =>
+    (await s.api.get(`/api/question-sets/${s.room.setId}/live-status/`)).active_run_phase as string;
+  await expect.poll(phase, { timeout: 15_000 }).toBe('closed');
+  await expect(board(page)).toBeVisible();
+  await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+  await page.waitForTimeout(1500);
+  expect(await phase()).toBe('closed');
+  await expect(seg(page, 'view.mx.ranking')).toHaveCount(0);
+});
+
 /** Backdates the run's last opened question (a session from days ago) —
  *  test-side via `manage.py shell` in the dev stack, like helpers/matrixAi. */
 function backdateRun(runId: number, days: number) {
