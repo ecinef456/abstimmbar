@@ -6,6 +6,9 @@
  *
  *  Runs as `demo`; seeds its own "E2E Matrix Rating" rooms and deletes them.
  *  MATRIX_RATING_SHOTS=<dir> saves screenshots. */
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { test, expect, API_BASE_URL, csrfToken } from './fixtures';
@@ -378,4 +381,71 @@ test('time limit, hidden scores: expiry only closes the rating, no reveal', asyn
   await page.waitForTimeout(1500);
   expect(await phase()).toBe('closed');
   await expect(board(page).locator('[data-card-score]')).toHaveCount(0);
+});
+
+/** Backdates the run's last opened question (a session from days ago) —
+ *  test-side via `manage.py shell` in the dev stack, like helpers/matrixAi. */
+function backdateRun(runId: number, days: number) {
+  execFileSync(
+    'docker',
+    [
+      'compose', 'exec', '-T', 'backend', 'python', 'manage.py', 'shell', '-c',
+      `from django.utils import timezone; from live.models import Run; ` +
+        `Run.objects.filter(pk=${Number(runId)}).update(opened_at=timezone.now() - timezone.timedelta(days=${Number(days)}))`,
+    ],
+    { cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..') },
+  );
+}
+
+test('resume: the same session keeps the rating on the board; a later session starts collecting', async ({
+  page,
+  trackRoom,
+}) => {
+  test.setTimeout(90_000);
+  const s = await seed(page, trackRoom, { matrix_rating_mode: 'updown', matrix_rating_live: false });
+  await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/stage`, { stage: 'rate', open: true });
+  await s.rate(s.tokens[0], s.ids.chatbot, { value: 1 });
+  // ✕ leaves without ending (the vote closes), then the question is edited
+  // (AI switch on) — as in the reported case.
+  await s.api.post(`/api/runs/${s.runId}/control/`, { away: true });
+  const csrf = await csrfToken(page.request);
+  const patched = await page.request.fetch(`${API_BASE_URL}/api/questions/${s.questionId}/`, {
+    method: 'PATCH',
+    headers: csrf ? { 'X-CSRFToken': csrf } : undefined,
+    data: { wordcloud_ai_enabled: true },
+  });
+  expect(patched.ok(), await patched.text()).toBeTruthy();
+
+  // Same session: resumed in place — the board with its closed rating, the
+  // cards, and the way back to collecting.
+  await openPresenter(page, s.room.setId);
+  await expect(page.getByTestId('mx-rating-closed')).toBeVisible();
+  await expect(card(page, s.ids.chatbot)).toBeVisible();
+  await expect(card(page, s.ids.altlast)).toBeVisible();
+  await expect(page.getByTestId('mx-back-to-collecting')).toBeVisible();
+  await expect(raters(page)).toHaveText('1');
+
+  // Days later, presenting again on the still-unfinished run: a new session
+  // from the lobby — the question opens collecting with all cards, not in
+  // the old rating stage.
+  await s.api.post(`/api/runs/${s.runId}/control/`, { away: true });
+  backdateRun(s.runId, 5);
+  await page.goto(`/sets/${s.room.setId}/present?resume=continue`);
+  await expect(page.locator('[data-tour="present.join"]')).toBeVisible();
+  await page.keyboard.press('ArrowRight');
+  await expect(board(page)).toBeVisible();
+  await expect(card(page, s.ids.chatbot)).toBeVisible();
+  await expect(card(page, s.ids.altlast)).toBeVisible();
+  await expect(page.getByTestId('mx-rating-banner')).toHaveCount(0);
+  await expect(page.getByTestId('mx-back-to-collecting')).toHaveCount(0);
+  const toggle = page.locator('[data-help="toggle"]');
+  await expect(toggle.getByTestId('toggle-rating-icon')).toHaveCount(0);
+  const status = await s.api.get(`/api/question-sets/${s.room.setId}/live-status/`);
+  expect(status.active_run).toBe(s.runId);
+  expect(status.active_run_phase).toBe('open');
+  // The rating is kept: starting it again shows the earlier vote.
+  await page.keyboard.press('s');
+  await page.getByTestId('mx-start-rating').click();
+  await expect(page.getByTestId('mx-rating-banner')).toBeVisible();
+  await expect(raters(page)).toHaveText('1');
 });

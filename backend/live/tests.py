@@ -21,9 +21,11 @@ from .matrix import MatrixError, zone_at
 from .mindmap import answered_runs_q
 from .models import (
     MatrixCard,
+    MatrixPhase,
     MatrixRating,
     MindmapContribution,
     MindmapNode,
+    MindmapPhase,
     ParticipantToken,
     Run,
     SelfCheckAttempt,
@@ -444,6 +446,59 @@ class ControlTests(LiveTestCase):
         self.assertEqual(resp["run"], run.pk)
         self.assertEqual(run.phase, Run.Phase.LOBBY)   # reset (not recent)
         self.assertIsNone(run.active_question_id)      # reset
+
+    def _rate_stages(self, run):
+        """A matrix and a mind map question of the set, both left in their
+        rating stage in ``run`` (as a previous session would leave them)."""
+        matrix_q = Question.objects.create(
+            question_set=self.question_set, kind=Question.Kind.MATRIX,
+            text="<p>Matrix</p>", matrix_rating_mode="updown",
+        )
+        mindmap_q = Question.objects.create(
+            question_set=self.question_set, kind=Question.Kind.MINDMAP,
+            text="<p>Mind map</p>", mindmap_rating_mode="updown",
+        )
+        MatrixPhase.objects.create(run=run, question=matrix_q, stage=MatrixPhase.Stage.RATE)
+        MindmapPhase.objects.create(run=run, question=mindmap_q, stage=MindmapPhase.Stage.RATE)
+
+    def test_fresh_start_resets_rating_stages(self):
+        # A presentation started days later on the still-unfinished run
+        # begins anew (lobby) — and so do the matrix / mind map stages: the
+        # old session's rating stage must not carry over (ratings are kept).
+        self.login()
+        run = self.open_question()
+        self._rate_stages(run)
+        Run.objects.filter(pk=run.pk).update(
+            opened_at=timezone.now() - timezone.timedelta(days=5)
+        )
+        self.client.post(
+            f"/api/question-sets/{self.question_set.pk}/start-run/",
+            {"existing": "continue"},
+            content_type="application/json",
+        )
+        self.assertEqual(
+            list(MatrixPhase.objects.filter(run=run).values_list("stage", flat=True)),
+            [MatrixPhase.Stage.COLLECT],
+        )
+        self.assertEqual(
+            list(MindmapPhase.objects.filter(run=run).values_list("stage", flat=True)),
+            [MindmapPhase.Stage.COLLECT],
+        )
+
+    def test_recent_resume_keeps_rating_stages(self):
+        # Same session (opened within the window): resumed in place, the
+        # rating stage stays.
+        self.login()
+        run = self.open_question()
+        self._rate_stages(run)
+        Run.objects.filter(pk=run.pk).update(opened_at=timezone.now())
+        self.client.post(
+            f"/api/question-sets/{self.question_set.pk}/start-run/",
+            {"existing": "continue"},
+            content_type="application/json",
+        )
+        self.assertEqual(MatrixPhase.objects.get(run=run).stage, MatrixPhase.Stage.RATE)
+        self.assertEqual(MindmapPhase.objects.get(run=run).stage, MindmapPhase.Stage.RATE)
 
     def test_easy_mode_archives_when_last_run_another_day(self):
         # Effective easy mode + no explicit ``existing``: a finished run from

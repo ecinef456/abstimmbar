@@ -51,6 +51,8 @@ from . import (
 from .ai_freetext import clean_categories
 from .hub import hub, sse_frame
 from .models import (
+    MatrixPhase,
+    MindmapPhase,
     OrderingResponse,
     ParticipantToken,
     PriorityScore,
@@ -1987,6 +1989,12 @@ def start_run(request, set_id):
                 run.phase = initial_phase
                 run.active_question = None
                 run.answers_revealed = False
+                # A new session also starts collecting: a matrix / mind map
+                # left in its rating stage by an earlier session must not
+                # open straight into rating (ratings are kept, as when the
+                # presenter goes back to collecting).
+                MatrixPhase.objects.filter(run=run).update(stage=MatrixPhase.Stage.COLLECT)
+                MindmapPhase.objects.filter(run=run).update(stage=MindmapPhase.Stage.COLLECT)
                 # #75: a fresh self-paced session gets a fresh overall deadline
                 # (or none); otherwise a re-run would inherit the previous run's
                 # already-passed clock.
