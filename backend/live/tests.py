@@ -9345,6 +9345,70 @@ class MatrixAiSimulateTests(MatrixTestCase):
         self.assertEqual((g["x"], g["y"]), (top.x, top.y))
         self.assertEqual(g["title"], "Old summary")
 
+    def simulate_cross(self, *groups):
+        groups = [{**g, "index": i} for i, g in enumerate(groups)]
+        return mxs.simulate_groups(self.run, self.xq, groups, cross_field=True)
+
+    def test_cross_field_target_zone_with_most_tops(self):
+        # A (q1) with D, E (q2): the summary goes to q2, at the oldest q2
+        # top (D); A is marked as moved from q1.
+        [g] = self.simulate_cross(self.group(self.a, self.d, self.e))
+        self.assertEqual(g["status"], "ok")
+        self.assertEqual(g["zone"], "q2")
+        self.assertEqual(g["anchor_id"], self.d.pk)
+        self.assertEqual((g["x"], g["y"], g["placed"]), (self.d.x, self.d.y, self.d.placed))
+        by_id = {c["id"]: c for c in g["cards"]}
+        self.assertEqual(by_id[self.a.pk]["moved_from"], "q1")
+        self.assertNotIn("moved_from", by_id[self.d.pk])
+        self.assertNotIn("moved_from", by_id[self.e.pk])
+
+    def test_cross_field_tie_takes_the_oldest_cards_zone(self):
+        # One top each: A is older than D → q1, D moves from q2.
+        [g] = self.simulate_cross(self.group(self.d, self.a))
+        self.assertEqual(g["zone"], "q1")
+        self.assertEqual(g["anchor_id"], self.a.pk)
+        self.assertEqual((g["x"], g["y"]), (self.a.x, self.a.y))
+        by_id = {c["id"]: c for c in g["cards"]}
+        self.assertEqual(by_id[self.d.pk]["moved_from"], "q2")
+        self.assertNotIn("moved_from", by_id[self.a.pk])
+
+    def test_cross_field_only_when_asked(self):
+        [g] = self.simulate(self.group(self.a, self.d, self.e))
+        self.assertEqual(g["skip_reason"], "zones")
+        self.assertTrue(all("moved_from" not in c for c in g["cards"]))
+        # Same-zone groups never carry moved_from, cross-field or not.
+        [g] = self.simulate_cross(self.group(self.a, self.b))
+        self.assertEqual(g["zone"], "q1")
+        self.assertTrue(all("moved_from" not in c for c in g["cards"]))
+
+    def test_cross_field_summary_only_kept_in_the_target_zone(self):
+        # A summary in a minority field is moved like any card (and replaced
+        # by a new summary in the target field) …
+        other = mxs.add_teacher_card(self.run, self.xq, "q1", "Old summary")
+        MatrixCard.objects.filter(pk=other.pk).update(summary=True)
+        [g] = self.simulate_cross(self.group(other, self.d, self.e))
+        self.assertEqual(g["zone"], "q2")
+        self.assertNotIn("top_summary_id", g)
+        # … one in the target field stays on top.
+        kept = mxs.add_teacher_card(self.run, self.xq, "q2", "Kept summary")
+        MatrixCard.objects.filter(pk=kept.pk).update(summary=True)
+        kept.refresh_from_db()
+        [g] = self.simulate_cross(self.group(self.a, self.d, kept))
+        self.assertEqual(g["zone"], "q2")
+        self.assertEqual(g["top_summary_id"], kept.pk)
+        self.assertEqual((g["x"], g["y"]), (kept.x, kept.y))
+
+    def test_hints_empty_cross_field(self):
+        hints = [{"index": 0, "cards": [self.a.pk, self.d.pk], "reason": "same"}]
+        self.assertEqual(len(mxs.simulate_hints(self.run, self.xq, hints)), 1)
+        self.assertEqual(mxs.simulate_hints(self.run, self.xq, hints, cross_field=True), [])
+
+    def test_sign_keeps_cross_field(self):
+        blob = mxs.sign_proposal(self.run, self.xq, [], [], 0, cross_field=True)
+        self.assertEqual(mxs.unsign_proposal(self.run, self.xq, blob), ([], [], 0, True))
+        blob = mxs.sign_proposal(self.run, self.xq, [], [], 0)
+        self.assertEqual(mxs.unsign_proposal(self.run, self.xq, blob), ([], [], 0, False))
+
     def test_hints(self):
         hints = mxs.simulate_hints(self.run, self.xq, [
             {"index": 0, "cards": [self.a.pk, self.d.pk, 999999], "reason": "same"},
@@ -9361,7 +9425,7 @@ class MatrixAiSimulateTests(MatrixTestCase):
         groups = [{"index": 0, "cards": [1, 2], "title": "t", "description": "", "reason": ""}]
         hints = [{"index": 0, "cards": [1, 3], "reason": ""}]
         blob = mxs.sign_proposal(self.run, self.xq, groups, hints, 2)
-        self.assertEqual(mxs.unsign_proposal(self.run, self.xq, blob), (groups, hints, 2))
+        self.assertEqual(mxs.unsign_proposal(self.run, self.xq, blob), (groups, hints, 2, False))
         for bad in (blob[:-2] + "xx", "garbage", None, 5):
             with self.assertRaises(MatrixError) as cm:
                 mxs.unsign_proposal(self.run, self.xq, bad)
@@ -9546,6 +9610,37 @@ class MatrixAiApplyTests(MatrixTestCase):
         self.assertNotEqual(self.snapshot(), before)
         mxs.undo_groups(self.run, self.xq, undo)
         self.assertEqual(self.snapshot(), before)
+
+    def test_cross_field_apply_moves_cards_and_members(self):
+        # A (q1, hand-placed) with its member C, plus D and E (q2): the summary
+        # lands in q2 at D's place; A and C move there.
+        self.stacked(self.a, self.c)
+        MatrixCard.objects.filter(pk=self.a.pk).update(placed=True)
+        self.d.refresh_from_db()
+        before = self.snapshot()
+        groups = self.groups([self.a, self.d, self.e])
+        # Without the switch the group spans fields → skipped.
+        self.assertEqual(self.apply(groups)["skipped"], [{"index": 0, "reason": "zones"}])
+        result = mxs.apply_groups(self.run, self.xq, groups, [0], {}, cross_field=True)
+        self.assertEqual(result["applied"], [0])
+        top = MatrixCard.objects.get(run=self.run, summary=True)
+        self.assertEqual((top.zone, top.x, top.y, top.placed), ("q2", self.d.x, self.d.y, self.d.placed))
+        for card in (self.a, self.c, self.d, self.e):
+            card.refresh_from_db()
+            self.assertEqual(card.stack_id, top.pk, card.title)
+            self.assertEqual((card.zone, card.x, card.y), ("q2", top.x, top.y), card.title)
+        self.assertEqual(self.a.placed, top.placed)
+        # Undo restores zone, position and placed exactly.
+        mxs.undo_groups(self.run, self.xq, result["undo"])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_cross_field_changed_check_still_applies(self):
+        [group] = self.groups([self.a, self.d])
+        group["tops"] = [self.a.pk, self.d.pk]
+        self.stacked(self.e, self.d)  # D now in E's (unreviewed) stack
+        result = mxs.apply_groups(self.run, self.xq, [group], [0], {}, cross_field=True)
+        self.assertEqual(result["skipped"], [{"index": 0, "reason": "changed"}])
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
 
     def test_undo_recreates_deleted_summary(self):
         first = self.summary("First")
@@ -9774,6 +9869,53 @@ class MatrixAiApiTests(MatrixTestCase):
         self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
         self.assertEqual(self.post("ai-undo", {"undo": data["undo"]}).status_code, 409)
         self.broadcast.assert_not_called()
+
+    def test_propose_cross_field(self):
+        with patch(self.CHAT, return_value=self.reply()) as chat:
+            response = self.post("ai-propose", {"level": "same", "cross_field": True})
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        system, _ = chat.call_args.args
+        self.assertIn("verschiedenen Feldern liegen", system)
+        # The cross-field group would be ok now (A is taken by the first
+        # group); the reply's hints are not wanted.
+        self.assertEqual([g["status"] for g in data["groups"]], ["ok", "skip"])
+        self.assertEqual(data["groups"][1]["skip_reason"], "duplicate")
+        self.assertEqual(data["hints"], [])
+        self.assertEqual(data["dropped"], 2)  # one malformed + one skipped
+
+    def test_cross_field_apply_and_undo(self):
+        reply = {"groups": [{"cards": [self.a.pk, self.d.pk], "title": "Wind"}], "hints": []}
+        with patch(self.CHAT, return_value=reply):
+            data = self.post("ai-propose", {"level": "same", "cross_field": True}).json()
+        [group] = data["groups"]
+        self.assertEqual((group["status"], group["zone"]), ("ok", "q1"))  # tie → A is older
+        self.assertEqual(
+            [c.get("moved_from") for c in group["cards"]], [None, "q2"],
+        )
+        # The signed proposal carries the switch: apply honours it.
+        response = self.post("ai-apply", {"proposal": data["proposal"], "selected": [0]})
+        self.assertEqual(response.json()["applied"], [0], response.content)
+        self.d.refresh_from_db()
+        self.assertEqual(self.d.zone, "q1")
+        response = self.post("ai-undo", {"undo": response.json()["undo"]})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.d.refresh_from_db()
+        self.assertEqual(self.d.zone, "q2")
+        self.assertIsNone(self.d.stack_id)
+
+    def test_propose_cross_field_invalid(self):
+        for value in ("yes", 1, None, [True]):
+            with patch(self.CHAT) as chat:
+                response = self.post("ai-propose", {"level": "same", "cross_field": value})
+            self.assertEqual(response.status_code, 400, value)
+            chat.assert_not_called()
+
+    def test_propose_cross_field_default_off(self):
+        response = self.propose()
+        system, _ = self.chat.call_args.args
+        self.assertNotIn("verschiedenen Feldern liegen", system)
+        self.assertEqual(response.json()["groups"][1]["skip_reason"], "zones")
 
     def test_apply_skips_stack_changed_since_proposal(self):
         proposal = self.propose().json()["proposal"]

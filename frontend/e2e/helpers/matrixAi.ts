@@ -1,7 +1,7 @@
 /** A real ai-propose response body without the LLM: the backend's own
  *  simulation and signing (`live.matrix.simulate_groups` / `simulate_hints`
- *  / `sign_proposal`) run on a fixed parsed reply via `manage.py shell` in
- *  the dev stack's backend container. The spec route-mocks `/ai-propose`
+ *  / `sign_proposal`, incl. the cross-field switch) run on a fixed parsed
+ *  reply via `manage.py shell` in the dev stack's backend container. The spec route-mocks `/ai-propose`
  *  with it, so ai-apply / ai-undo then run for real against the backend.
  *  Test-side only — no test endpoint in the app. */
 import { execFileSync } from 'node:child_process';
@@ -29,16 +29,19 @@ from rooms.models import Question
 data = json.loads(sys.stdin.read())
 run = Run.objects.get(pk=data["run"])
 question = Question.objects.get(pk=data["question"])
+cross_field = data["cross_field"]
 groups = [dict(g, index=i) for i, g in enumerate(data["groups"])]
-hints = [dict(h, index=i) for i, h in enumerate(data["hints"])]
-previews = matrix.simulate_groups(run, question, groups)
-hint_previews = matrix.simulate_hints(run, question, hints)
+hints = [] if cross_field else [dict(h, index=i) for i, h in enumerate(data["hints"])]
+previews = matrix.simulate_groups(run, question, groups, cross_field)
+hint_previews = matrix.simulate_hints(run, question, hints, cross_field)
 skipped = sum(1 for g in previews if g["status"] != "ok")
 print("@@" + json.dumps({
     "groups": previews,
     "hints": hint_previews,
     "dropped": skipped + len(hints) - len(hint_previews),
-    "proposal": matrix.sign_proposal(run, question, matrix.with_tops(groups, previews), hints, 0),
+    "proposal": matrix.sign_proposal(
+        run, question, matrix.with_tops(groups, previews), hints, 0, cross_field
+    ),
 }))
 `;
 
@@ -47,6 +50,8 @@ export function signedProposal(
   questionId: number,
   groups: ParsedGroup[],
   hints: ParsedHint[] = [],
+  /** "Also group across fields" (the propose body's `cross_field`). */
+  crossField = false,
 ): Record<string, unknown> {
   const out = execFileSync(
     'docker',
@@ -58,6 +63,7 @@ export function signedProposal(
         question: questionId,
         groups: groups.map((g) => ({ description: '', reason: '', ...g })),
         hints: hints.map((h) => ({ reason: '', ...h })),
+        cross_field: crossField,
       }),
       encoding: 'utf8',
     },

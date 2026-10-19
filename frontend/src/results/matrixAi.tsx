@@ -11,7 +11,9 @@
  *  before applying) — or kept under an existing summary card; groups that
  *  no longer fit the board come greyed out with the reason. Hints name the
  *  same content in different fields (display only; "Highlight" rings those
- *  cards on the board). "Apply" sends all ticked groups in one step; "Undo"
+ *  cards on the board). With "Also group across fields" on, groups may
+ *  span fields: cards of other fields are marked "will be moved from: …"
+ *  and moved into the group's field on apply; no hints then. "Apply" sends all ticked groups in one step; "Undo"
  *  reverts exactly that step until the next apply or until the panel
  *  closes (409 when a stack changed meanwhile → the server's reason).
  *  Locked while rating, like manual stacking. */
@@ -27,6 +29,7 @@ import type {
   MatrixBoard,
   MatrixSettingsPayload,
 } from "../api";
+import { ToggleSwitch } from "../components/ui";
 import { AI_MARK } from "./MindMap";
 import { matrixStacks } from "./Matrix";
 import { requestBody, requestDetail } from "./mindmapModeration";
@@ -68,6 +71,8 @@ const RATING_LOCK = "Stacking and deleting are locked while rating.";
 interface Proposal extends MatrixAiProposal {
   /** The level the proposal was made at (the switch may change since). */
   level: MatrixAiLevel;
+  /** Made with "Also group across fields" on (no hints then). */
+  crossField: boolean;
   selected: number[];
   edits: Record<number, MatrixAiEdit>;
 }
@@ -95,6 +100,8 @@ export function useMatrixAi({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [level, setLevel] = useState<MatrixAiLevel>("same");
+  /** "Also group across fields" — per request, off by default. */
+  const [crossField, setCrossField] = useState(false);
   const [busy, setBusy] = useState<"propose" | "apply" | "undo" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
@@ -131,7 +138,7 @@ export function useMatrixAi({
     setProposal(null);
     setHighlight(null);
     try {
-      const res = await live.matrixAiPropose(runId, questionId, level);
+      const res = await live.matrixAiPropose(runId, questionId, level, crossField);
       if (mine !== seq.current) return;
       const edits: Record<number, MatrixAiEdit> = {};
       for (const g of res.groups) {
@@ -142,6 +149,7 @@ export function useMatrixAi({
       setProposal({
         ...res,
         level,
+        crossField,
         selected: res.groups.filter((g) => g.status === "ok").map((g) => g.index),
         edits,
       });
@@ -252,6 +260,8 @@ export function useMatrixAi({
     },
     level,
     setLevel,
+    crossField,
+    setCrossField,
     busy,
     error,
     proposal,
@@ -321,7 +331,7 @@ export function MatrixAiDrawer({
     ai.setLevel(next);
     e.currentTarget.querySelector<HTMLElement>(`[data-level="${next}"]`)?.focus();
   };
-  const cardList = (cards: { id: number; title: string; category: string }[]) =>
+  const cardList = (cards: { id: number; title: string; category: string; moved_from?: string }[]) =>
     cards.map((c, i) => {
       const cat = catText(c.category);
       return (
@@ -329,6 +339,12 @@ export function MatrixAiDrawer({
           {i > 0 && ", "}
           <span className="font-medium text-slate-800">{c.title}</span>
           {cat && <span className="text-slate-500"> ({cat})</span>}
+          {c.moved_from && (
+            <span className="text-slate-600" data-testid="mx-ai-moved">
+              {" "}
+              ({t("will be moved from: {{field}}", { field: zoneName(c.moved_from) })})
+            </span>
+          )}
         </span>
       );
     });
@@ -409,6 +425,15 @@ export function MatrixAiDrawer({
               <p className="mt-1.5 text-xs text-slate-600" data-testid="mx-ai-level-text">
                 {t(LEVEL_TEXT[ai.level].text)}
               </p>
+            </div>
+            <div>
+              <ToggleSwitch
+                checked={ai.crossField}
+                onChange={ai.setCrossField}
+                disabled={disabled}
+                label={<span className="font-medium text-slate-700">{t("Also group across fields")}</span>}
+              />
+              <p className="mt-1 text-xs text-slate-600">{t("Cards from other fields are moved in the process.")}</p>
             </div>
             <div>
               <button
@@ -557,7 +582,7 @@ export function MatrixAiDrawer({
                 })}
               </ul>
             )}
-            {proposal.hints.length > 0 && (
+            {!proposal.crossField && proposal.hints.length > 0 && (
               <section data-testid="mx-ai-hints" aria-labelledby="mx-ai-hints-title" className="border-t border-slate-100 pt-3">
                 <h3 id="mx-ai-hints-title" className="font-semibold text-slate-700">
                   {t(HINTS_TITLE[proposal.level])}

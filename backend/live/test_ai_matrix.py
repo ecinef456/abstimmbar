@@ -195,3 +195,18 @@ class MatrixAiPromptTests(base.MatrixTestCase):
                       '"description": "Rotoren", "category": "Idee", "stack": ["Windrad"], '
                       '"summary": true', user)
         self.assertEqual(user.count('"summary": true'), 1)
+
+    def test_cross_field_prompt(self):
+        system, user = ai_matrix.build_prompt(self.run, self.xq, "same", cross_field=True)
+        # Groups may span fields; no hints are asked for.
+        self.assertIn("verschiedenen Feldern liegen", system)
+        self.assertNotIn("im selben Feld (gleiche zone)", system)
+        self.assertNotIn('"hints"', system)
+        self.assertIn("anderen Worten", system)  # the level still applies
+        self.assertIn('"zone": "q3"', user)
+        # Default: same-field groups and hints, as before.
+        default, _ = self.prompt("same")
+        self.assertEqual(default, ai_matrix.build_prompt(self.run, self.xq, "same", cross_field=False)[0])
+        self.assertIn("im selben Feld (gleiche zone)", default)
+        self.assertIn('"hints"', default)
+        self.assertNotIn("verschiedenen Feldern liegen", default)

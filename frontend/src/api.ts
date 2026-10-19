@@ -177,8 +177,10 @@ export interface MatrixAiGroup {
   status: "ok" | "skip";
   skip_reason?: MatrixAiSkipReason;
   zone: string | null;
-  /** The distinct tops of the group (stack members map to their top). */
-  cards: { id: number; title: string; category: string }[];
+  /** The distinct tops of the group (stack members map to their top).
+   *  `moved_from`: cross-field proposals only — the card's field, from
+   *  which apply moves it (with its stack) into the group's `zone`. */
+  cards: { id: number; title: string; category: string; moved_from?: string }[];
   /** Proposed (or, with `top_summary_id`, the existing) summary title. */
   title: string;
   description: string;
@@ -1580,12 +1582,13 @@ export const live = {
   /** Deletes a teacher card (participant cards can only be hidden). */
   matrixDelete: (runId: number, questionId: number, card: number) =>
     matrixCall(runId, questionId, "delete", { card }),
-  /** AI grouping proposal (no change yet). 503 AI off, 400 switch off /
-   *  fewer than 3 cards, 409 rating, 502 AI error. */
-  matrixAiPropose: (runId: number, questionId: number, level: MatrixAiLevel) =>
+  /** AI grouping proposal (no change yet). `crossField`: groups may span
+   *  fields (no hints then). 503 AI off, 400 switch off / fewer than 3
+   *  cards, 409 rating, 502 AI error. */
+  matrixAiPropose: (runId: number, questionId: number, level: MatrixAiLevel, crossField = false) =>
     request<MatrixAiProposal>(`/api/runs/${runId}/matrix/${questionId}/ai-propose`, {
       method: "POST",
-      body: JSON.stringify({ level }),
+      body: JSON.stringify({ level, cross_field: crossField }),
     }),
   /** Applies the selected groups in one step (`skipped`: no longer fitting). */
   matrixAiApply: (

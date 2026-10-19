@@ -580,7 +580,15 @@ def _card_preview(card):
     return {"id": card.pk, "title": card.title, "category": card.category}
 
 
-def simulate_groups(run, question, groups):
+def _target_zone(tops):
+    """Cross-field: the zone holding the most tops of a group; tie → the zone
+    of the oldest of the tied zones' tops."""
+    counts = Counter(t.zone for t in tops)
+    best = max(counts.values())
+    return min((t for t in tops if counts[t.zone] == best), key=_age).zone
+
+
+def simulate_groups(run, question, groups, cross_field=False):
     """Check the parsed ``groups`` (``ai_matrix.parse_reply``) against the
     board; one preview dict per group in order: ``{index, status ("ok" |
     "skip"), skip_reason?, zone, cards [{id, title, category}] (the distinct
@@ -592,7 +600,13 @@ def simulate_groups(run, question, groups):
     ok group, or it has fewer than two distinct tops. An existing summary top
     in the group is kept (its title/description/category/position); else the
     new summary card takes the oldest top's position and the most frequent
-    category of all cards incl. stack members (tie: the oldest card's)."""
+    category of all cards incl. stack members (tie: the oldest card's).
+
+    ``cross_field`` (the presenter's switch) lifts the same-zone rule: the
+    target zone is the one with the most tops (``_target_zone``), only
+    summary tops there are kept and the anchor is the oldest top there; every
+    card from another zone carries ``moved_from: <zone>`` (apply moves it,
+    with its stack, to the summary card's zone and position)."""
     by_id, members = _board(run, question)
     used = set()
     result = []
@@ -614,7 +628,7 @@ def simulate_groups(run, question, groups):
             "reason": group.get("reason", ""),
         }
         if not reason:
-            if len({t.zone for t in tops}) > 1:
+            if not cross_field and len({t.zone for t in tops}) > 1:
                 reason = SKIP_ZONES
             elif any(t.pk in used for t in tops):
                 reason = SKIP_DUPLICATE
@@ -625,11 +639,19 @@ def simulate_groups(run, question, groups):
             result.append(preview)
             continue
         used.update(t.pk for t in tops)
+        zone = _target_zone(tops) if cross_field else tops[0].zone
+        if cross_field:
+            preview["zone"] = zone
+            preview["cards"] = [
+                {**_card_preview(t), **({"moved_from": t.zone} if t.zone != zone else {})}
+                for t in tops
+            ]
+        local = [t for t in tops if t.zone == zone]
         everyone = [
             *tops,
             *(m for t in tops for m in members.get(t.pk, []) if not m.hidden),
         ]
-        summaries = [t for t in tops if t.summary]
+        summaries = [t for t in local if t.summary]
         if summaries:
             anchor = min(summaries, key=_age)
             preview.update(
@@ -637,18 +659,21 @@ def simulate_groups(run, question, groups):
                 description=anchor.description, category=anchor.category,
             )
         else:
-            anchor = min(tops, key=_age)
+            anchor = min(local, key=_age)
             preview["category"] = _group_category(question, everyone)
         preview.update(anchor_id=anchor.pk, x=anchor.x, y=anchor.y, placed=anchor.placed)
         result.append(preview)
     return result
 
 
-def simulate_hints(run, question, hints):
+def simulate_hints(run, question, hints, cross_field=False):
     """The parsed ``hints`` with only valid ids (existing, visible; members
     map to their top, duplicates dropped): ``{index, cards [{id, title,
     category, zone}], reason}``. Hints whose cards no longer span at least
-    two zones are dropped."""
+    two zones are dropped. None with ``cross_field`` (such cards are grouped
+    instead)."""
+    if cross_field:
+        return []
     by_id, _ = _board(run, question)
     result = []
     for hint in hints:
@@ -676,18 +701,19 @@ def with_tops(groups, previews):
     ]
 
 
-def sign_proposal(run, question, groups, hints, malformed=0):
+def sign_proposal(run, question, groups, hints, malformed=0, cross_field=False):
     """Signed (not encrypted) parsed proposal for ai-apply, bound to run +
-    question, valid for PROPOSAL_MAX_AGE."""
+    question, valid for PROPOSAL_MAX_AGE; ``cross_field`` is part of it, so
+    apply checks the groups the way they were proposed."""
     return signing.dumps(
         {"run": run.pk, "question": question.pk, "groups": groups, "hints": hints,
-         "malformed": malformed},
+         "malformed": malformed, "cross_field": bool(cross_field)},
         salt=PROPOSAL_SALT, compress=True,
     )
 
 
 def unsign_proposal(run, question, blob):
-    """``(groups, hints, malformed)`` of a signed proposal; MatrixError 400
+    """``(groups, hints, malformed, cross_field)`` of a signed proposal; MatrixError 400
     when tampered or made for another run/question, 409 when expired."""
     if not isinstance(blob, str):
         raise MatrixError("Invalid proposal.")
@@ -703,7 +729,10 @@ def unsign_proposal(run, question, blob):
         or data.get("question") != question.pk
     ):
         raise MatrixError("Invalid proposal.")
-    return data.get("groups", []), data.get("hints", []), data.get("malformed", 0)
+    return (
+        data.get("groups", []), data.get("hints", []), data.get("malformed", 0),
+        data.get("cross_field") is True,
+    )
 
 
 # --- AI grouping: apply and undo --------------------------------------------
@@ -772,21 +801,26 @@ def _apply_group(run, question, preview, edit):
             category=category or preview["category"],
         )
     touched, deleted = [], []
-    place = {"zone": top.zone, "x": top.x, "y": top.y}
+    # Every card under the summary takes its zone and position (a cross-field
+    # group moves cards of other fields here); undo restores all four.
+    place = {"zone": top.zone, "x": top.x, "y": top.y, "placed": top.placed}
     for other in tops:
         if other.pk == top.pk:
             continue
         for member in other.members.all():
-            touched.append([member.pk, member.stack_id, member.zone, member.x, member.y])
+            touched.append(
+                [member.pk, member.stack_id, member.zone, member.x, member.y, member.placed]
+            )
         other.members.update(stack=top, **place)
         if _disposable_summary(other):
             deleted.append(_snapshot(other))
             other.delete()
             continue
-        touched.append([other.pk, other.stack_id, other.zone, other.x, other.y])
+        touched.append([other.pk, other.stack_id, other.zone, other.x, other.y, other.placed])
         other.stack = top
-        other.zone, other.x, other.y = top.zone, top.x, top.y
-        other.save(update_fields=["stack", "zone", "x", "y"])
+        for field, value in place.items():
+            setattr(other, field, value)
+        other.save(update_fields=["stack", *place])
     return {
         "top": top.pk,
         "created": not keep,
@@ -796,7 +830,7 @@ def _apply_group(run, question, preview, edit):
     }
 
 
-def apply_groups(run, question, groups, selected, edits):
+def apply_groups(run, question, groups, selected, edits, cross_field=False):
     """Apply the ``selected`` groups (indices) of a proposal in one
     transaction under the run lock: re-simulate against the live board,
     create (or keep an existing) summary top per ok group and stack every
@@ -806,7 +840,9 @@ def apply_groups(run, question, groups, selected, edits):
     description?, category?}}`` for the new summary cards (title validated
     like a presenter card — 400; an invalid category falls back to the
     proposal's; edits of a group that keeps an existing summary top are
-    ignored). Refused while rating (409); allowed on a finished run, like
+    ignored). ``cross_field`` (from the signed proposal) re-simulates with
+    the same-zone rule lifted; cards of other fields then move to the
+    summary card's zone/position. Refused while rating (409); allowed on a finished run, like
     the mind map's ai-apply and manual stack moderation. Returns
     ``{applied: [index], skipped: [{index, reason}], undo}``."""
     chosen = sorted(set(selected))
@@ -814,7 +850,9 @@ def apply_groups(run, question, groups, selected, edits):
     with transaction.atomic():
         _lock_run(run)
         _lock_stacks(run, question)
-        previews = simulate_groups(run, question, [by_index[i] for i in chosen if i in by_index])
+        previews = simulate_groups(
+            run, question, [by_index[i] for i in chosen if i in by_index], cross_field,
+        )
         count = _cards(run, question).count()
         applied, skipped, undo = [], [], []
         for preview in previews:
@@ -867,7 +905,7 @@ def _unsign_undo(run, question, blob):
 
 def undo_groups(run, question, blob):
     """Undo one ``apply_groups`` step exactly: restore every touched card's
-    stack/zone/position, recreate deleted summary cards and delete the
+    stack/zone/position/placed, recreate deleted summary cards and delete the
     created ones. 409 (nothing changed) when a summary top is gone, no
     longer a top, has other members than right after the apply, or a
     created one got ratings meanwhile."""
@@ -905,9 +943,11 @@ def undo_groups(run, question, blob):
                     created_at=datetime.fromisoformat(snap["created_at"])
                 )
                 ids[snap["id"]] = card.pk
-            for pk, stack, zone, x, y in group["cards"]:
+            for pk, stack, zone, x, y, *placed in group["cards"]:
+                # ``placed`` since cross-field grouping (older tokens lack it).
                 MatrixCard.objects.filter(pk=pk).update(
-                    stack_id=ids.get(stack, stack), zone=zone, x=x, y=y
+                    stack_id=ids.get(stack, stack), zone=zone, x=x, y=y,
+                    **({"placed": placed[0]} if placed else {}),
                 )
             if group["created"]:
                 MatrixCard.objects.filter(pk=group["top"]).delete()

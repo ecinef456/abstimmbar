@@ -3,8 +3,8 @@
  *  level choice, "Vorschlag holen", groups with editable summary title /
  *  description / category, skipped groups with their reason, hints with a
  *  board highlight — "Übernehmen" (summary card marked on the board),
- *  "Rückgängig" (also refused once a stack changed), errors, the rating
- *  lock, help labels, axe.
+ *  "Rückgängig" (also refused once a stack changed), the cross-field switch
+ *  (moved cards, no hints), errors, the rating lock, help labels, axe.
  *
  *  Never calls the LLM: `/ai-propose` is route-mocked with a body the
  *  backend simulated and signed itself (`helpers/matrixAi.ts`), so apply
@@ -52,7 +52,7 @@ async function login(page: Page, opts: { easy?: boolean } = {}) {
   await page.waitForURL('http://localhost:5174/**');
 }
 
-type Card = { id: number; stack: number | null; summary: boolean; title: string; category: string };
+type Card = { id: number; stack: number | null; summary: boolean; title: string; category: string; zone: string };
 
 async function seed(page: Page, trackRoom: (id: number) => void, overrides: Record<string, unknown> = {}) {
   const room = await createRoomWithQuestions(page.request, [], 'Matrix KI', trackRoom, 'E2E Matrix KI');
@@ -295,6 +295,75 @@ test('keyboard opening focuses the level; skipped groups keep the edited title; 
   await s.api.post(`/api/runs/${s.runId}/matrix/${s.questionId}/unstack`, { card: ids.chatbot2 });
   await expect(card(page, summary.id).getByTestId('matrix-stack-badge')).toHaveCount(0);
   await expect(card(page, summary.id).locator('[data-card-summary]')).toBeVisible();
+});
+
+test('cross-field switch: sent per request, moved cards marked, no hints, apply moves, undo restores', async ({
+  page,
+  trackRoom,
+}) => {
+  test.setTimeout(90_000);
+  await login(page);
+  const s = await seed(page, trackRoom);
+  const { ids } = s;
+  const body = signedProposal(
+    s.runId,
+    s.questionId,
+    [{ cards: [ids.chatbot, ids.chatbot2, ids.assistant], title: 'Chatbot' }],
+    [],
+    true,
+  ) as { hints: unknown[] };
+  // Even a hint in the body stays hidden while the switch was on.
+  body.hints = [{ index: 0, cards: [{ id: ids.podcast, title: 'Podcast', category: 'orange', zone: 'q2' }], reason: 'x' }];
+  const sent: unknown[] = [];
+  await page.route(/\/api\/runs\/\d+\/matrix\/\d+\/ai-propose$/, async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({ json: body });
+  });
+  await openPresenter(page, s.room.setId);
+  await handle(page).click();
+  const cross = panel(page).getByRole('switch', { name: 'Auch über Feldgrenzen zusammenfassen' });
+  await expect(cross).toHaveAttribute('aria-checked', 'false');
+  await expect(panel(page)).toContainText('Karten aus anderen Feldern werden dabei verschoben.');
+  // Off by default: the request says so.
+  await panel(page).getByRole('button', { name: 'Vorschlag holen' }).click();
+  await expect(panel(page).getByTestId('mx-ai-group')).toHaveCount(1);
+  await panel(page).getByRole('button', { name: 'Verwerfen' }).click();
+  await cross.click();
+  await expect(cross).toHaveAttribute('aria-checked', 'true');
+  await expectNoAxe(page);
+  await shot(page, 'mx-ai-cross-switch');
+  await panel(page).getByRole('button', { name: 'Vorschlag holen' }).click();
+  expect(sent).toEqual([
+    { level: 'same', cross_field: false },
+    { level: 'same', cross_field: true },
+  ]);
+
+  const group = panel(page).getByTestId('mx-ai-group');
+  await expect(group).toHaveCount(1);
+  // Target field: the one with the most cards (x part first); the card from
+  // another field says where it comes from.
+  await expect(group.locator('p').first()).toHaveText('nützlich & modern');
+  await expect(group.getByTestId('mx-ai-moved')).toHaveCount(1);
+  await expect(group.getByTestId('mx-ai-moved')).toHaveText('(wird verschoben aus: nicht nützlich & altbacken)');
+  await expect(panel(page).getByTestId('mx-ai-hints')).toHaveCount(0);
+  await expectNoAxe(page);
+  await shot(page, 'mx-ai-cross-proposal');
+
+  // Apply: the card from q3 lies under the summary card in q1.
+  await panel(page).getByRole('button', { name: 'Übernehmen (1)' }).click();
+  await expect(panel(page).getByRole('button', { name: 'Rückgängig' })).toBeVisible();
+  let server = await s.cards();
+  const summary = server.find((c) => c.summary)!;
+  expect(summary.zone).toBe('q1');
+  expect(server.find((c) => c.id === ids.assistant)).toMatchObject({ stack: summary.id, zone: 'q1' });
+  await expect(card(page, summary.id).getByTestId('matrix-stack-badge')).toHaveText('×3');
+
+  // Undo: back in its own field, loose again.
+  await panel(page).getByRole('button', { name: 'Rückgängig' }).click();
+  await expect(card(page, ids.assistant)).toBeVisible();
+  server = await s.cards();
+  expect(server.find((c) => c.id === ids.assistant)).toMatchObject({ stack: null, zone: 'q3' });
+  expect(server.some((c) => c.summary)).toBe(false);
 });
 
 test('AI error and too few cards', async ({ page, trackRoom }) => {

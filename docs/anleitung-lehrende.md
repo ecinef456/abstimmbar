@@ -419,8 +419,16 @@ der Maus über ein Symbol, nennt ein Tooltip seinen Namen und seine Taste.
     unterschiedlich eingeordnet**, **Inhaltlich gleich, aber unterschiedlich
     eingeordnet** oder **Ähnlich, aber unterschiedlich eingeordnet**. **Zeigen** hebt
     diese Karten auf dem Brett hervor, geändert wird dabei nichts – ein guter
-    Anlass zur Diskussion. **Übernehmen** stapelt alle angehakten Gruppen in
-    einem Schritt; **Rückgängig** im Panel nimmt genau diesen Schritt zurück –
+    Anlass zur Diskussion. Schalten Sie vor **Vorschlag holen** den Schalter
+    **Auch über Feldgrenzen zusammenfassen** ein, dürfen Gruppen Karten aus
+    mehreren Feldern enthalten: Die Sammelkarte kommt in das Feld mit den
+    meisten Karten der Gruppe (bei Gleichstand in das Feld der ältesten
+    Karte), Karten aus anderen Feldern sind mit **wird verschoben aus: …**
+    gekennzeichnet und werden beim Übernehmen samt ihrem Stapel dorthin
+    gelegt; Hinweise entfallen dann. Standardmäßig ist der Schalter aus.
+    **Übernehmen** stapelt alle angehakten Gruppen in
+    einem Schritt; **Rückgängig** im Panel nimmt genau diesen Schritt zurück
+    (verschobene Karten kehren in ihr Feld und an ihre Stelle zurück) –
     bis zum nächsten Übernehmen oder bis Sie das Panel schließen (auch Stift
     oder Anzeige öffnen schließt es), und nur, solange die Stapel nicht von
     Hand verändert wurden. Sammelkarten tragen auf dem Beamer, auf der
