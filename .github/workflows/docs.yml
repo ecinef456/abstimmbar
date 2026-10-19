@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: Apache-2.0
+# Project website (MkDocs Material) → GitHub Pages. Pull requests only
+# build (strict), pushes to main also deploy.
+name: Docs site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/deployment.md"
+      - "docs/lti.md"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "website/**"
+      - "docs/deployment.md"
+      - "docs/lti.md"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Deploys share the "pages" group; PR builds get their own (superseded
+# pushes to a PR cancel the older build).
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: website/requirements.txt
+      - name: Install MkDocs Material
+        run: pip install -r website/requirements.txt
+      - name: Build site
+        run: mkdocs build --strict -f website/mkdocs.yml -d "${{ runner.temp }}/site"
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

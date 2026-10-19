@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Abstimmbar">
+  <rect width="32" height="32" rx="8" fill="oklch(0.5 0.1 152)"/>
+  <rect x="7" y="16" width="4.5" height="9" rx="1.5" fill="#fff"/>
+  <rect x="13.75" y="8" width="4.5" height="17" rx="1.5" fill="#fff"/>
+  <rect x="20.5" y="12" width="4.5" height="13" rx="1.5" fill="oklch(0.84 0.13 147)"/>
+</svg>

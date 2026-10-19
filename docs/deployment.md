@@ -27,8 +27,8 @@ Alltagskommandos, Updates, Zertifikate und Backup.
 ## Installation auf Rocky Linux 9 — Schritt für Schritt
 
 Eine komplette Anleitung für einen frischen **Rocky-Linux-9-Server**, so
-geschrieben, dass sie ohne Linux-Vorerfahrung nachvollziehbar ist. Kopiere
-jeden Befehl exakt.
+geschrieben, dass sie ohne Linux-Vorerfahrung nachvollziehbar ist. Kopieren
+Sie jeden Befehl exakt.
 
 **Wie es zusammenspielt (einmal lesen):** Auf dem Server wird nur eine
 Sache installiert — **Docker**. Docker lädt und betreibt alle Bausteine als
@@ -44,14 +44,14 @@ Präsentationsmodus.
 
 - Ein Server mit Rocky Linux 9 und ein Benutzer mit `sudo`-Rechten (oder
   `root` — dann das `sudo` vor den Befehlen weglassen).
-- Ein **Domainname** (z. B. `abstimmbar.example.org`), für den du einen
-  DNS-Eintrag anlegen kannst. HTTPS braucht eine echte Domain.
+- Ein **Domainname** (z. B. `abstimmbar.example.org`), für den Sie einen
+  DNS-Eintrag anlegen können. HTTPS braucht eine echte Domain.
 - Die **öffentliche IP-Adresse** des Servers.
 - Ein **OIDC-Client** im institutionellen Keycloak (Details unten; kann
   auch nachgereicht werden, der Stack startet ohne funktionierenden Login).
 
 > Notation: Zeilen mit `sudo` werden im Terminal des Servers ausgeführt.
-> Im Editor `nano` speicherst du mit **Strg+O**, **Enter** und verlässt ihn
+> Im Editor `nano` speichern Sie mit **Strg+O**, **Enter** und verlassen ihn
 > mit **Strg+X**.
 
 ### Schritt 1 — Am Server anmelden
@@ -59,7 +59,7 @@ Präsentationsmodus.
 Vom eigenen Rechner aus:
 
 ```bash
-ssh dein-benutzer@SERVER-IP        # z. B. ssh admin@203.0.113.10
+ssh BENUTZER@SERVER-IP            # z. B. ssh admin@203.0.113.10
 ```
 
 ### Schritt 2 — System aktualisieren und Grundwerkzeuge installieren
@@ -116,9 +116,9 @@ sudo firewall-cmd --list-services      # muss 'http' und 'https' enthalten
 > **Hinweis:** Manche Server (v. a. Cloud-/Rechenzentrums-VMs) haben keine
 > Host-Firewall, sondern filtern über eine externe **Security Group /
 > Netz-Firewall**. Wenn `firewall-cmd` trotz der Schritte oben
-> `FirewallD is not running` meldet — oder ihr bewusst kein firewalld
-> nutzt — überspringe diesen Schritt und lass stattdessen die Ports **80**
-> und **443** in der externen Firewall freischalten.
+> `FirewallD is not running` meldet — oder Sie bewusst kein firewalld
+> nutzen — überspringen Sie diesen Schritt und lassen Sie stattdessen die
+> Ports **80** und **443** in der externen Firewall freischalten.
 
 ### Schritt 5 — Domain auf den Server zeigen lassen (DNS)
 
@@ -144,7 +144,7 @@ cd abstimmbar
 ```
 
 (Für das interne Repo braucht der Server einen SSH-Key mit Lesezugriff
-oder du nutzt die HTTPS-URL mit Zugangsdaten.)
+oder Sie nutzen die HTTPS-URL mit Zugangsdaten.)
 
 ### Schritt 7 — Konfigurationsdatei anlegen
 
@@ -190,7 +190,7 @@ Start des Stacks (Schritt 10) automatisch lädt. Definiert ist es in
 
 **Wo die Konfiguration liegt:** in der Datei `Caddyfile` im Projektordner,
 also `/opt/abstimmbar/Caddyfile`. Das Compose-File hängt sie **read-only in
-den Container** — du bearbeitest sie auf dem Host, nichts muss kopiert
+den Container** — Sie bearbeiten sie auf dem Host, nichts muss kopiert
 werden.
 
 Zwei Dinge ändern: die Domain in der Zeile `abstimmbar.example.org {` und
@@ -201,9 +201,9 @@ cd /opt/abstimmbar
 sudo nano Caddyfile
 ```
 
-Zertifikate richtest du **nicht** von Hand ein — Caddy besorgt und
+Zertifikate richten Sie **nicht** von Hand ein — Caddy besorgt und
 erneuert das Let's-Encrypt-Zertifikat automatisch, sobald Domain und Ports
-stimmen. Spätere Änderungen am Caddyfile übernimmst du mit
+stimmen. Spätere Änderungen am Caddyfile übernehmen Sie mit
 `sudo docker compose -f docker-compose.prod.yml restart caddy`.
 
 ### Schritt 9 — Dateien für SELinux freigeben
@@ -268,7 +268,7 @@ Ja — das Setup ist reboot-sicher:
 
 - Docker startet beim Boot (`systemctl enable docker`, Schritt 3).
 - Alle Dienste haben `restart: unless-stopped` — Datenbank, Backend und
-  Caddy kommen nach einem Reboot von selbst wieder hoch (außer du hast
+  Caddy kommen nach einem Reboot von selbst wieder hoch (außer Sie haben
   den Stack bewusst mit `… down` gestoppt).
 - Alle Daten liegen in persistenten Volumes: Datenbank (`postgres_data`),
   hochgeladene Bilder (`media_data`), Zertifikate (`caddy_data`). Beim
@@ -416,9 +416,15 @@ Stellen ergänzen:
 nötig**: die SPA nutzt standardmäßig relative URLs (gleicher Origin wie die
 API, hinter Caddy). Nur für einen bewusst abweichenden Aufbau (SPA und API
 auf unterschiedlichen Origins) setzen. Vite backt den Wert dann **zur
-Buildzeit** fest ins Bundle — das funktioniert nur, wenn du selbst baust
+Buildzeit** fest ins Bundle — das funktioniert nur, wenn Sie selbst bauen
 (`up -d --build`); ein veröffentlichtes Release-Image wurde bereits mit dem
 Standardwert gebaut und lässt sich nicht nachträglich umkonfigurieren.
+
+**`VITE_GUIDE_URL`** (optional) ist das Ziel des Menüpunkts „Anleitung“ im
+„?“-Menü der App; Standard ist die öffentliche Projekt-Website
+(`https://virtuos.github.io/abstimmbar/anleitung/`). Wie
+`VITE_API_BASE_URL` wird der Wert zur **Buildzeit** festgelegt (Build-Argument
+im `app`-Service, nur mit `up -d --build` wirksam).
 
 Gegenprüfen, was im laufenden Container ankommt:
 

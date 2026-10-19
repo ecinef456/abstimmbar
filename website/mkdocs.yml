@@ -1,0 +1,125 @@
+# SPDX-License-Identifier: Apache-2.0
+# Project website (GitHub Pages): landing page, guide for teachers,
+# installation. Build: mkdocs build --strict -f website/mkdocs.yml
+site_name: Abstimmbar
+site_url: https://virtuos.github.io/abstimmbar/
+site_description: >-
+  Anonyme Live-Abstimmungen für die Hochschullehre — Open Source von virtUOS,
+  Universität Osnabrück.
+site_author: virtUOS, Universität Osnabrück
+repo_url: https://github.com/virtUOS/abstimmbar
+repo_name: virtUOS/abstimmbar
+edit_uri: ""
+copyright: >-
+  © 2026 Universität Osnabrück (virtUOS) · Abstimmbar steht unter der
+  Apache-Lizenz 2.0
+
+docs_dir: .
+# Build output must live outside docs_dir (= this folder): repo-root site/.
+site_dir: ../site
+# The site sources live next to the config; keep build output and tooling
+# out of the page tree.
+exclude_docs: |
+  README.md
+  mkdocs.yml
+  requirements.txt
+  hooks/
+
+theme:
+  name: material
+  language: de
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  font:
+    text: Plus Jakarta Sans
+    code: JetBrains Mono
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Helles Design
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dunkles Design
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-auto
+        name: Design des Systems
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+
+extra_css:
+  - assets/abstimmbar.css
+
+hooks:
+  - hooks/docs_links.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - def_list
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.keys
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.snippets:
+      # Repo root, so pages can include docs/*.md (single source).
+      base_path: !relative $config_dir/..
+      check_paths: true
+  - toc:
+      permalink: true
+      # GitHub-compatible anchors (umlauts kept), so links inside the
+      # included docs/*.md keep working.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+
+validation:
+  links:
+    anchors: warn
+
+nav:
+  - Start: index.md
+  - Anleitung:
+      - anleitung/index.md
+      - Anmelden und Modus: anleitung/anmelden.md
+      - Der geführte Rundgang: anleitung/rundgang.md
+      - Räume: anleitung/raeume.md
+      - Fragen erstellen: anleitung/fragen.md
+      - KI-Assistenz: anleitung/ki-assistenz.md
+      - Durchführung starten: anleitung/durchfuehrung.md
+      - Teilnehmende einladen: anleitung/teilnehmende.md
+      - Präsentieren: anleitung/praesentieren.md
+      - Aufgezeichnete Vorlesungen: anleitung/aufzeichnung.md
+      - Ergebnisse: anleitung/ergebnisse.md
+      - Räume im Team: anleitung/team.md
+      - Datenschutz: anleitung/datenschutz.md
+      - Tipps für die Lehre: anleitung/tipps.md
+  - Installation:
+      - installation.md
+      - LMS-Einbindung (LTI 1.3): lti.md

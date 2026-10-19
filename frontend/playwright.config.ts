@@ -9,6 +9,9 @@ const PHONE_UA = 'Mozilla/5.0 (Android 16; Mobile; rv:157.0) Gecko/157.0 Firefox
 // Phone specs only (mobile-*.spec.ts) + their seed/teardown (mobile.*.ts).
 const MOBILE_SPECS = /mobile-.*\.spec\.ts$/;
 const MOBILE_SETUP = /mobile\.(setup|teardown)\.ts$/;
+// Website screenshots (`npm run docs:shots`): not a test — the project only
+// exists when DOCS_SHOTS is set, and every other project ignores the file.
+const DOCS_SHOTS = /docs-screenshots\.spec\.ts$/;
 
 export default defineConfig({
   testDir: './e2e',
@@ -22,7 +25,7 @@ export default defineConfig({
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: [MOBILE_SPECS, MOBILE_SETUP],
+      testIgnore: [MOBILE_SPECS, MOBILE_SETUP, DOCS_SHOTS],
     },
     // Logs in demo + admin-demo once (storage states) and seeds the shared
     // "E2E Mobile …" room; `mobile-teardown` deletes it after all phone runs.
@@ -62,5 +65,14 @@ export default defineConfig({
         locale: 'de-DE',
       },
     },
+    ...(process.env.DOCS_SHOTS
+      ? [
+          {
+            name: 'docs-shots',
+            testMatch: DOCS_SHOTS,
+            use: { ...devices['Desktop Chrome'], locale: 'de-DE', colorScheme: 'light' as const },
+          },
+        ]
+      : []),
   ],
 });

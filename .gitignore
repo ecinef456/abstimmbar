@@ -34,3 +34,6 @@ media/
 # Internal dev-process artifacts (kept local, not part of the public repo)
 docs/superpowers/
 .superpowers/
+
+# Project website build output (mkdocs build -f website/mkdocs.yml)
+/site/

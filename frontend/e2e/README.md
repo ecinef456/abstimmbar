@@ -43,6 +43,10 @@ Projects:
   axe accessibility smoke checks (`mobile-a11y.spec.ts`), each in light and dark.
 - `mobile-setup` / `mobile-teardown` — log in once (storage states in
   `e2e/.auth/`, gitignored) and seed/delete one shared "E2E Mobile …" room.
+- `docs-shots` — not a test: `npm run docs:shots` writes the project
+  website's screenshots (`website/bilder/`, see `website/README.md`) from
+  synthetic "E2E Docs …" rooms. The project exists only with `DOCS_SHOTS`
+  set, so a plain `npx playwright test` never runs it.
 
 axe runs with the WCAG 2.0/2.1 A+AA tags, `color-contrast` included (#178),
 in light and dark on: home, room page, set page, question editor, results,

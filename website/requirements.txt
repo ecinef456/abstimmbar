@@ -1,0 +1,5 @@
+# Build-only dependencies of the project website (GitHub Pages workflow),
+# not of the app. Exact pins; update deliberately (MkDocs 2 is incompatible
+# with Material, hence the explicit mkdocs pin).
+mkdocs==1.6.1
+mkdocs-material==9.7.7
