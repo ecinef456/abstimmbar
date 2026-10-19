@@ -2935,10 +2935,14 @@ def results_csv(request, set_id):
 
     class _PaddedWriter:
         # Every row gets the full column count ("bewertung" only filled for
-        # mind maps with a rating phase).
+        # mind maps with a rating phase). Every text cell is neutralised
+        # centrally against spreadsheet formula injection (csv_safe is
+        # idempotent and leaves numbers alone); the header goes through the
+        # raw writer above and holds only fixed labels.
         @staticmethod
         def writerow(row):
-            return raw_writerow(list(row) + [""] * (len(header) - len(row)))
+            cells = [csv_safe(c) for c in row]
+            return raw_writerow(cells + [""] * (len(header) - len(cells)))
 
     writer = _PaddedWriter()
     for run in runs:
@@ -2968,7 +2972,7 @@ def results_csv(request, set_id):
                         else mindmap_rating.csv_cell(question, scores, node_id)
                     )
                     writer.writerow(
-                        base + [csv_safe(path), "", count, "", "", "", csv_safe(cell)]
+                        base + [path, "", count, "", "", "", cell]
                     )
             elif question.kind == Question.Kind.MATRIX:
                 # One row per visible card: title in "antwort", one vote each,
@@ -2986,15 +2990,15 @@ def results_csv(request, set_id):
                     )
                     writer.writerow(
                         base
-                        + [csv_safe(card["title"]), "", 1, "", "", "", csv_safe(cell)]
-                        + [csv_safe(card[key]) for key in ("description", "category", "zone")]
-                        + [card["x"], card["y"], csv_safe(card["stack"])]
+                        + [card["title"], "", 1, "", "", "", cell]
+                        + [card[key] for key in ("description", "category", "zone")]
+                        + [card["x"], card["y"], card["stack"]]
                     )
             elif question.kind in Question.TEXT_KINDS:
                 for word in words_with_counts(run, question, limit=100000):
                     writer.writerow(
                         base
-                        + [csv_safe(word["text"]), "", word["count"],
+                        + [word["text"], "", word["count"],
                            word.get("onsite", ""), word.get("recording", ""), ""]
                     )
             elif question.kind == Question.Kind.PRIORITIES:

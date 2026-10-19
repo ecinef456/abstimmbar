@@ -300,10 +300,13 @@ OIDC_CLAIM_LAST_NAME = os.environ.get("OIDC_CLAIM_LAST_NAME", "family_name")
 OIDC_GROUPS_CLAIM = os.environ.get("OIDC_GROUPS_CLAIM", "groups")
 OIDC_ADMIN_GROUP = os.environ.get("OIDC_ADMIN_GROUP", "")
 # Heal re-issued IdP subjects (re-imported dev realm, realm migration) by
-# matching on the username. Safe at UOS because usernames are never re-assigned
-# to different people — see basicbar-auth's operator notes before changing.
+# matching on the username. Opt-in (default off): only enable it for IdPs that
+# assign usernames centrally and never re-assign them to different people —
+# otherwise an IdP account could adopt a local account of the same username.
+# basicbar-auth >= 0.2.2 additionally never adopts accounts without an OIDC
+# subject (e.g. the local break-glass superuser). See its operator notes.
 OIDC_MATCH_BY_USERNAME_FALLBACK = (
-    os.environ.get("OIDC_MATCH_BY_USERNAME_FALLBACK", "1") == "1"
+    os.environ.get("OIDC_MATCH_BY_USERNAME_FALLBACK", "0") == "1"
 )
 
 # Where to send the browser after login/logout (the SPA).

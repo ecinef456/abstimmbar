@@ -258,7 +258,9 @@ sudo docker compose -f docker-compose.prod.yml exec app python manage.py creates
 ```
 
 Den Eingaben folgen (Benutzername, E-Mail, Passwort); Login danach unter
-`https://abstimmbar.example.org/admin/`. Lehrende melden sich regulär per
+`https://abstimmbar.example.org/admin/`. Dieses Konto bleibt rein
+passwortbasiert unter `/admin/` und wird von keinem OIDC-Login übernommen.
+Lehrende melden sich regulär per
 Uni-Login (OIDC) auf der Startseite an; Mitglieder der Gruppe aus
 `OIDC_ADMIN_GROUP` bekommen dabei automatisch Django-Admin-Rechte.
 

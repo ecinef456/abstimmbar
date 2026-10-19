@@ -273,7 +273,9 @@ sudo docker compose -f docker-compose.prod.yml exec app python manage.py creates
 ```
 
 Follow the prompts (username, email, password); then log in at
-`https://abstimmbar.example.org/admin/`. Teachers sign in as usual with
+`https://abstimmbar.example.org/admin/`. This account stays
+password-only at `/admin/` and is never adopted by an OIDC login.
+Teachers sign in as usual with
 their university login (OIDC) on the start page; members of the group set
 in `OIDC_ADMIN_GROUP` automatically get Django admin rights when they do.
 

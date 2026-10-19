@@ -1232,6 +1232,45 @@ class ResultsApiTests(LiveTestCase):
         self.assertNotIn("{", body)
         self.assertNotIn("'de'", body)
 
+    def test_csv_neutralises_every_text_cell(self):
+        """Formula-looking authored text (question, options, Likert steps,
+        priorities items) never reaches the CSV unescaped, whatever the kind."""
+        import csv
+        import io
+
+        Question.objects.all().delete()
+        qs = self.question_set
+        sc = Question.objects.create(
+            question_set=qs, kind=Question.Kind.SINGLE_CHOICE,
+            text='=HYPERLINK("x")', position=0,
+        )
+        AnswerOption.objects.create(question=sc, text="+1", position=0)
+        lk = Question.objects.create(
+            question_set=qs, kind=Question.Kind.LIKERT, text="<p>L</p>", position=1,
+        )
+        AnswerOption.objects.create(question=lk, text="-foo", position=0)
+        AnswerOption.objects.create(question=lk, text="fine", position=1)
+        pq = Question.objects.create(
+            question_set=qs, kind=Question.Kind.PRIORITIES, text="<p>P</p>", position=2,
+        )
+        AnswerOption.objects.create(question=pq, text="@bar", position=0)
+        Run.objects.create(
+            question_set=qs, phase=Run.Phase.CLOSED, active_question=sc
+        )
+        self.client.force_login(self.owner)
+        body = self.client.get(
+            f"/api/question-sets/{qs.pk}/results.csv"
+        ).content.decode("utf-8-sig")
+        rows = list(csv.reader(io.StringIO(body), delimiter=";"))
+        cells = [c for row in rows[1:] for c in row]
+        for raw in ('=HYPERLINK("x")', "+1", "-foo", "@bar"):
+            self.assertIn("'" + raw, cells)
+            self.assertNotIn(raw, cells)
+        for cell in cells:
+            self.assertFalse(cell.startswith(("=", "+", "-", "@", "\t", "\r")), cell)
+        # Numbers stay untouched.
+        self.assertIn("0", cells)
+
     def test_csv_requires_owner(self):
         self._run_with_votes()
         eve = User.objects.create_user(username="eve")
