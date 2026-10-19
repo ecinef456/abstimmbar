@@ -34,6 +34,7 @@ import MindMap, { AI_MARK, hiddenMindmapNodes, mindmapBranchHues } from "../resu
 import MindmapRanking, { rankMindmap } from "../results/MindmapRanking";
 import { requestDetail, useMindmapModeration } from "../results/mindmapModeration";
 import { MindmapAiDrawer, useMindmapAi } from "../results/mindmapAi";
+import MindmapModerationList from "../results/MindmapModerationList";
 import { Footer, FooterIconButton, buildViewSegments, type ViewSegment } from "./presenter/footer";
 import HelpOverlay from "./presenter/HelpOverlay";
 import MatrixPanel from "./presenter/MatrixPanel";
@@ -2108,7 +2109,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               className="mx-auto mt-2 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm text-slate-700">
               <Info className="h-4 w-4 shrink-0 text-brand-600" aria-hidden />
               <p className="flex-1">
-                {t("Tip: + adds a term. Drag a term onto another to merge them, or onto “Attach here” beside it to move it there; double-click renames, × hides (the pencil on the right lists hidden terms). Ctrl+Z undoes.")}
+                {t("Tip: + adds a term. Drag a term onto another to merge them, or onto “Attach here” beside it to move it there; double-click renames, × hides (the pencil on the right shows hidden terms and your moderation steps for selective reset). Ctrl+Z undoes.")}
               </p>
               <button
                 type="button"
@@ -2626,7 +2627,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 }}
                 aria-label={t("Moderate")}
                 title={t("Moderate")}
-                data-help="handle.moderate"
+                data-help="handle.mm-moderate"
                 data-beamer-inset=""
                   style={{ top: handleColumnTop }}
                   className={`fixed right-0 z-30 rounded-l-xl border border-r-0 border-slate-200 bg-white/95 p-3 text-slate-500 shadow-md transition-opacity hover:text-slate-800 ${
@@ -2637,6 +2638,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               </button>
               <div
                 {...{ [WC_DRAWER_ATTR]: "" }}
+                data-testid="mm-mod-drawer"
                 onClick={blurClickedButton}
                 className={`fixed right-0 top-0 z-40 flex h-full w-80 flex-col border-l border-slate-200 bg-white text-slate-800 transition-transform duration-300 ${
                   showModPanel ? "translate-x-0 shadow-2xl" : "translate-x-full"
@@ -2668,6 +2670,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   <span className="text-sm font-semibold text-slate-600">{t("Moderate")}</span>
                   <button
                     type="button"
+                    id="mm-mod-close"
                     onClick={() => setShowModPanel(false)}
                     aria-label={t("Close")}
                     className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
@@ -2675,42 +2678,15 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-3 text-left text-sm">
-                  {mmHidden.length === 0 ? (
-                    <p className="text-slate-400">
-                      {t("Nothing hidden yet. × on a term hides it together with everything below it.")}
-                    </p>
-                  ) : (
-                    <>
-                      <h3 className="mb-1 font-semibold text-slate-600">{t("Hidden")}</h3>
-                      {mmHidden.map((h) => (
-                        <div key={h.id} className="flex items-start justify-between gap-2 py-1">
-                          <div className="min-w-0">
-                            <p className="truncate">{h.text}</p>
-                            {(h.path.length > 0 || h.below > 0) && (
-                              <p className="truncate text-xs text-slate-400">
-                                {[
-                                  h.path.join(" › "),
-                                  h.below > 0 ? t("+{{count}} below", { count: h.below }) : "",
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </p>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            className="shrink-0 text-brand-700 hover:underline"
-                            onClick={() => hideMindmapNode(h.id, false)}
-                            title={t("Show this entry on the beamer again")}
-                            aria-label={t("Show {{word}} on the beamer again", { word: h.text })}
-                          >
-                            {t("Show again")}
-                          </button>
-                        </div>
-                      ))}
-                    </>
-                  )}
+                <div className="flex-1 overflow-y-auto p-3">
+                  <MindmapModerationList
+                    hidden={mmHidden}
+                    log={mindmap?.moderation_log ?? []}
+                    rating={!!mmRate}
+                    onShow={(id) => hideMindmapNode(id, false)}
+                    onReset={mmMod.resetLog}
+                    fallbackFocusId="mm-mod-close"
+                  />
                 </div>
               </div>
             </>

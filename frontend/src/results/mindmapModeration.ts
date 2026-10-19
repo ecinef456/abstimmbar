@@ -13,18 +13,23 @@
  *
  * An applied AI optimisation is one entry ("ai"): undo reverts the whole
  * batch on the server; it can't be redone (and undoing it drops the redo
- * stack, whose entries were made on top of the optimised map). */
+ * stack, whose entries were made on top of the optimised map).
+ *
+ * Merge, move, rename and AI entries remember their moderation-log entry
+ * (`logId`, #201): undoing them marks that entry reset on the server, and
+ * resetting an entry from the drawer's list (`resetLog`) drops the matching
+ * undo/redo entries, so a later Ctrl+Z doesn't try to undo it again. */
 import { useRef, useState } from "react";
 import { live } from "../api";
 import type { MindmapAiUndo } from "../api";
 
 type Entry =
   | { kind: "add"; parent: number | null; text: string; description?: string; node: number }
-  | { kind: "merge"; source: number; target: number; undo: string }
-  | { kind: "move"; node: number; from: number | null; to: number | null }
-  | { kind: "rename"; node: number; text: string; undo: string }
+  | { kind: "merge"; source: number; target: number; undo: string; logId?: number | null }
+  | { kind: "move"; node: number; from: number | null; to: number | null; logId?: number | null }
+  | { kind: "rename"; node: number; text: string; undo: string; logId?: number | null }
   | { kind: "hide"; node: number; hidden: boolean }
-  | { kind: "ai"; undo: MindmapAiUndo };
+  | { kind: "ai"; undo: MindmapAiUndo; logId?: number | null };
 
 interface Stacks {
   undo: Entry[];
@@ -145,16 +150,16 @@ export function useMindmapModeration(
       }
       case "merge": {
         const res = await live.mindmapMerge(rid, qid, e.source, e.target);
-        return { ...e, undo: res.undo };
+        return { ...e, undo: res.undo, logId: res.log_id };
       }
       case "move": {
         // The server's old parent is authoritative (the client tree may lag).
         const res = await live.mindmapMove(rid, qid, e.node, e.to);
-        return { ...e, from: res.undo.parent };
+        return { ...e, from: res.undo.parent, logId: res.log_id };
       }
       case "rename": {
         const res = await live.mindmapRename(rid, qid, e.node, e.text);
-        return { ...e, undo: res.undo };
+        return { ...e, undo: res.undo, logId: res.log_id };
       }
       case "hide":
         await live.mindmapHide(rid, qid, e.node, e.hidden);
@@ -237,16 +242,45 @@ export function useMindmapModeration(
         const res = await live.mindmapAiApply(rid, qid, proposal, selected);
         result = { applied: res.applied, skipped: res.skipped };
         if (res.undo.length > 0) {
-          stacks.undo.push({ kind: "ai", undo: res.undo });
+          stacks.undo.push({ kind: "ai", undo: res.undo, logId: res.log_id });
           stacks.redo = [];
         }
       });
       void queue.current.then(() => resolve(result));
     });
 
+  /** Resets one moderation-log entry (queued like any action). Resolves
+   *  with null on success — the undo/redo entries of that step are dropped
+   *  — or with the server's (untranslated) `detail` when it is refused
+   *  (shown inline by the caller, not as a toast). */
+  const resetLog = (entryId: number) =>
+    new Promise<string | null>((resolve) => {
+      // No run/question (yet): nothing was reset — say so instead of
+      // reporting success.
+      if (runId == null || questionId == null || key === null) return resolve("Not possible right now.");
+      const rid = runId;
+      const qid = questionId;
+      const stacks = stacksFor(key);
+      queue.current = queue.current
+        .then(async () => {
+          try {
+            await live.mindmapLogReset(rid, qid, entryId);
+          } catch (err) {
+            resolve(requestDetail(err));
+            return;
+          }
+          const keep = (e: Entry) => !("logId" in e) || e.logId !== entryId;
+          stacks.undo = stacks.undo.filter(keep);
+          stacks.redo = stacks.redo.filter(keep);
+          resolve(null);
+        })
+        .finally(() => setTick((n) => n + 1));
+    });
+
   const current = key ? all.current.get(key) : undefined;
   return {
     applyAi,
+    resetLog,
     add: (parent: number | null, text: string, description?: string) =>
       act({ kind: "add", parent, text, description, node: 0 }),
     merge: (source: number, target: number) => act({ kind: "merge", source, target, undo: "" }),

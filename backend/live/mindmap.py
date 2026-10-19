@@ -37,6 +37,7 @@ from .models import (
     MatrixCard,
     MatrixRating,
     MindmapContribution,
+    MindmapModerationEntry,
     MindmapNode,
     MindmapPhase,
     MindmapRating,
@@ -655,6 +656,36 @@ def _snapshot(node):
     }
 
 
+def _term(node):
+    """A term in a moderation-log label (``live.mindmap_log``): its text at
+    the time of the action — plus, for a seeded node, its ``text_i18n`` map
+    like in the tree. None = the main branch (no parent)."""
+    if node is None:
+        return None
+    term = {"text": node.text}
+    if node.seeded:
+        canonical, langs = seed_langs()
+        text = (node.seed_i18n or {}).get("text") or {canonical: node.text}
+        term["text_i18n"] = {lang: text.get(lang, "") for lang in langs}
+    return term
+
+
+def _log(run, question, kind, label, undo):
+    """Record a moderation-log entry (under the run lock); its id."""
+    return MindmapModerationEntry.objects.create(
+        run=run, question=question, kind=kind, label=label, undo=undo
+    ).pk
+
+
+def _mark_reset(run, question, kinds, undo):
+    """The step with this undo data was undone (the beamer's top undo):
+    mark its active log entry reset."""
+    MindmapModerationEntry.objects.filter(
+        run=run, question=question, kind__in=kinds, undo=undo,
+        state=MindmapModerationEntry.State.ACTIVE,
+    ).update(state=MindmapModerationEntry.State.RESET)
+
+
 def _combine_ratings(question, target_value, source_value):
     """A participant rated both merged entries: points add up (capped at one
     when only one point per entry is allowed); plus/minus keeps the target's."""
@@ -808,8 +839,9 @@ def _check_merge(tree, question, source_id, target_id, children_of=_db_children)
     _check_nested_hidden(source_id, target_id, children_of)
 
 
-def merge_nodes(run, question, source_id, target_id):
-    """Merge ``source`` into ``target``; returns the signed undo string."""
+def merge_nodes(run, question, source_id, target_id, *, log=False):
+    """Merge ``source`` into ``target``; returns the signed undo string —
+    with ``log``, ``(undo, log entry id)``."""
     ensure_seed(run, question)
     with transaction.atomic():
         _lock_run(run)
@@ -817,8 +849,11 @@ def merge_nodes(run, question, source_id, target_id):
         _check_merge(_load_tree(run, question), question, source_id, target_id)
         source = MindmapNode.objects.get(pk=source_id)
         target = MindmapNode.objects.get(pk=target_id)
-        undo = _merge(source, target, question)
-    return _sign(run, question, {"op": "merge", "merge": undo})
+        label = {"source": _term(source), "target": _term(target)}
+        blob = _sign(run, question, {"op": "merge", "merge": _merge(source, target, question)})
+        if log:
+            return blob, _log(run, question, "merge", label, blob)
+    return blob
 
 
 def _check_move(tree, question, node_id, parent_id):
@@ -840,9 +875,13 @@ def _check_move(tree, question, node_id, parent_id):
     return old_parent
 
 
-def move_node(run, question, node_id, parent_id):
+def move_node(run, question, node_id, parent_id, *, log=False):
     """Re-attach a node (with its subtree) below ``parent_id`` (None = main
-    branch). Returns the plain undo ``{node, parent}`` (the old parent)."""
+    branch). Returns the plain undo ``{node, parent}`` (the old parent) —
+    with ``log``, ``(undo, log entry id or None)``: a move that exactly
+    reverses the term's newest active logged move (the beamer's top undo of
+    it) marks that entry reset instead of logging a new one; a no-op move is
+    not logged."""
     with transaction.atomic():
         _lock_run(run)
         _refuse_while_rating(run, question)
@@ -850,7 +889,7 @@ def move_node(run, question, node_id, parent_id):
         old_parent = _check_move(tree, question, node_id, parent_id)
         undo = {"node": node_id, "parent": old_parent}
         if parent_id == old_parent:
-            return undo
+            return (undo, None) if log else undo
         node = MindmapNode.objects.get(pk=node_id)
         clash = (
             MindmapNode.objects.filter(
@@ -867,12 +906,42 @@ def move_node(run, question, node_id, parent_id):
             )
         node.parent_id = parent_id
         node.save(update_fields=["parent"])
+        if log:
+            return undo, _log_move(run, question, node, old_parent, parent_id)
     return undo
 
 
-def rename_node(run, question, node_id, text):
+def _log_move(run, question, node, old_parent, parent_id):
+    """Log a done move (see ``move_node``); the new entry id or None."""
+    newest = (
+        MindmapModerationEntry.objects.filter(
+            run=run, question=question, kind="move", undo__node=node.pk,
+            state=MindmapModerationEntry.State.ACTIVE,
+        )
+        .order_by("-created_at", "-pk")
+        .first()
+    )
+    if newest is not None and (
+        newest.undo.get("to") == old_parent and newest.undo["parent"] == parent_id
+    ):
+        MindmapModerationEntry.objects.filter(pk=newest.pk).update(
+            state=MindmapModerationEntry.State.RESET
+        )
+        return None
+    places = MindmapNode.objects.in_bulk([p for p in (old_parent, parent_id) if p])
+    label = {
+        "node": _term(node),
+        "from": _term(places.get(old_parent)),
+        "to": _term(places.get(parent_id)),
+    }
+    undo = {"node": node.pk, "parent": old_parent, "to": parent_id}
+    return _log(run, question, "move", label, undo)
+
+
+def rename_node(run, question, node_id, text, *, log=False):
     """Rename a term. A name clash with a sibling merges into that sibling.
-    Returns ``(node_id, merged, signed undo)``."""
+    Returns ``(node_id, merged, signed undo)`` — with ``log``, plus the log
+    entry id (a rename into a sibling is logged as a merge)."""
     text = _clean_term(text)
     key = text_key(text)
     ensure_seed(run, question)
@@ -889,10 +958,15 @@ def rename_node(run, question, node_id, text):
             .exclude(pk=node_id)
             .first()
         )
+        old_term = _term(node)
         if clash is not None:
             _check_merge(tree, question, node_id, clash.pk)
+            label = {"source": old_term, "target": _term(clash)}
             undo = _merge(node, clash, question)
-            return clash.pk, True, _sign(run, question, {"op": "merge", "merge": undo})
+            blob = _sign(run, question, {"op": "merge", "merge": undo})
+            if log:
+                return clash.pk, True, blob, _log(run, question, "merge", label, blob)
+            return clash.pk, True, blob
         undo = {
             "op": "rename",
             "node": node.pk,
@@ -914,14 +988,21 @@ def rename_node(run, question, node_id, text):
             }
             fields.append("seed_i18n")
         node.save(update_fields=fields)
-    return node.pk, False, _sign(run, question, undo)
+        blob = _sign(run, question, undo)
+        if log:
+            label = {"old": old_term, "new": _term(node)}
+            return node.pk, False, blob, _log(run, question, "rename", label, blob)
+    return node.pk, False, blob
 
 
-def _unsign(run, question, blob):
+def _unsign(run, question, blob, max_age=UNDO_MAX_AGE):
+    """The signed undo data (signature and run/question binding checked);
+    ``max_age=None`` skips the expiry — only for undo data kept on the
+    server (the moderation log), never for a blob handed in by a client."""
     if not isinstance(blob, str):
         raise MindmapError("Invalid undo data.")
     try:
-        data = signing.loads(blob, salt=UNDO_SALT, max_age=UNDO_MAX_AGE)
+        data = signing.loads(blob, salt=UNDO_SALT, max_age=max_age)
     except signing.SignatureExpired as error:
         raise MindmapError("This undo step has expired.", 409) from error
     except signing.BadSignature as error:
@@ -1047,13 +1128,13 @@ def _check_restored_tree(tree, depth):
             current = tree[current][0]
 
 
-def restore(run, question, blob):
+def restore(run, question, blob, *, max_age=UNDO_MAX_AGE):
     """Undo a merge or rename from its signed ``undo`` string — all or
     nothing (409 + rollback when the map changed in between).
 
     Intentionally bypasses the per-person quota and the total node cap: it
     puts back exactly what was there before the merge/rename."""
-    data = _unsign(run, question, blob)
+    data = _unsign(run, question, blob, max_age)
     try:
         with transaction.atomic():
             _lock_run(run)
@@ -1064,6 +1145,7 @@ def restore(run, question, blob):
                 _restore_rename(run, question, data)
             # level > depth also catches cycles (their walk never ends).
             _check_restored_tree(_load_tree(run, question), question.mindmap_depth)
+            _mark_reset(run, question, ("merge", "rename"), blob)
     except IntegrityError as error:
         raise MindmapError(_CHANGED, 409) from error
 
@@ -1484,7 +1566,7 @@ def simulate_ops(run, question, ops, options, selected=None):
     return {"ops": entries, "dropped": dropped, "preview": sim.preview(), "active": applied}
 
 
-def apply_ops(run, question, ops, options, selected):
+def apply_ops(run, question, ops, options, selected, *, log=False):
     """Apply the ``selected`` ops (indices) in order, each re-checked against
     the live map (``_check_ai_op`` on a fresh copy) and run through the
     manual primitives. Like ``simulate_ops``, only ops that fit when the
@@ -1494,7 +1576,8 @@ def apply_ops(run, question, ops, options, selected):
     in application order — merge/rename: the signed undo string; move:
     ``{node, parent}`` (old parent); add: ``{node}`` (inverse =
     ``teacher_delete``). All under one transaction and the run lock; 409
-    (nothing applied) during the rating stage."""
+    (nothing applied) during the rating stage. With ``log``, the batch is
+    one moderation-log entry (``log_id``, None when nothing was applied)."""
     applied, skipped, undo = 0, 0, []
     ensure_seed(run, question)
     with transaction.atomic():
@@ -1535,7 +1618,12 @@ def apply_ops(run, question, ops, options, selected):
                 created.add(item["data"]["node"])
             undo.append(item)
             applied += 1
-    return {"applied": applied, "skipped": skipped, "undo": undo}
+        result = {"applied": applied, "skipped": skipped, "undo": undo}
+        if log:
+            result["log_id"] = (
+                _log(run, question, "ai", {"count": applied}, undo) if undo else None
+            )
+    return result
 
 
 def _apply_one(run, question, op, resolved, refs):
@@ -1606,7 +1694,7 @@ def _undo_item(item):
     return kind, data
 
 
-def undo_ops(run, question, items):
+def undo_ops(run, question, items, *, max_age=UNDO_MAX_AGE):
     """Reverse an ``apply_ops`` batch (its ``undo`` list) in reverse order —
     all or nothing: 409 + rollback when the map changed in a way that makes
     exact restoration impossible (like ``restore``)."""
@@ -1614,7 +1702,7 @@ def undo_ops(run, question, items):
         raise MindmapError("Invalid undo data.")
     steps = [_undo_item(item) for item in items]
     signed = {
-        index: _unsign(run, question, data)
+        index: _unsign(run, question, data, max_age)
         for index, (kind, data) in enumerate(steps)
         if kind in ("merge", "rename")
     }
@@ -1643,5 +1731,6 @@ def undo_ops(run, question, items):
                 except MindmapError as error:
                     raise MindmapError(_CHANGED, 409) from error
             _check_restored_tree(_load_tree(run, question), question.mindmap_depth)
+            _mark_reset(run, question, ("ai",), items)
     except IntegrityError as error:
         raise MindmapError(_CHANGED, 409) from error

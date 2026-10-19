@@ -50,5 +50,7 @@
   "{{count}} proposals applied._one": "{{count}} proposal applied.",
   "{{count}} proposals applied._other": "{{count}} proposals applied.",
   "{{count}} groups proposed — untick what you don't want._one": "{{count}} group proposed — untick it if you don't want it.",
-  "{{count}} groups proposed — untick what you don't want._other": "{{count}} groups proposed — untick what you don't want."
+  "{{count}} groups proposed — untick what you don't want._other": "{{count}} groups proposed — untick what you don't want.",
+  "AI: {{count}} changes_one": "AI: {{count}} change",
+  "AI: {{count}} changes_other": "AI: {{count}} changes"
 }

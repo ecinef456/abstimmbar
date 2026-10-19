@@ -1296,7 +1296,26 @@ export interface LiveMindmap {
   total: number;
   nodes: LiveMindmapNode[];
   rating?: MindmapRating;
+  /** Presenter only (#201): the active moderation-log entries (merges,
+   *  moves, renames, applied AI proposals), newest first, at most 100. */
+  moderation_log?: MindmapLogEntry[];
 }
+
+/** A term in a moderation-log label: its text at the time of the action;
+ *  seeded terms carry both languages (resolve like `mindmapNodeText`). */
+export interface MindmapLogTerm {
+  text: string;
+  text_i18n?: LocalizedText;
+}
+
+/** One entry of the mind map's moderation log (#201). `move`: `null` =
+ *  the main branch. */
+export type MindmapLogEntry = { id: number; created_at: string } & (
+  | { kind: "merge"; label: { source: MindmapLogTerm; target: MindmapLogTerm } }
+  | { kind: "move"; label: { node: MindmapLogTerm; from: MindmapLogTerm | null; to: MindmapLogTerm | null } }
+  | { kind: "rename"; label: { old: MindmapLogTerm; new: MindmapLogTerm } }
+  | { kind: "ai"; label: { count: number } }
+);
 
 export interface WordCloudWord {
   text: string;
@@ -1646,7 +1665,7 @@ export const live = {
     }),
   /** Merges `source` (with its subtree) into `target`; `undo` is opaque. */
   mindmapMerge: (runId: number, questionId: number, source: number, target: number) =>
-    request<{ undo: string }>(`/api/runs/${runId}/mindmap/${questionId}/merge`, {
+    request<{ undo: string; log_id: number }>(`/api/runs/${runId}/mindmap/${questionId}/merge`, {
       method: "POST",
       body: JSON.stringify({ source, target }),
     }),
@@ -1658,14 +1677,14 @@ export const live = {
     }),
   /** Re-attaches `node` below `parent` (null = main branch). */
   mindmapMove: (runId: number, questionId: number, node: number, parent: number | null) =>
-    request<{ undo: { node: number; parent: number | null } }>(
+    request<{ undo: { node: number; parent: number | null }; log_id: number | null }>(
       `/api/runs/${runId}/mindmap/${questionId}/move`,
       { method: "POST", body: JSON.stringify({ node, parent }) },
     ),
   /** Renames a term; a name clash with a sibling merges it into that sibling
    *  (`merged`, `node_id` = the sibling). Undo either way via `mindmapUnmerge`. */
   mindmapRename: (runId: number, questionId: number, node: number, text: string) =>
-    request<{ node_id: number; merged: boolean; undo: string }>(
+    request<{ node_id: number; merged: boolean; undo: string; log_id: number }>(
       `/api/runs/${runId}/mindmap/${questionId}/rename`,
       { method: "POST", body: JSON.stringify({ node, text }) },
     ),
@@ -1685,7 +1704,7 @@ export const live = {
     }),
   /** Applies the selected proposal entries as one batch. */
   mindmapAiApply: (runId: number, questionId: number, proposal: string, selected: number[]) =>
-    request<{ applied: number; skipped: number; undo: MindmapAiUndo }>(
+    request<{ applied: number; skipped: number; undo: MindmapAiUndo; log_id: number | null }>(
       `/api/runs/${runId}/mindmap/${questionId}/ai-apply`,
       { method: "POST", body: JSON.stringify({ proposal, selected }) },
     ),
@@ -1695,6 +1714,13 @@ export const live = {
       method: "POST",
       body: JSON.stringify({ undo }),
     }),
+  /** Resets one moderation-log entry (#201); 409 `{detail}` when it no
+   *  longer applies cleanly (nothing changed). */
+  mindmapLogReset: (runId: number, questionId: number, entryId: number) =>
+    request<{ status: string; id: number; kind: string }>(
+      `/api/runs/${runId}/mindmap/${questionId}/moderation-log/${entryId}/reset`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
   /** Presenter word-cloud moderation (#Wortwolke): hide/unhide a term, merge
    *  several keys under one label, unmerge, or rename a merge's label. */
   wordcloudModeration: (
