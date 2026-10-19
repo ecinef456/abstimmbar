@@ -391,6 +391,7 @@ class MatrixCard(models.Model):
     a top); members keep their own coordinates but render at their top's
     position. ``placed`` marks cards moved by the presenter (never
     auto-moved). ``hidden`` is the presenter's reversible moderation.
+    ``summary`` marks a summary card of the AI grouping (always ``teacher``).
     """
 
     run = models.ForeignKey(Run, on_delete=models.CASCADE, related_name="matrix_cards")
@@ -416,6 +417,11 @@ class MatrixCard(models.Model):
     )
     hidden = models.BooleanField(default=False)
     teacher = models.BooleanField(default=False)
+    # A presenter card created by the AI grouping on top of its stack; it is
+    # deleted when its stack is dissolved by hand, unless rated (see
+    # ``live.matrix._detach``). Put under another card (dragged, or a second
+    # summary in an AI group) it loses the flag unless rated.
+    summary = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

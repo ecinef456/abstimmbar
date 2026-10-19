@@ -21,6 +21,7 @@ from .matrix import MatrixError, zone_at
 from .mindmap import answered_runs_q
 from .models import (
     MatrixCard,
+    MatrixRating,
     MindmapContribution,
     MindmapNode,
     ParticipantToken,
@@ -8874,7 +8875,7 @@ class MatrixRatingPayloadTests(MatrixTestCase):
         self.assertEqual([c["title"] for c in rating["cards"]], ["C", "B", "A"])
         for card in rating["cards"]:
             self.assertEqual(
-                set(card), {"id", "title", "description", "category", "zone"}
+                set(card), {"id", "title", "description", "category", "zone", "summary"}
             )
         text = json.dumps(build_payloads(self.room)["participant"])
         self.assertNotIn("Hid", text)
@@ -9071,3 +9072,680 @@ class MatrixRatingFixWaveTests(MatrixTestCase):
         )
         self.assertEqual(r.status_code, 409)
         self.assertEqual(r.json()["detail"], "Rating has not started.")
+
+
+class MatrixSummaryCardTests(MatrixTestCase):
+    """Summary cards (AI grouping): payload flag and auto-delete when their
+    stack is dissolved by hand."""
+
+    def summary_on(self, *members, zone="q1"):
+        top = mxs.add_teacher_card(self.run, self.xq, zone, "Summary")
+        MatrixCard.objects.filter(pk=top.pk).update(summary=True)
+        top.refresh_from_db()
+        self.stacked(top, *members)
+        return top
+
+    def test_default_false_and_in_payloads(self):
+        from . import matrix_rating as mr
+
+        a = self.add(title="A")
+        top = self.summary_on(self.add(title="B"))
+        cards = {c["id"]: c for c in mxs.board_payload(self.run, self.xq, True)["cards"]}
+        self.assertFalse(cards[a.pk]["summary"])
+        self.assertTrue(cards[top.pk]["summary"])
+        self.configure(matrix_rating_mode="points", matrix_rating_budget=3)
+        mr.set_stage(self.run, self.xq, "rate")
+        rating = {c["id"]: c for c in mr.participant_payload(self.run, self.xq)["cards"]}
+        self.assertTrue(rating[top.pk]["summary"])
+        self.assertFalse(rating[a.pk]["summary"])
+
+    def test_deleted_when_last_member_unstacked(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        top = self.summary_on(a, b)
+        mxs.unstack_card(self.run, self.xq, a.pk)
+        self.assertTrue(MatrixCard.objects.filter(pk=top.pk).exists())
+        b.refresh_from_db()
+        self.assertEqual(b.stack_id, top.pk)
+        mxs.unstack_card(self.run, self.xq, b.pk)
+        self.assertFalse(MatrixCard.objects.filter(pk=top.pk).exists())
+        self.assertTrue(MatrixCard.objects.filter(pk__in=[a.pk, b.pk]).count() == 2)
+
+    def test_deleted_when_unstacked_itself(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        top = self.summary_on(a, b)
+        mxs.unstack_card(self.run, self.xq, top.pk)
+        self.assertFalse(MatrixCard.objects.filter(pk=top.pk).exists())
+        a.refresh_from_db()
+        b.refresh_from_db()
+        self.assertIsNone(a.stack_id)
+        self.assertEqual(b.stack_id, a.pk)
+
+    def test_rated_summary_kept_when_last_member_unstacked(self):
+        a = self.add(title="A")
+        top = self.summary_on(a)
+        MatrixRating.objects.create(card=top, token=self.tok2, value=1)
+        mxs.unstack_card(self.run, self.xq, a.pk)
+        top.refresh_from_db()
+        self.assertTrue(top.summary)
+        self.assertIsNone(top.stack_id)
+        self.assertEqual(top.ratings.count(), 1)
+
+    def test_rated_summary_kept_when_unstacked_itself(self):
+        a = self.add(title="A")
+        top = self.summary_on(a)
+        MatrixRating.objects.create(card=top, token=self.tok2, value=1)
+        mxs.unstack_card(self.run, self.xq, top.pk)
+        top.refresh_from_db()
+        a.refresh_from_db()
+        self.assertTrue(top.summary)
+        self.assertIsNone(top.stack_id)
+        self.assertIsNone(a.stack_id)
+        self.assertEqual(top.ratings.count(), 1)
+
+    def test_deleted_when_last_member_removed_by_participant(self):
+        a = self.add(title="A")
+        top = self.summary_on(a)
+        mxs.remove_card(self.run, self.xq, self.tok, a.pk)
+        self.assertFalse(MatrixCard.objects.filter(pk=top.pk).exists())
+
+    def test_unrated_summary_dragged_onto_card_loses_flag(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        top = self.summary_on(a)
+        mxs.stack_card(self.run, self.xq, top.pk, b.pk)
+        top.refresh_from_db()
+        self.assertEqual(top.stack_id, b.pk)
+        self.assertFalse(top.summary)
+
+    def test_rated_summary_dragged_onto_card_keeps_flag(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        top = self.summary_on(a)
+        MatrixRating.objects.create(card=top, token=self.tok2, value=1)
+        mxs.stack_card(self.run, self.xq, top.pk, b.pk)
+        top.refresh_from_db()
+        self.assertEqual(top.stack_id, b.pk)
+        self.assertTrue(top.summary)
+
+    def test_plain_top_kept(self):
+        a, b = self.add(title="A"), self.add(title="B")
+        self.stacked(a, b)
+        mxs.unstack_card(self.run, self.xq, b.pk)
+        self.assertTrue(MatrixCard.objects.filter(pk=a.pk).exists())
+
+
+class MatrixAiSimulateTests(MatrixTestCase):
+    """``simulate_groups``/``simulate_hints`` against the live board and the
+    signed proposal."""
+
+    def setUp(self):
+        super().setUp()
+        self.configure(matrix_edges=True)
+        self.a = self.add(title="A")
+        self.b = self.add(title="B", token=self.tok2)
+        self.c = self.add(title="C")
+        self.d = self.add(title="D", zone="q2")
+        self.e = self.add(title="E", zone="q2")
+
+    def group(self, *cards, title="Group", description="", reason="why"):
+        return {"cards": [getattr(c, "pk", c) for c in cards], "title": title,
+                "description": description, "reason": reason}
+
+    def simulate(self, *groups):
+        groups = [{**g, "index": i} for i, g in enumerate(groups)]
+        return mxs.simulate_groups(self.run, self.xq, groups)
+
+    def test_ok_group(self):
+        [g] = self.simulate(self.group(self.b, self.a, title="AB", description="desc"))
+        self.assertEqual(g["status"], "ok")
+        self.assertEqual(g["index"], 0)
+        self.assertEqual(g["zone"], "q1")
+        self.assertEqual([c["id"] for c in g["cards"]], [self.b.pk, self.a.pk])
+        self.assertEqual(g["cards"][0], {"id": self.b.pk, "title": "B", "category": ""})
+        self.assertEqual(g["title"], "AB")
+        self.assertEqual(g["description"], "")  # descriptions off
+        self.assertEqual(g["category"], "")
+        # Position of the oldest card of the group.
+        self.assertEqual((g["x"], g["y"]), (self.a.x, self.a.y))
+        self.assertNotIn("top_summary_id", g)
+
+    def test_description_kept_when_enabled(self):
+        self.configure(matrix_descriptions=True)
+        [g] = self.simulate(self.group(self.a, self.b, description="desc"))
+        self.assertEqual(g["description"], "desc")
+
+    def test_same_zone_only(self):
+        [g] = self.simulate(self.group(self.a, self.d))
+        self.assertEqual(g["status"], "skip")
+        self.assertEqual(g["skip_reason"], "zones")
+
+    def test_unknown_and_hidden_skipped(self):
+        MatrixCard.objects.filter(pk=self.c.pk).update(hidden=True)
+        other_q = Question.objects.create(
+            question_set=self.question_set, kind=Question.Kind.MATRIX, text="x", position=3,
+        )
+        foreign = mxs.add_card(self.run, other_q, self.tok, "q1", "Foreign")
+        unknown, hidden, alien, ok = self.simulate(
+            self.group(self.a, 999999), self.group(self.a, self.c),
+            self.group(self.a, foreign), self.group(self.a, self.b),
+        )
+        self.assertEqual((unknown["status"], unknown["skip_reason"]), ("skip", "unknown"))
+        self.assertEqual((hidden["status"], hidden["skip_reason"]), ("skip", "hidden"))
+        self.assertEqual((alien["status"], alien["skip_reason"]), ("skip", "unknown"))
+        self.assertEqual(ok["status"], "ok")
+
+    def test_member_of_hidden_top_skipped(self):
+        self.stacked(self.c, self.b)
+        MatrixCard.objects.filter(pk=self.c.pk).update(hidden=True)
+        [g] = self.simulate(self.group(self.a, self.b))
+        self.assertEqual(g["skip_reason"], "hidden")
+
+    def test_member_maps_to_top(self):
+        self.stacked(self.a, self.b)
+        [g] = self.simulate(self.group(self.b, self.c))
+        self.assertEqual(g["status"], "ok")
+        self.assertEqual([c["id"] for c in g["cards"]], [self.a.pk, self.c.pk])
+        # Member and its own top are one top only -> too few.
+        [g] = self.simulate(self.group(self.a, self.b))
+        self.assertEqual((g["status"], g["skip_reason"]), ("skip", "too_few"))
+
+    def test_card_in_two_groups(self):
+        first, second, third = self.simulate(
+            self.group(self.a, self.b), self.group(self.b, self.c), self.group(self.d, self.e),
+        )
+        self.assertEqual(first["status"], "ok")
+        self.assertEqual((second["status"], second["skip_reason"]), ("skip", "duplicate"))
+        self.assertEqual(third["status"], "ok")
+
+    def test_skipped_group_does_not_reserve_cards(self):
+        bad, good = self.simulate(self.group(self.a, self.d), self.group(self.a, self.b))
+        self.assertEqual(bad["status"], "skip")
+        self.assertEqual(good["status"], "ok")
+
+    def test_category_majority_and_tie(self):
+        self.configure(matrix_category_mode="colors", matrix_categories=[
+            {"key": "blue", "name": {}}, {"key": "red", "name": {}},
+        ])
+        MatrixCard.objects.filter(pk=self.a.pk).update(category="red")
+        MatrixCard.objects.filter(pk__in=[self.b.pk, self.c.pk]).update(category="blue")
+        [g] = self.simulate(self.group(self.a, self.b, self.c))
+        self.assertEqual(g["category"], "blue")
+        # Tie: the oldest card's category.
+        [g] = self.simulate(self.group(self.a, self.b))
+        self.assertEqual(g["category"], "red")
+        # Stack members count too.
+        extra = self.add(title="F", category="red")
+        self.stacked(self.b, extra)
+        [g] = self.simulate(self.group(self.b, self.c))
+        self.assertEqual(g["category"], "blue")  # b, c blue : F red
+        [g] = self.simulate(self.group(self.a, self.b))
+        self.assertEqual(g["category"], "red")  # a, F red : b blue
+
+    def test_existing_summary_top_kept(self):
+        top = mxs.add_teacher_card(self.run, self.xq, "q1", "Old summary")
+        MatrixCard.objects.filter(pk=top.pk).update(summary=True)
+        top.refresh_from_db()
+        self.stacked(top, self.b)
+        [g] = self.simulate(self.group(self.a, self.b, title="New"))
+        self.assertEqual(g["status"], "ok")
+        self.assertEqual(g["top_summary_id"], top.pk)
+        self.assertEqual((g["x"], g["y"]), (top.x, top.y))
+        self.assertEqual(g["title"], "Old summary")
+
+    def test_hints(self):
+        hints = mxs.simulate_hints(self.run, self.xq, [
+            {"index": 0, "cards": [self.a.pk, self.d.pk, 999999], "reason": "same"},
+            {"index": 1, "cards": [self.a.pk, self.b.pk], "reason": "one zone"},
+            {"index": 2, "cards": [self.a.pk, 999999], "reason": "too few"},
+        ])
+        self.assertEqual(len(hints), 1)
+        self.assertEqual(hints[0]["index"], 0)
+        self.assertEqual([c["id"] for c in hints[0]["cards"]], [self.a.pk, self.d.pk])
+        self.assertEqual(hints[0]["cards"][1]["zone"], "q2")
+        self.assertEqual(hints[0]["reason"], "same")
+
+    def test_sign_roundtrip_tamper_and_other_run(self):
+        groups = [{"index": 0, "cards": [1, 2], "title": "t", "description": "", "reason": ""}]
+        hints = [{"index": 0, "cards": [1, 3], "reason": ""}]
+        blob = mxs.sign_proposal(self.run, self.xq, groups, hints, 2)
+        self.assertEqual(mxs.unsign_proposal(self.run, self.xq, blob), (groups, hints, 2))
+        for bad in (blob[:-2] + "xx", "garbage", None, 5):
+            with self.assertRaises(MatrixError) as cm:
+                mxs.unsign_proposal(self.run, self.xq, bad)
+            self.assertEqual(cm.exception.status, 400)
+        other = Run(pk=self.run.pk + 1)  # only the id is compared
+        with self.assertRaises(MatrixError):
+            mxs.unsign_proposal(other, self.xq, blob)
+        other_q = Question.objects.create(
+            question_set=self.question_set, kind=Question.Kind.MATRIX, text="x", position=3,
+        )
+        with self.assertRaises(MatrixError):
+            mxs.unsign_proposal(self.run, other_q, blob)
+
+    def test_expired(self):
+        blob = mxs.sign_proposal(self.run, self.xq, [], [], 0)
+        later = timezone.now() + timezone.timedelta(hours=25)
+        with patch("django.core.signing.time.time", return_value=later.timestamp()), \
+                self.assertRaises(MatrixError) as cm:
+            mxs.unsign_proposal(self.run, self.xq, blob)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertIn("expired", cm.exception.detail)
+
+
+class MatrixAiApplyTests(MatrixTestCase):
+    """``apply_groups``/``undo_groups``: one transaction under the run lock,
+    exact undo or 409."""
+
+    def setUp(self):
+        super().setUp()
+        self.a = self.add(title="A")
+        self.b = self.add(title="B", token=self.tok2)
+        self.c = self.add(title="C")
+        self.d = self.add(title="D", zone="q2")
+        self.e = self.add(title="E", zone="q2")
+
+    def groups(self, *card_lists, title="Group"):
+        return [
+            {"index": i, "cards": [c.pk for c in cards], "title": f"{title} {i}",
+             "description": "Beschreibung", "reason": "r"}
+            for i, cards in enumerate(card_lists)
+        ]
+
+    def apply(self, groups, selected=None, edits=None):
+        if selected is None:
+            selected = [g["index"] for g in groups]
+        return mxs.apply_groups(self.run, self.xq, groups, selected, edits or {})
+
+    def summary(self, title="Old", zone="q1"):
+        top = mxs.add_teacher_card(self.run, self.xq, zone, title)
+        MatrixCard.objects.filter(pk=top.pk).update(summary=True)
+        top.refresh_from_db()
+        return top
+
+    def snapshot(self):
+        return sorted(
+            MatrixCard.objects.filter(run=self.run).values_list(
+                "pk", "stack_id", "zone", "x", "y", "placed", "hidden", "summary", "title"
+            )
+        )
+
+    def test_apply_creates_summary_and_stacks(self):
+        self.stacked(self.c, self.d)  # D now lives in C's stack (q1)
+        before_a = (self.a.x, self.a.y)
+        result = self.apply(self.groups([self.b, self.a, self.c]))
+        self.assertEqual(result["applied"], [0])
+        self.assertEqual(result["skipped"], [])
+        self.assertIsInstance(result["undo"], str)
+        top = MatrixCard.objects.get(run=self.run, summary=True)
+        self.assertEqual(
+            (top.title, top.teacher, top.token_id, top.zone, top.stack_id, top.description),
+            ("Group 0", True, None, "q1", None, ""),  # descriptions off
+        )
+        self.assertEqual((top.x, top.y), before_a)
+        for card in (self.a, self.b, self.c, self.d):
+            card.refresh_from_db()
+            self.assertEqual(card.stack_id, top.pk, card.title)
+            self.assertEqual((card.zone, card.x, card.y), (top.zone, top.x, top.y))
+
+    def test_description_kept_when_enabled(self):
+        self.configure(matrix_descriptions=True)
+        self.apply(self.groups([self.a, self.b]))
+        top = MatrixCard.objects.get(run=self.run, summary=True)
+        self.assertEqual(top.description, "Beschreibung")
+
+    def test_edits(self):
+        self.configure(matrix_descriptions=True, matrix_category_mode="colors",
+                       matrix_categories=[{"key": "blue", "name": {}}, {"key": "red", "name": {}}])
+        MatrixCard.objects.filter(pk__in=[self.a.pk, self.b.pk]).update(category="red")
+        self.apply(self.groups([self.a, self.b], [self.d, self.e]), edits={
+            0: {"title": "  Edited  ", "description": "Neu", "category": "blue"},
+            1: {"category": "nope"},
+        })
+        first = MatrixCard.objects.get(run=self.run, summary=True, zone="q1")
+        self.assertEqual((first.title, first.description, first.category),
+                         ("Edited", "Neu", "blue"))
+        second = MatrixCard.objects.get(run=self.run, summary=True, zone="q2")
+        self.assertEqual(second.title, "Group 1")
+        self.assertEqual(second.category, "blue")  # invalid edit -> proposal's (fallback)
+
+    def test_title_too_long_refused_without_change(self):
+        before = self.snapshot()
+        for edit in ({"title": "x" * 61}, {"title": "  "}):
+            with self.assertRaises(MatrixError) as cm:
+                self.apply(self.groups([self.a, self.b], [self.d, self.e]), edits={1: edit})
+            self.assertEqual(cm.exception.status, 400)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_existing_summary_top_kept(self):
+        old = self.summary()
+        self.stacked(old, self.c)
+        result = self.apply(self.groups([self.a, self.c, self.b]))
+        self.assertEqual(result["applied"], [0])
+        self.assertEqual(MatrixCard.objects.filter(run=self.run, summary=True).count(), 1)
+        old.refresh_from_db()
+        self.assertEqual(old.title, "Old")
+        self.assertIsNone(old.stack_id)
+        for card in (self.a, self.b, self.c):
+            card.refresh_from_db()
+            self.assertEqual(card.stack_id, old.pk)
+
+    def test_two_summaries_unrated_other_deleted(self):
+        first = self.summary("First")
+        second = self.summary("Second")
+        self.stacked(first, self.a)
+        self.stacked(second, self.b)
+        self.apply(self.groups([self.a, self.b]))
+        self.assertFalse(MatrixCard.objects.filter(pk=second.pk).exists())
+        self.b.refresh_from_db()
+        self.assertEqual(self.b.stack_id, first.pk)
+
+    def test_two_summaries_rated_other_becomes_member(self):
+        first = self.summary("First")
+        second = self.summary("Second")
+        self.stacked(first, self.a)
+        self.stacked(second, self.b)
+        MatrixRating.objects.create(card=second, token=self.tok, value=1)
+        self.apply(self.groups([self.a, self.b]))
+        second.refresh_from_db()
+        self.b.refresh_from_db()
+        self.assertEqual(second.stack_id, first.pk)
+        self.assertEqual(self.b.stack_id, first.pk)
+
+    def test_skipped_when_board_changed(self):
+        groups = self.groups([self.a, self.b], [self.d, self.e], [self.a, self.c])
+        MatrixCard.objects.filter(pk=self.b.pk).update(hidden=True)
+        mxs.move_card(self.run, self.xq, self.e.pk, 0.5, 0.5)  # E now in q1
+        result = self.apply(groups)
+        self.assertEqual(result["applied"], [2])
+        self.assertEqual(result["skipped"], [{"index": 0, "reason": "hidden"},
+                                             {"index": 1, "reason": "zones"}])
+
+    def test_skipped_when_stacked_elsewhere(self):
+        groups = self.groups([self.a, self.b])
+        self.stacked(self.b, self.a)
+        result = self.apply(groups)
+        self.assertEqual(result["applied"], [])
+        self.assertEqual(result["skipped"], [{"index": 0, "reason": "too_few"}])
+
+    def test_only_selected(self):
+        result = self.apply(self.groups([self.a, self.b], [self.d, self.e]), selected=[1])
+        self.assertEqual(result["applied"], [1])
+        self.a.refresh_from_db()
+        self.assertIsNone(self.a.stack_id)
+
+    def test_rating_refused(self):
+        from . import matrix_rating as mr
+
+        self.configure(matrix_rating_mode="points", matrix_rating_budget=3)
+        mr.set_stage(self.run, self.xq, "rate")
+        with self.assertRaises(MatrixError) as cm:
+            self.apply(self.groups([self.a, self.b]))
+        self.assertEqual(cm.exception.status, 409)
+        self.assertEqual(cm.exception.detail, mxs.STACKS_LOCKED)
+
+    def test_undo_restores_exactly(self):
+        self.stacked(self.c, self.d)
+        first = self.summary("First")
+        second = self.summary("Second", zone="q2")
+        self.stacked(first, self.a)
+        before = self.snapshot()
+        undo = self.apply(self.groups([self.a, self.b, self.c], [self.e, second]))["undo"]
+        self.assertNotEqual(self.snapshot(), before)
+        mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_undo_recreates_deleted_summary(self):
+        first = self.summary("First")
+        second = self.summary("Second")
+        self.stacked(first, self.a)
+        self.stacked(second, self.b)
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        mxs.undo_groups(self.run, self.xq, undo)
+        restored = MatrixCard.objects.get(run=self.run, title="Second")
+        self.assertTrue(restored.summary)
+        self.b.refresh_from_db()
+        self.assertEqual(self.b.stack_id, restored.pk)
+        self.a.refresh_from_db()
+        self.assertEqual(self.a.stack_id, first.pk)
+
+    def test_undo_after_change_refused(self):
+        undo = self.apply(self.groups([self.a, self.b, self.c]))["undo"]
+        mxs.unstack_card(self.run, self.xq, self.c.pk)
+        before = self.snapshot()
+        with self.assertRaises(MatrixError) as cm:
+            mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertEqual(
+            cm.exception.detail,
+            "Der Stapel wurde inzwischen verändert – Rückgängig ist nicht mehr möglich.",
+        )
+        self.assertEqual(self.snapshot(), before)
+
+    def test_undo_after_extra_card_stacked_refused(self):
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        top = MatrixCard.objects.get(run=self.run, summary=True)
+        mxs.stack_card(self.run, self.xq, self.c.pk, top.pk)
+        with self.assertRaises(MatrixError) as cm:
+            mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(cm.exception.status, 409)
+
+    def test_new_summary_inherits_placed(self):
+        mxs.move_card(self.run, self.xq, self.a.pk, 0.7, 0.7)
+        self.a.refresh_from_db()
+        self.apply(self.groups([self.a, self.b]))
+        top = MatrixCard.objects.get(run=self.run, summary=True)
+        self.assertTrue(top.placed)
+        self.assertEqual((top.x, top.y), (self.a.x, self.a.y))
+        self.apply(self.groups([self.d, self.e]))
+        self.assertFalse(MatrixCard.objects.get(run=self.run, summary=True, zone="q2").placed)
+
+    def test_limit_skip(self):
+        old = self.summary()
+        self.stacked(old, self.c)
+        count = MatrixCard.objects.filter(run=self.run).count()
+        with patch.object(mxs, "MATRIX_MAX_CARDS", count):
+            result = self.apply(self.groups([self.a, self.b]))
+            self.assertEqual(result["skipped"], [{"index": 0, "reason": "limit"}])
+            # Keeping an existing summary needs no new card.
+            [g] = self.groups([self.c, self.a])
+            self.assertEqual(self.apply([g])["applied"], [0])
+
+    def test_edits_ignored_when_summary_kept(self):
+        old = self.summary()
+        self.stacked(old, self.c)
+        result = self.apply(self.groups([self.c, self.a]), edits={0: {"title": "x" * 99}})
+        self.assertEqual(result["applied"], [0])
+        old.refresh_from_db()
+        self.assertEqual(old.title, "Old")
+
+    def test_undo_refused_when_created_summary_rated(self):
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        top = MatrixCard.objects.get(run=self.run, summary=True)
+        MatrixRating.objects.create(card=top, token=self.tok, value=1)
+        before = self.snapshot()
+        with self.assertRaises(MatrixError) as cm:
+            mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_undo_refused_when_recreation_exceeds_limit(self):
+        first = self.summary("First")
+        second = self.summary("Second")
+        self.stacked(first, self.a)
+        self.stacked(second, self.b)
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        self.add(title="Filler")
+        before = self.snapshot()
+        with patch.object(mxs, "MATRIX_MAX_CARDS", len(before)), \
+                self.assertRaises(MatrixError) as cm:
+            mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_skipped_when_tops_changed_since_proposal(self):
+        [group] = self.groups([self.a, self.b])
+        group["tops"] = [self.a.pk, self.b.pk]
+        self.stacked(self.c, self.b)  # B now in C's (unreviewed) stack
+        result = self.apply([group])
+        self.assertEqual(result["skipped"], [{"index": 0, "reason": "changed"}])
+        self.c.refresh_from_db()
+        self.assertIsNone(self.c.stack_id)
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
+
+    def test_undo_expired(self):
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        later = timezone.now() + timezone.timedelta(hours=25)
+        with patch("django.core.signing.time.time", return_value=later.timestamp()), \
+                self.assertRaises(MatrixError) as cm:
+            mxs.undo_groups(self.run, self.xq, undo)
+        self.assertEqual(cm.exception.status, 409)
+        self.assertTrue(MatrixCard.objects.filter(summary=True).exists())
+
+    def test_undo_invalid(self):
+        undo = self.apply(self.groups([self.a, self.b]))["undo"]
+        for bad in (undo[:-2] + "xx", None, mxs.sign_proposal(self.run, self.xq, [], [], 0)):
+            with self.assertRaises(MatrixError) as cm:
+                mxs.undo_groups(self.run, self.xq, bad)
+            self.assertEqual(cm.exception.status, 400)
+        with self.assertRaises(MatrixError):
+            mxs.undo_groups(Run(pk=self.run.pk + 1), self.xq, undo)
+
+
+@override_settings(**AI_ON)
+class MatrixAiApiTests(MatrixTestCase):
+    CHAT = "basicbar_integrations.ai.chat_json"
+
+    def setUp(self):
+        super().setUp()
+        self.configure(wordcloud_ai_enabled=True)
+        self.a = self.add(title="Wind")
+        self.b = self.add(title="wind", token=self.tok2)
+        self.c = self.add(title="Sonne")
+        self.d = self.add(title="Windkraft", zone="q2")
+
+    def post(self, op, body=None, user=None):
+        self.client.force_login(user or self.owner)
+        with patch("live.views.broadcast") as broadcast:
+            response = self.client.post(
+                f"/api/runs/{self.run.pk}/matrix/{self.xq.pk}/{op}", body or {},
+                content_type="application/json",
+            )
+        self.broadcast = broadcast
+        return response
+
+    def reply(self):
+        return {
+            "groups": [
+                {"cards": [self.a.pk, self.b.pk], "title": "Wind", "reason": "Schreibweise"},
+                {"cards": [self.a.pk, self.d.pk], "title": "Quer", "reason": "x"},
+                {"cards": [self.a.pk], "title": "kaputt"},
+            ],
+            "hints": [{"cards": [self.a.pk, self.d.pk], "reason": "gleich"}],
+        }
+
+    def propose(self, level="spelling", reply=None):
+        with patch(self.CHAT, return_value=reply or self.reply()) as chat:
+            response = self.post("ai-propose", {"level": level})
+        self.chat = chat
+        return response
+
+    def test_propose_shape_and_privacy(self):
+        response = self.propose()
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertEqual(set(data), {"groups", "hints", "dropped", "proposal"})
+        self.assertEqual([g["status"] for g in data["groups"]], ["ok", "skip"])
+        self.assertEqual(data["dropped"], 2)  # one malformed + one skipped
+        self.assertEqual(len(data["hints"]), 1)
+        system, user = self.chat.call_args.args
+        for token in (self.tok, self.tok2):
+            self.assertNotIn(token.key, system + user)
+        self.assertIn("Wind", user)
+        self.broadcast.assert_not_called()
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
+
+    def test_propose_gating(self):
+        with override_settings(**AI_OFF), patch(self.CHAT) as chat:
+            self.assertEqual(self.post("ai-propose", {"level": "same"}).status_code, 503)
+        chat.assert_not_called()
+        self.assertEqual(self.propose(level="wild").status_code, 400)
+        self.assertEqual(self.propose(level=None).status_code, 400)
+        self.configure(wordcloud_ai_enabled=False)
+        self.assertEqual(self.propose().status_code, 400)
+        self.configure(wordcloud_ai_enabled=True)
+        self.stacked(self.a, self.b)  # with C hidden: 2 visible tops
+        MatrixCard.objects.filter(pk=self.c.pk).update(hidden=True)
+        response = self.propose()
+        self.assertEqual(response.status_code, 400)
+        self.chat.assert_not_called()
+
+    def test_propose_rating_409(self):
+        from . import matrix_rating as mr
+
+        self.configure(matrix_rating_mode="points", matrix_rating_budget=3)
+        mr.set_stage(self.run, self.xq, "rate")
+        self.assertEqual(self.propose().status_code, 409)
+        self.chat.assert_not_called()
+
+    def test_propose_ai_error_502(self):
+        from basicbar_integrations import ai as ai_module
+
+        with patch(self.CHAT, side_effect=ai_module.AIError("boom")):
+            response = self.post("ai-propose", {"level": "same"})
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("boom", response.json()["detail"])
+
+    def test_non_owner_404(self):
+        eve = User.objects.create_user(username="eve")
+        for op in ("ai-propose", "ai-apply", "ai-undo"):
+            with patch(self.CHAT) as chat:
+                self.assertEqual(self.post(op, {"level": "same"}, user=eve).status_code, 404)
+            chat.assert_not_called()
+
+    def test_apply_and_undo(self):
+        proposal = self.propose().json()["proposal"]
+        response = self.post("ai-apply", {
+            "proposal": proposal, "selected": [0, 1], "edits": {"0": {"title": "Windig"}},
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertEqual(data["applied"], [0])
+        self.assertEqual(data["skipped"], [{"index": 1, "reason": "zones"}])
+        self.assertEqual(self.broadcast.call_count, 1)
+        top = MatrixCard.objects.get(summary=True)
+        self.assertEqual(top.title, "Windig")
+        response = self.post("ai-undo", {"undo": data["undo"]})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["status"], "ok")
+        self.assertEqual(self.broadcast.call_count, 1)
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
+        self.assertEqual(self.post("ai-undo", {"undo": data["undo"]}).status_code, 409)
+        self.broadcast.assert_not_called()
+
+    def test_apply_skips_stack_changed_since_proposal(self):
+        proposal = self.propose().json()["proposal"]
+        mxs.stack_card(self.run, self.xq, self.b.pk, self.c.pk)
+        response = self.post("ai-apply", {"proposal": proposal, "selected": [0]})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["skipped"], [{"index": 0, "reason": "changed"}])
+        self.broadcast.assert_not_called()  # nothing applied
+        self.c.refresh_from_db()
+        self.assertIsNone(self.c.stack_id)
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
+
+    def test_apply_invalid(self):
+        proposal = self.propose().json()["proposal"]
+        for body in (
+            {"proposal": proposal, "selected": [5]},
+            {"proposal": proposal, "selected": "0"},
+            {"proposal": proposal, "selected": [True]},
+            {"proposal": proposal, "selected": [0], "edits": []},
+            {"proposal": proposal, "selected": [0], "edits": {"x": {}}},
+            {"proposal": proposal, "selected": [0], "edits": {"²": {}}},
+            {"proposal": proposal, "selected": [0], "edits": {"0": "t"}},
+            {"proposal": proposal, "selected": [0], "edits": {"0": {"title": 5}}},
+            {"proposal": proposal, "selected": [0], "edits": {"0": {"title": "x" * 61}}},
+            {"proposal": "nope", "selected": [0]},
+        ):
+            response = self.post("ai-apply", body)
+            self.assertEqual(response.status_code, 400, body)
+            self.broadcast.assert_not_called()
+        self.assertFalse(MatrixCard.objects.filter(summary=True).exists())

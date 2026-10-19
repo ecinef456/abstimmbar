@@ -36,6 +36,7 @@ from rooms.models import AnswerOption, Question, QuestionSet, Room
 
 from . import (
     ai_evaluation,
+    ai_matrix,
     matrix,
     matrix_rating,
     mindmap,
@@ -1026,12 +1027,10 @@ def matrix_stage(request, run_id, question_id):
     return Response(body)
 
 
-def _matrix_moderate(request, run_id, question_id, action, http_status=200):
-    """Owner-only shell for the presenter endpoints: 404 for anyone else and
-    for non-matrix questions, MatrixError mapping, board echo + broadcast."""
-    run = get_object_or_404(
-        Run.objects.select_related("question_set__room"), pk=run_id
-    )
+def _matrix_owner(request, run_id, question_id):
+    """``(run, room, question)`` of a matrix question for the room's owner;
+    404 for anyone else and for non-matrix questions."""
+    run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
     room = run.question_set.room
     if not _require_owner(request.user, room):
         raise Http404
@@ -1039,6 +1038,13 @@ def _matrix_moderate(request, run_id, question_id, action, http_status=200):
         Question, pk=question_id, question_set=run.question_set,
         kind=Question.Kind.MATRIX,
     )
+    return run, room, question
+
+
+def _matrix_moderate(request, run_id, question_id, action, http_status=200):
+    """Owner-only shell for the presenter endpoints: 404 for anyone else and
+    for non-matrix questions, MatrixError mapping, board echo + broadcast."""
+    run, room, question = _matrix_owner(request, run_id, question_id)
     if not isinstance(request.data, dict):
         return Response({"detail": "Invalid request."}, status=400)
     try:
@@ -1123,6 +1129,126 @@ def matrix_teacher_delete(request, run_id, question_id):
             run, q, mindmap._parse_id(d.get("card"))
         ),
     )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_ai_propose(request, run_id, question_id):
+    """Presenter (expert mode): ask the LLM which cards of a field belong
+    together. Body ``{level: "spelling"|"same"|"similar"}`` → 200 ``{groups,
+    hints, dropped, proposal}`` (``matrix.simulate_groups``/``simulate_hints``;
+    ``dropped`` = malformed reply entries + skipped groups + dropped hints;
+    ``proposal`` = the signed parsed reply for ai-apply, 24 h). Nothing
+    changes. 503 AI not configured, 400 invalid level / AI switch off /
+    fewer than 3 visible cards, 409 rating stage, 502 AI error."""
+    run, _room, question = _matrix_owner(request, run_id, question_id)
+    data = request.data
+    if not isinstance(data, dict) or data.get("level") not in ai_matrix.LEVELS:
+        return Response(
+            {"detail": "level must be one of: " + ", ".join(ai_matrix.LEVELS) + "."},
+            status=400,
+        )
+    if not ai.is_enabled():
+        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+    if not question.wordcloud_ai_enabled:
+        return Response(
+            {"detail": "KI-Funktionen sind für diese Frage nicht aktiviert."}, status=400
+        )
+    if matrix.is_rating(run, question):
+        return Response({"detail": matrix.STACKS_LOCKED}, status=409)
+    if len(ai_matrix.visible_cards(run, question)) < 3:
+        return Response({"detail": "At least 3 cards are needed."}, status=400)
+    system, user = ai_matrix.build_prompt(run, question, data["level"])
+    try:
+        reply = ai.chat_json(system, user)
+    except ai.AIError as exc:
+        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+    groups, hints, malformed = ai_matrix.parse_reply(reply)
+    previews = matrix.simulate_groups(run, question, groups)
+    hint_previews = matrix.simulate_hints(run, question, hints)
+    skipped = sum(1 for g in previews if g["status"] != "ok")
+    return Response({
+        "groups": previews,
+        "hints": hint_previews,
+        "dropped": malformed + skipped + len(hints) - len(hint_previews),
+        "proposal": matrix.sign_proposal(
+            run, question, matrix.with_tops(groups, previews), hints, malformed
+        ),
+    })
+
+
+def _matrix_ai_edits(data, count):
+    """``{index: {title?, description?, category?}}`` from the JSON body
+    (string keys); _BadField for anything else."""
+    raw = data.get("edits", {})
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise _BadField("edits must be an object.")
+    edits = {}
+    for key, edit in raw.items():
+        if not (isinstance(key, str) and key.isdecimal() and int(key) < count):
+            raise _BadField("edits must be keyed by proposal indices.")
+        if not isinstance(edit, dict) or not all(
+            edit.get(field) is None or isinstance(edit[field], str)
+            for field in ("title", "description", "category")
+        ):
+            raise _BadField("An edit has title/description/category strings.")
+        edits[int(key)] = edit
+    return edits
+
+
+def _matrix_ai_moderate(request, run_id, question_id, action):
+    """Owner-only shell for ai-apply/ai-undo: _BadField/MatrixError mapping,
+    then one broadcast (none when an apply applied nothing); the body gets
+    the presenter board."""
+    run, room, question = _matrix_owner(request, run_id, question_id)
+    if not isinstance(request.data, dict):
+        return Response({"detail": "Invalid request."}, status=400)
+    try:
+        body = action(run, question, request.data)
+    except _BadField as error:
+        return Response({"detail": str(error)}, status=400)
+    except matrix.MatrixError as error:
+        return Response(error.body(), status=error.status)
+    if body.get("applied", True):  # ai-undo bodies carry no "applied"
+        broadcast(room, debounce=matrix.BROADCAST_DEBOUNCE)
+    return Response({**body, "matrix": matrix.board_payload(run, question, presenter=True)})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_ai_apply(request, run_id, question_id):
+    """Apply the selected groups of a proposal in one step: ``{proposal,
+    selected: [index], edits?: {index: {title?, description?, category?}}}``
+    → 200 ``{applied, skipped, undo, matrix}`` (``skipped`` = selected groups
+    that no longer fit the board). One broadcast; 409 while rating."""
+
+    def action(run, question, data):
+        groups, _hints, _malformed = matrix.unsign_proposal(run, question, data.get("proposal"))
+        selected = data.get("selected")
+        if not isinstance(selected, list) or not all(
+            isinstance(i, int) and not isinstance(i, bool) and 0 <= i < len(groups)
+            for i in selected
+        ):
+            raise _BadField("selected must be a list of proposal indices.")
+        edits = _matrix_ai_edits(data, len(groups))
+        return matrix.apply_groups(run, question, groups, selected, edits)
+
+    return _matrix_ai_moderate(request, run_id, question_id, action)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def matrix_ai_undo(request, run_id, question_id):
+    """Undo an applied step: ``{undo}`` (from ai-apply) → 200 ``{status: "ok",
+    matrix}``; 409 ``{detail}`` (nothing changed) when a stack changed since."""
+
+    def action(run, question, data):
+        matrix.undo_groups(run, question, data.get("undo"))
+        return {"status": "ok"}
+
+    return _matrix_ai_moderate(request, run_id, question_id, action)
 
 
 @api_view(["POST"])
