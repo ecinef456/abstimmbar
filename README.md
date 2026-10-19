@@ -22,7 +22,7 @@ sharing its design language and stack. Released under the
 > - [`docs/concept.md`](docs/concept.md) — Funktionsumfang & fachliches Konzept
 > - [`docs/roadmap.md`](docs/roadmap.md) — Meilensteine (MVP → v2 → Ausblick)
 > - [`docs/decisions/`](docs/decisions/) — Architekturentscheidungen (ADRs)
-> - [`docs/anleitung-lehrende.md`](docs/anleitung-lehrende.md) — Anleitung für Lehrende
+> - [Projekt-Website](https://virtuos.github.io/abstimmbar/) · [Anleitung für Lehrende](https://virtuos.github.io/abstimmbar/anleitung/) — Quelle: [`website/`](website/)
 > - [`docs/deployment.md`](docs/deployment.md) · [`docs/monitoring.md`](docs/monitoring.md) — Betrieb und Monitoring (Prometheus/Grafana)
 
 <p align="center">

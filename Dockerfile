@@ -8,6 +8,8 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci
 COPY frontend/ .
+# Optional build-time override of the in-app guide link (see docs/deployment.md).
+ARG VITE_GUIDE_URL
 RUN npm run build
 
 FROM python:3.12-slim

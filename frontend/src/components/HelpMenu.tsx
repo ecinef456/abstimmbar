@@ -6,8 +6,11 @@
  *  neighboring Settings link. */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HelpCircle } from "lucide-react";
+import { ExternalLink, HelpCircle } from "lucide-react";
 import type { TourMode } from "../tour/steps";
+
+const GUIDE_URL =
+  import.meta.env.VITE_GUIDE_URL || "https://virtuos.github.io/abstimmbar/anleitung/";
 
 export default function HelpMenu({
   easyMode,
@@ -67,10 +70,18 @@ export default function HelpMenu({
           >
             {t("Start tour")}
           </button>
-          {/* TODO(guide-link): no in-app guide/info page exists yet —
-              docs/anleitung-lehrende.md lives only in the repo, and the
-              admin-managed pages/:slug route has no guaranteed lecturer-guide
-              slug. Add a "Guide" menuitem here once an in-app target ships. */}
+          <a
+            role="menuitem"
+            href={GUIDE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setOpen(false)}
+            aria-label={t("Guide (opens in a new tab)")}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {t("Guide")}
+            <ExternalLink aria-hidden className="h-4 w-4 text-slate-400" />
+          </a>
         </div>
       )}
     </div>

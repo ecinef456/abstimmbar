@@ -420,6 +420,12 @@ Buildzeit** fest ins Bundle — das funktioniert nur, wenn du selbst baust
 (`up -d --build`); ein veröffentlichtes Release-Image wurde bereits mit dem
 Standardwert gebaut und lässt sich nicht nachträglich umkonfigurieren.
 
+**`VITE_GUIDE_URL`** (optional) ist das Ziel des Menüpunkts „Anleitung“ im
+„?“-Menü der App; Standard ist die öffentliche Projekt-Website
+(`https://virtuos.github.io/abstimmbar/anleitung/`). Wie
+`VITE_API_BASE_URL` wird der Wert zur **Buildzeit** festgelegt (Build-Argument
+im `app`-Service, nur mit `up -d --build` wirksam).
+
 Gegenprüfen, was im laufenden Container ankommt:
 
 ```bash
