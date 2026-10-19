@@ -42,8 +42,12 @@ jobs:
           cache-dependency-path: website/requirements.txt
       - name: Install MkDocs Material
         run: pip install -r website/requirements.txt
-      - name: Build site
+      # German at the root, English into en/ — in this order, since each
+      # build cleans its output directory.
+      - name: Build site (German)
         run: mkdocs build --strict -f website/mkdocs.yml -d "${{ runner.temp }}/site"
+      - name: Build site (English)
+        run: mkdocs build --strict -f website/mkdocs.en.yml -d "${{ runner.temp }}/site/en"
       - if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
       - if: github.event_name != 'pull_request'

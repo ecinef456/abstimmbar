@@ -11,7 +11,7 @@ Melden Sie sich mit Ihrer gewohnten Uni-Kennung an (Single Sign-on). Sie
 können Abstimmbar auch direkt als Aktivität in Ihre Lernplattform einbinden
 (LTI 1.3; z. B. Moodle; Stud.IP, sobald dort LTI 1.3 verfügbar ist) und
 ersparen sich so das separate Login
-— wie das geht, steht unter [LMS-Einbindung](../lti.md#anleitung-für-lehrende).
+— wie das geht, steht unter [In der Lernplattform](lms.md).
 Räume, die aus dem LMS heraus entstanden sind, tragen auf der Startseite den
 Hinweis **„aus LMS“**.
 
@@ -34,7 +34,8 @@ Nur im Experten-Modus sehen Sie unter anderem:
   **Ergebnisse archivieren** im Menü eines Fragensets,
 - die **KI-Assistenz** (sofern Ihre Einrichtung sie freigeschaltet hat,
   siehe [KI-Assistenz](ki-assistenz.md)),
-- **zweisprachige Inhalte** (Deutsch/Englisch),
+- **zweisprachige Inhalte** (Deutsch/Englisch, siehe
+  [Zweisprachigkeit](zweisprachigkeit.md)),
 - den **Aufzeichnungsmodus** (siehe [Aufgezeichnete Vorlesungen](aufzeichnung.md)),
 - die **Raum-Einstellungen** für Logo, dauerhaft eingeblendeten QR-/Raumcode
   und die **Abschluss-Info für Teilnehmende**,
@@ -48,4 +49,4 @@ Im **Benutzermenü** (Ihr Initial oben rechts) wählen Sie die Sprache der
 Oberfläche (Deutsch oder Englisch) und das **Erscheinungsbild**: hell, dunkel
 oder wie Ihr System. Die Sprache wird an Ihrem Konto gespeichert. Ihre
 Teilnehmenden können die Sprache der Teilnahmeseite unabhängig davon selbst
-umschalten.
+umschalten — mehr unter [Zweisprachigkeit](zweisprachigkeit.md).

@@ -1,0 +1,28 @@
+{#-
+  Language selector (Material's partials/alternate.html, mkdocs-material
+  9.7). Changed: each entry links to the counterpart of the current page
+  (alternate_links, set by hooks/i18n.py, relative to the page) and falls
+  back to extra.alternate (the other language's start page). target="_self"
+  keeps Material's sitemap-based language switch out of the way — it maps
+  pages by identical paths, but the two languages use different slugs.
+-#}
+<div class="md-header__option">
+  <div class="md-select">
+    {% set icon = config.theme.icon.alternate or "material/translate" %}
+    <button class="md-header__button md-icon" aria-label="{{ lang.t('select.language') }}">
+      {% include ".icons/" ~ icon ~ ".svg" %}
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        {% for alt in config.extra.alternate %}
+          {% set href = (alternate_links or {}).get(alt.lang) or (alt.link | url) %}
+          <li class="md-select__item">
+            <a href="{{ href }}" hreflang="{{ alt.lang }}" target="_self" class="md-select__link">
+              {{ alt.name }}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>

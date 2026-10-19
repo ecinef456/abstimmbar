@@ -1,12 +1,12 @@
 ---
 title: Datenschutz
-description: Abstimmbar ist auf Anonymität ausgelegt — ohne Konto, ohne IP-Adressen zu den Stimmen.
+description: Abstimmbar ist auf Anonymität ausgelegt — ohne Konto, ohne IP-Adressen der Abstimmenden.
 ---
 
 # Datenschutz
 
 Abstimmbar ist auf **Anonymität ausgelegt**: Teilnehmende benötigen kein
-Konto, und zu den Stimmen werden keine IP-Adressen gespeichert. Sie können das
+Konto, und IP-Adressen der Abstimmenden werden nicht gespeichert. Sie können das
 Werkzeug daher bedenkenlos zur Aktivierung und für ehrliches Feedback
 einsetzen — auch bei sensiblen Fragestellungen.
 

@@ -10,6 +10,7 @@ RUN npm ci
 COPY frontend/ .
 # Optional build-time override of the in-app guide link (see docs/deployment.md).
 ARG VITE_GUIDE_URL
+ARG VITE_GUIDE_URL_EN
 RUN npm run build
 
 FROM python:3.12-slim

@@ -41,6 +41,6 @@ Hinzukommende jederzeit beitreten können.
   geantwortet haben.
 - Ob Teilnehmende die Ergebnisse und die Lösung auch auf dem eigenen Gerät
   sehen, legen Sie in den
-  [Einstellungen des Fragensets](fragen.md#einstellungen-des-fragensets) fest.
+  [Einstellungen der Live-Umfrage](set-arten.md#live-umfrage) fest.
 - Nach dem Ende sehen Teilnehmende den Schlussbildschirm und, falls
   eingerichtet, Ihre **Abschluss-Info**.

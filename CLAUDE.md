@@ -22,6 +22,10 @@ Authoritative documents:
 - `docs/concept.md` — Funktionsumfang & Domänenmodell (German)
 - `docs/roadmap.md` — milestones M0–M4, v2, Ausblick; review decisions
 - `docs/decisions/` — ADRs (0001 tech stack, 0002 app structure)
+- `website/` — project website (GitHub Pages; see website/README.md):
+  German at the root, English twin in `website/en/`. **Keep EN in sync:**
+  a change to a German page, to `docs/deployment.md` or `docs/lti.md`
+  (included on the German site) needs the matching edit in `website/en/`.
 
 ## Language convention
 

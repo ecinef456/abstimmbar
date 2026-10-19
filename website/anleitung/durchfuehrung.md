@@ -1,66 +1,42 @@
 ---
 title: Durchführung starten
-description: Live-Umfrage präsentieren, Quiz-Block starten oder Lernkontrolle veröffentlichen.
+description: Live-Umfrage präsentieren, Quiz-Block starten oder Lernkontrolle veröffentlichen — die Startknöpfe im Überblick.
 ---
 
 # Eine Durchführung starten
 
-Wie Sie ein Fragenset durchführen, hängt von seiner
-[Art](fragen.md#art-des-fragensets) ab. Jede Präsentation einer Live-Umfrage
-und jeder Quiz-Block wird als eigene **Durchführung** gespeichert; die
-Ergebnisse finden Sie danach unter [Ergebnisse](ergebnisse.md).
+Wie ein Fragenset abläuft, hängt von seiner [Art](set-arten.md) ab. Hier steht
+nur, wie Sie es starten und beenden. Jede Präsentation einer Live-Umfrage und
+jeder Quiz-Block wird als eigene **Durchführung** gespeichert; die Ergebnisse
+finden Sie unter [Ergebnisse](ergebnisse.md).
 
-## Live-Umfrage
+## Live-Umfrage und Quiz-Block
 
-Klicken Sie im Fragenset auf **Präsentieren**. Damit öffnet sich der
-**Präsentationsmodus** für den Beamer, und Ihr Raum ist für Teilnehmende
-freigeschaltet. Zuerst erscheint der Beitrittsbildschirm mit QR-Code und
-Raumcode (siehe [Teilnehmende einladen](teilnehmende.md)); wie Sie danach
-steuern, beschreibt [Präsentieren](praesentieren.md).
+1. Klicken Sie im Fragenset auf **Präsentieren**. Der Präsentationsmodus öffnet
+   sich für den Beamer, und Ihr Raum ist für Teilnehmende freigeschaltet;
+   zuerst erscheinen QR-Code und Raumcode (siehe
+   [Teilnehmende einladen](teilnehmende.md)).
+2. Liegen schon Ergebnisse vor, fragt Abstimmbar, wie damit umgegangen werden
+   soll: **Weiterzählen** (in dieselbe Durchführung), **Archivieren & neu
+   starten** (die bisherige bleibt als frühere Durchführung erhalten) oder
+   **Löschen**. Im einfachen Modus wird automatisch archiviert, wenn Sie an
+   einem anderen Tag erneut präsentieren.
+3. **Live-Umfrage:** Sie steuern Frage für Frage, siehe
+   [Präsentieren](praesentieren.md). Im Experten-Modus startet das ▶-Symbol
+   einer Frage auch **nur diese Frage**.
+   **Quiz-Block:** Die Teilnehmenden arbeiten selbstständig; der Beamer zeigt
+   Restzeit und Antworten je Frage. **Quiz beenden** (++esc++) schließt den
+   Block, bei abgelaufener Gesamtdauer endet er von selbst.
 
-Im Experten-Modus starten Sie über das ▶-Symbol einer Frage auch **nur diese
-Frage**.
-
-Liegen für das Set schon Ergebnisse vor, fragt Abstimmbar vor dem Start, wie
-damit umgegangen werden soll:
-
-- **Weiterzählen** — neue Stimmen zählen in dieselbe Durchführung.
-- **Archivieren & neu starten** — die bisherige Durchführung bleibt archiviert,
-  die neue beginnt leer.
-- **Löschen** — alle bisherigen Ergebnisse werden verworfen.
-
-Im einfachen Modus archiviert Abstimmbar die Ergebnisse automatisch, wenn Sie
-an einem anderen Tag erneut präsentieren.
-
-Solange eine Durchführung läuft, steht in der Übersicht des Sets der Knopf
-**Umfrage beenden** (siehe
+Das rote **✕** in der Präsentation **verlässt** sie nur. Beendet wird eine
+laufende Durchführung über **Umfrage beenden** bzw. **Quiz beenden** in der
+Übersicht des Sets (siehe
 [Verlassen oder beenden](praesentieren.md#verlassen-oder-beenden)).
-
-## Quiz-Block
-
-Ein Quiz-Block läuft in **Stillarbeit**: Klicken Sie auf **Präsentieren**.
-Der Beamer zeigt QR-Code und Raumcode, eine eventuelle **Restzeit** und je
-Frage einen Balken mit der Zahl der eingegangenen Antworten. Ihre
-Teilnehmenden arbeiten die Fragen im eigenen Tempo durch — je nach
-Einstellung mit sofortiger Rückmeldung zur richtigen Antwort und mit Vor- und
-Zurückblättern.
-
-Mit **Quiz beenden** (++esc++) schließen Sie den Block. Haben Sie in den
-Einstellungen **„Im Anschluss die Ergebnisse in der Präsentation anzeigen“**
-gewählt, gehen Sie danach Frage für Frage die Ergebnisse durch (mit
-++arrow-left++ ++arrow-right++, die richtigen Antworten sind markiert);
-sonst erscheint der Schlussbildschirm. Ist eine Gesamtdauer eingestellt,
-endet der Block nach deren Ablauf von selbst.
 
 ## Lernkontrolle
 
-Eine Lernkontrolle wird nicht präsentiert, sondern **veröffentlicht**: Ein
-Klick auf **Veröffentlichen** erzeugt einen **Dauer-Link**, über den Lernende
-jederzeit üben und sofort Rückmeldung erhalten. Danach zeigt das Set:
-
-- den **Dauer-Link** zum Kopieren — und an jeder Frage einen Link direkt zu
-  dieser Frage,
-- den Hinweis für Ihr LMS: Wählen Sie das Set im Abstimmbar-Deep-Link aus,
-  landen Lernende direkt dort (siehe [LMS-Einbindung](../lti.md)),
-- die **Zahl der Versuche** und den Anteil richtiger Antworten,
-- **Stoppen** — nimmt den Link wieder vom Netz — und **Zähler zurücksetzen**.
+Klicken Sie auf **Veröffentlichen**. Das Set zeigt dann den **Dauer-Link** zum
+Kopieren (und an jeder Frage einen Link direkt zu dieser Frage), den Hinweis
+zur Einbindung im LMS, die **Zahl der Versuche** mit dem Anteil richtiger
+Antworten sowie **Stoppen** (nimmt den Link vom Netz) und **Zähler
+zurücksetzen**. Mehr unter [Lernkontrolle](set-arten.md#lernkontrolle).
