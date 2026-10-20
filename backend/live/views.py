@@ -61,6 +61,7 @@ from .models import (
     SelfCheckAttempt,
     Vote,
     WordCloudModeration,
+    strip_control_chars,
 )
 from .results import (
     likert_summary,
@@ -439,7 +440,7 @@ def vote(request, code):
         return Response({"status": "ok"}, status=status.HTTP_201_CREATED)
 
     if question.kind in Question.TEXT_KINDS:
-        text = str(request.data.get("text", "")).strip()
+        text = strip_control_chars(str(request.data.get("text", ""))).strip()
         if not text:
             return Response({"detail": "Empty answer."}, status=400)
         option_ids = []
@@ -777,7 +778,7 @@ def mindmap_add(request, code):
             request.data.get("description", ""),
         )
     except mindmap.MindmapError as error:
-        return Response({"detail": error.detail}, status=error.status)
+        return Response(error.body(), status=error.status)
     broadcast(room, debounce=mindmap.BROADCAST_DEBOUNCE)
     return Response(
         {
@@ -800,7 +801,7 @@ def mindmap_remove(request, code):
     try:
         deleted = mindmap.remove_term(run, question, token, request.data.get("node"))
     except mindmap.MindmapError as error:
-        return Response({"detail": error.detail}, status=error.status)
+        return Response(error.body(), status=error.status)
     broadcast(room, debounce=mindmap.BROADCAST_DEBOUNCE)
     return Response(
         {
@@ -825,7 +826,8 @@ def mindmap_mine(request, code):
     if run is None:
         return Response({"nodes": []})
     question = Question.objects.filter(
-        question_set=run.question_set, pk=mindmap._parse_id(request.data.get("question"))
+        question_set=run.question_set, kind=Question.Kind.MINDMAP,
+        pk=mindmap._parse_id(request.data.get("question")),
     ).first()
     if question is None:
         return Response({"detail": "Unknown question."}, status=404)
@@ -1351,7 +1353,7 @@ def _parse_answer(question, data):
     options). Raises _AnswerError(detail) on invalid input. Shared shape with
     the live vote view."""
     if question.kind in Question.TEXT_KINDS:
-        text = str(data.get("text", "")).strip()
+        text = strip_control_chars(str(data.get("text", ""))).strip()
         if not text:
             raise _AnswerError("Empty answer.")
         return text, [], []
@@ -1546,6 +1548,13 @@ def recording_vote(request, token):
         if option_ids:
             vote_obj.options.set(options)
 
+    # Same background AI hand-off as the live vote view: evaluate opted-in
+    # free-text answers (else they stay "pending" forever), and let a shown
+    # live AI word-cloud view recompute (no-op unless one is active).
+    if question.kind == Question.Kind.OPEN_TEXT and question.ai_evaluate:
+        ai_evaluation.schedule(vote_obj.pk, room.pk)
+    if question.kind in Question.TEXT_KINDS:
+        ai_wordcloud_live.schedule(run.pk, question.pk, room.pk)
     payload = {"status": "ok", **_question_results(run, question)}
     feedback = _self_paced_feedback(run, question, set(option_ids))
     if feedback is not None:

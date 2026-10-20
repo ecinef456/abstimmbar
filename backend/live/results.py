@@ -12,7 +12,7 @@ from common.i18n_fields import translated_map
 from rooms.models import Question
 
 from . import matrix, matrix_rating, mindmap_rating
-from .mindmap import build_tree, contribution_total, contributor_count
+from .mindmap import build_tree, contribution_total
 from .models import Vote
 
 
@@ -399,7 +399,7 @@ def run_results(run):
             rating = mindmap_rating.results(run, question, item["mindmap"])
             if rating is not None:
                 item["mindmap"]["rating"] = rating
-            item["votes"] = contributor_count(run, question)
+            item["votes"] = mindmap_rating.votes(run, question)
         elif question.kind == Question.Kind.MATRIX:
             # Owner-only endpoint: hidden cards are marked, not dropped.
             item["matrix"] = matrix.board_payload(run, question, presenter=True)

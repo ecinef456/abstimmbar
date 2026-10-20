@@ -5664,6 +5664,36 @@ class MindmapRatingSettingsTests(ApiTestCase):
         )
         self.assertEqual(response.status_code, 200, response.content)
 
+    def test_mode_locked_while_running_run_is_rating_without_ratings(self):
+        # Same rule as the matrix: the rating stage alone locks the mode, so
+        # participant devices cannot switch mid-rating (drift D4).
+        from live.models import MindmapPhase
+
+        question = self._rated_question()
+        run = Run.objects.create(question_set=self.question_set, phase=Run.Phase.OPEN,
+                                 active_question=question)
+        MindmapPhase.objects.create(run=run, question=question,
+                                    stage=MindmapPhase.Stage.RATE)
+        response = self.client.patch(
+            f"/api/questions/{question.pk}/", {"mindmap_rating_mode": "updown"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["mindmap_rating_mode"],
+            ["The rating mode cannot be changed while a running session is rating."],
+        )
+        question.refresh_from_db()
+        self.assertEqual(question.mindmap_rating_mode, "points")
+        # A finished run's rating stage does not lock.
+        run.phase = Run.Phase.FINISHED
+        run.save()
+        response = self.client.patch(
+            f"/api/questions/{question.pk}/", {"mindmap_rating_mode": "updown"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+
 
 class MatrixRatingSettingsTests(ApiTestCase):
     """Matrix rating phase (Task 1): the four authoring settings."""
@@ -5991,3 +6021,150 @@ class MindmapAiSettingsTests(ApiTestCase):
         self.assertTrue(question.mindmap_ai_merge)
         self.assertTrue(question.mindmap_ai_translate)
         self.assertTrue(question.mindmap_ai_restructure)
+
+
+class QuestionFieldListGuardTests(ApiTestCase):
+    """M5: the transfer field lists cannot silently lose a question field —
+    every content field is exported and read back on import, and every
+    kind-specific model field is part of ``QUESTION_CONTENT_FIELDS``."""
+
+    # Kind-specific model fields deliberately NOT in QUESTION_CONTENT_FIELDS
+    # (none today — add a name here only with a reason in a comment).
+    NOT_EXPORTED: ClassVar = set()
+    PATTERNS = ("matrix_", "mindmap_", "wordcloud_")
+
+    def _full_question(self, question_set):
+        from . import mindmap
+
+        values = {
+            "shuffle_options": True,
+            "binary_choice": True,
+            "time_limit": 30,
+            "allow_multiple": True,
+            "wordcloud_live": False,
+            "wordcloud_ai_enabled": True,
+            "wordcloud_grouping": "Nach Thema",
+            "wordcloud_grouping_use_solution": False,
+            "wordcloud_merge_variants": False,
+            "wordcloud_merge_synonyms": False,
+            "wordcloud_merge_concepts": True,
+            "wordcloud_max_answers": 3,
+            "wordcloud_batch_submit": True,
+            "reveal_answers": Question.RevealAnswers.NEVER,
+            "ai_evaluate": True,
+            "evaluation_hint": "Hinweis",
+            "evaluation_categories": ["gut", "mittel", "schlecht"],
+            "evaluation_chart": True,
+            "model_solution": "Lösung",
+            "participant_feedback": True,
+            "mindmap_depth": 3,
+            "mindmap_max_per_person": 4,
+            "mindmap_descriptions": True,
+            "mindmap_highlight_duplicates": False,
+            "mindmap_seed": mindmap.clean_seed(
+                [{"text": {"de": "Ast", "en": "Branch"}}], 3
+            ),
+            "mindmap_rating_mode": "updown",
+            "mindmap_rating_budget": 9,
+            "mindmap_rating_multi": False,
+            "mindmap_rating_live": True,
+            "mindmap_ai_merge": False,
+            "mindmap_ai_translate": False,
+            "mindmap_ai_target_lang": "en",
+            "mindmap_ai_restructure": False,
+            "matrix_edges": True,
+            "matrix_descriptions": True,
+            "matrix_max_per_person": 4,
+            "matrix_category_mode": matrix.CATEGORY_NAMED,
+            "matrix_categories": matrix.clean_categories(
+                [{"key": "blue", "name": {"de": "Idee", "en": "Idea"}},
+                 {"key": "red", "name": {"de": "Risiko", "en": "Risk"}}],
+                matrix.CATEGORY_NAMED,
+            ),
+            "matrix_rating_mode": "updown",
+            "matrix_rating_budget": 9,
+            "matrix_rating_multi": False,
+            "matrix_rating_live": True,
+        }
+        translated = {
+            "text_de": "<p>Frage</p>", "text_en": "<p>Question</p>",
+            "mindmap_root_de": "Wurzel", "mindmap_root_en": "Root",
+            "matrix_x_from_de": "links", "matrix_x_from_en": "left",
+            "matrix_x_to_de": "rechts", "matrix_x_to_en": "right",
+            "matrix_y_from_de": "unten", "matrix_y_from_en": "bottom",
+            "matrix_y_to_de": "oben", "matrix_y_to_en": "top",
+        }
+        question = Question.objects.create(
+            question_set=question_set, kind=Question.Kind.MATRIX,
+            **values, **translated,
+        )
+        return question, values, translated
+
+    def test_content_fields_cover_values(self):
+        from .transfer import QUESTION_CONTENT_FIELDS
+
+        _question, values, _translated = self._full_question(
+            QuestionSet.objects.create(room=self.room, title_de="Guard")
+        )
+        # The fixture sets every content field (so the round trip checks all).
+        self.assertEqual(set(values), set(QUESTION_CONTENT_FIELDS))
+
+    def test_every_content_field_round_trips(self):
+        from .transfer import (
+            QUESTION_CONTENT_FIELDS,
+            QUESTION_TRANSLATED_FIELDS,
+            export_set,
+            import_set,
+        )
+
+        source_set = QuestionSet.objects.create(room=self.room, title_de="Guard")
+        source, values, translated = self._full_question(source_set)
+        data = export_set(source_set)
+        exported = data["questions"][0]
+        for field in (*QUESTION_CONTENT_FIELDS, *QUESTION_TRANSLATED_FIELDS):
+            self.assertIn(field, exported, field)
+        imported = import_set(self.room, data).questions.get()
+        for field in QUESTION_CONTENT_FIELDS:
+            self.assertEqual(
+                getattr(imported, field), getattr(source, field), field
+            )
+            # And it is not just the model default on both sides.
+            self.assertEqual(getattr(imported, field), values[field], field)
+        for column, value in translated.items():
+            self.assertEqual(getattr(imported, column), value, column)
+
+    def test_kind_specific_model_fields_are_listed(self):
+        from common.i18n_fields import LANGS
+
+        from .transfer import QUESTION_CONTENT_FIELDS, QUESTION_TRANSLATED_FIELDS
+
+        listed = set(QUESTION_CONTENT_FIELDS) | set(QUESTION_TRANSLATED_FIELDS)
+        lang_suffixes = tuple(f"_{lang}" for lang in LANGS)
+        missing = []
+        for field in Question._meta.get_fields():
+            if not getattr(field, "concrete", False):
+                continue
+            name = field.name
+            if not (name.startswith(self.PATTERNS) or "_rating_" in name):
+                continue
+            base = name
+            if name.endswith(lang_suffixes) and name.rsplit("_", 1)[0] in listed:
+                base = name.rsplit("_", 1)[0]
+            if base not in listed and name not in self.NOT_EXPORTED:
+                missing.append(name)
+        self.assertEqual(missing, [])
+
+    def test_import_clamps_wordcloud_grouping_like_serializer(self):
+        # D13c: same 1000-char cap as the authoring serializer.
+        from .transfer import import_set
+
+        imported = import_set(self.room, {
+            "format": "abstimmbar-set-v2",
+            "title": {"de": "Fremd", "en": ""},
+            "questions": [{
+                "kind": "word_cloud",
+                "text": {"de": "<p>Q</p>", "en": ""},
+                "wordcloud_grouping": "x" * 1500,
+            }],
+        })
+        self.assertEqual(len(imported.questions.get().wordcloud_grouping), 1000)

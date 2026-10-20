@@ -30,26 +30,13 @@ from common.i18n_fields import LANGS, translated_map
 from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Section
 from .naming import unique_title
+from .question_fields import clean_evaluation_categories
 from .sanitize import clean_html, clean_media_url
 
 EXPORT_FORMAT = "abstimmbar-set-v2"
 LEGACY_FORMAT = "abstimmbar-set-v1"
 VALID_KINDS = {k.value for k in Question.Kind}
 CONTENT_DEFAULT_LANGUAGE = settings.MODELTRANSLATION_DEFAULT_LANGUAGE
-
-
-def _import_categories(value):
-    """2–5 trimmed, unique category labels from a foreign file, else default."""
-    from .models import default_verdicts
-
-    cleaned, seen = [], set()
-    for raw in value or []:
-        label = str(raw).strip()[:40]
-        key = label.casefold()
-        if label and key not in seen:
-            seen.add(key)
-            cleaned.append(label)
-    return cleaned if 2 <= len(cleaned) <= 5 else default_verdicts()
 
 
 def _unique_in_room(room, base):
@@ -547,7 +534,8 @@ def import_set(room, data):
             allow_multiple=bool(item.get("allow_multiple")),
             wordcloud_live=bool(item.get("wordcloud_live", True)),
             wordcloud_ai_enabled=bool(item.get("wordcloud_ai_enabled")),
-            wordcloud_grouping=str(item.get("wordcloud_grouping") or "")[:2000],
+            # Same cap as the authoring serializer / ai-settings endpoint.
+            wordcloud_grouping=str(item.get("wordcloud_grouping") or "")[:1000],
             wordcloud_grouping_use_solution=bool(
                 item.get("wordcloud_grouping_use_solution", True)
             ),
@@ -559,7 +547,9 @@ def import_set(room, data):
             wordcloud_batch_submit=bool(item.get("wordcloud_batch_submit")),
             ai_evaluate=bool(item.get("ai_evaluate")),
             evaluation_hint=str(item.get("evaluation_hint") or "")[:2000],
-            evaluation_categories=_import_categories(item.get("evaluation_categories")),
+            evaluation_categories=clean_evaluation_categories(
+                item.get("evaluation_categories")
+            ),
             evaluation_chart=bool(item.get("evaluation_chart")),
             # Missing in older exports → empty solution, feedback off.
             model_solution=str(item.get("model_solution") or "")[:2000],
