@@ -1091,3 +1091,35 @@ test('moderation view: hidden cards restore, stacks release members / dissolve',
   expect(helpFor).toContain('mx.drawer-views');
   await page.keyboard.press('Escape');
 });
+
+test('a closed vote keeps the board on the beamer; Question hides it, E shows the results', async ({ page, trackRoom }) => {
+  test.setTimeout(90_000);
+  const s = await seed(page, trackRoom);
+  const phase = async () =>
+    (await s.api.get(`/api/question-sets/${s.room.setId}/live-status/`)).active_run_phase as string;
+  await openPresenter(page, s.room.setId);
+  await expect(card(page, s.ids.chatbot)).toBeVisible();
+
+  // Stopped (e.g. by the timer): the board stays, "Frage" is selectable.
+  await control(s.api, s.runId, 'closed');
+  await expect.poll(phase).toBe('closed');
+  await expect(board(page)).toBeVisible();
+  await expect(card(page, s.ids.chatbot)).toBeVisible();
+  await expect(seg(page, 'view.mx.raw')).toHaveAttribute('aria-checked', 'true');
+  await expect(seg(page, 'view.question')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByText('Beantwortung geschlossen', { exact: true })).toHaveCount(0);
+  // "Frage" shows the question alone (the phase stays closed).
+  await seg(page, 'view.question').click();
+  await expect(seg(page, 'view.question')).toHaveAttribute('aria-checked', 'true');
+  await expect(board(page)).toHaveCount(0);
+  expect(await phase()).toBe('closed');
+  // E: the results as before; E again back to the question alone.
+  await page.keyboard.press('e');
+  await expect.poll(phase).toBe('results');
+  await expect(seg(page, 'view.mx.raw')).toHaveAttribute('aria-checked', 'true');
+  await expect(board(page)).toBeVisible();
+  await page.keyboard.press('e');
+  await expect.poll(phase).toBe('closed');
+  await expect(seg(page, 'view.question')).toHaveAttribute('aria-checked', 'true');
+  await expect(board(page)).toHaveCount(0);
+});
