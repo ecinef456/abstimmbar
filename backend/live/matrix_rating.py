@@ -214,15 +214,19 @@ def payload(run, question, *, presenter):
     return data
 
 
-_ZONE_ORDER = {zone: i for i, zone in enumerate(ZONES)}
+# Reading order (top row q2, q1; bottom row q3, q4; then the edges) — the
+# same order as the participant zone picker (participant.html mxBuild), the
+# beamer picker (MatrixZonePicker.tsx) and the results list (MatrixList.tsx).
+READING_ORDER = ("q2", "q1", "q3", "q4", "e_top", "e_right", "e_bottom", "e_left")
+_ZONE_ORDER = {zone: i for i, zone in enumerate(READING_ORDER)}
 
 
 def participant_payload(run, question):
     """``matrix_rating`` of the participant snapshot, or None without a rating
     mode. Collecting: ``{stage}``. Rating: ``{stage, mode, budget, multi,
     cards, scores?}`` — ``cards`` are the visible top cards WITHOUT positions
-    (zone order, then y descending, x ascending); ``scores`` only once
-    revealed (see :func:`payload`). Never anyone's individual ratings."""
+    (reading order of the fields, then y descending, x ascending);
+    ``scores`` only once revealed (see :func:`payload`). Never anyone's individual ratings."""
     if not question.matrix_rating_mode:
         return None
     stage = stage_of(run, question)

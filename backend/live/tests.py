@@ -2205,7 +2205,8 @@ class AiWordCloudTests(LiveTestCase):
     def setUp(self):
         super().setUp()
         self.cloud = Question.objects.create(
-            question_set=self.question_set, kind=Question.Kind.WORD_CLOUD, position=5
+            question_set=self.question_set, kind=Question.Kind.WORD_CLOUD, position=5,
+            wordcloud_ai_enabled=True,
         )
         self.run = self.open_question(self.cloud)
         for raw in ["Klima", "Klima", "Klima", "Klimawandel", "Wasser", "Wasser", "Boden"]:
@@ -2279,6 +2280,19 @@ class AiWordCloudTests(LiveTestCase):
         self.assertEqual(self.client.post(self.url).status_code, 503)
 
     @override_settings(**AI_ON)
+    def test_question_switch_off_returns_400(self):
+        self.cloud.wordcloud_ai_enabled = False
+        self.cloud.save()
+        with patch("basicbar_integrations.ai.chat_json") as chat:
+            self.client.force_login(self.owner)
+            response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"], "AI features are not enabled for this question."
+        )
+        chat.assert_not_called()
+
+    @override_settings(**AI_ON)
     def test_requires_owner(self):
         with patch("basicbar_integrations.ai.chat_json", return_value={"groups": []}):
             self.client.force_login(User.objects.create_user(username="eve"))
@@ -2295,7 +2309,8 @@ class AiWordCloudTests(LiveTestCase):
     @override_settings(**AI_ON)
     def test_empty_wordcloud_skips_model(self):
         empty_cloud = Question.objects.create(
-            question_set=self.question_set, kind=Question.Kind.WORD_CLOUD, position=6
+            question_set=self.question_set, kind=Question.Kind.WORD_CLOUD, position=6,
+            wordcloud_ai_enabled=True,
         )
         url = f"/api/runs/{self.run.pk}/questions/{empty_cloud.pk}/ai-wordcloud/"
         with patch("basicbar_integrations.ai.chat_json") as chat:
@@ -2338,9 +2353,9 @@ class AiReportTests(LiveTestCase):
     def test_disabled_returns_503(self):
         run = self._run_with_votes()
         self.client.force_login(self.owner)
-        self.assertEqual(
-            self.client.post(f"/api/runs/{run.pk}/ai-summary/").status_code, 503
-        )
+        response = self.client.post(f"/api/runs/{run.pk}/ai-summary/")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "AI is not configured.")
 
     @override_settings(**AI_ON)
     def test_requires_owner(self):
@@ -2378,6 +2393,7 @@ class AiFreeTextTests(LiveTestCase):
         self.q = Question.objects.create(
             question_set=self.question_set, kind=Question.Kind.OPEN_TEXT,
             text="<p>Hauptstadt von Frankreich?</p>", position=5,
+            wordcloud_ai_enabled=True,
         )
         self.run = self.open_question(self.q)
         for raw in ["Paris", "paris", "Berlin", "vielleicht Paris", "keine Ahnung"]:
@@ -2424,6 +2440,19 @@ class AiFreeTextTests(LiveTestCase):
     def test_disabled_returns_503(self):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.post(self.url).status_code, 503)
+
+    @override_settings(**AI_ON)
+    def test_question_switch_off_returns_400(self):
+        self.q.wordcloud_ai_enabled = False
+        self.q.save()
+        with patch("basicbar_integrations.ai.chat_json") as chat:
+            self.client.force_login(self.owner)
+            response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"], "AI features are not enabled for this question."
+        )
+        chat.assert_not_called()
 
     @override_settings(**AI_ON)
     def test_requires_owner(self):
@@ -9009,8 +9038,9 @@ class MatrixRatingPayloadTests(MatrixTestCase):
             (rating["stage"], rating["mode"], rating["budget"], rating["multi"]),
             ("rate", "points", 3, True),
         )
-        # q1 before q2; inside a zone y desc (C was moved up), then x asc.
-        self.assertEqual([c["title"] for c in rating["cards"]], ["C", "B", "A"])
+        # Reading order q2 before q1; inside a zone y desc (C was moved up),
+        # then x asc.
+        self.assertEqual([c["title"] for c in rating["cards"]], ["A", "C", "B"])
         for card in rating["cards"]:
             self.assertEqual(
                 set(card), {"id", "title", "description", "category", "zone", "summary"}
@@ -9020,6 +9050,21 @@ class MatrixRatingPayloadTests(MatrixTestCase):
         self.assertNotIn("Member", text)
         self.assertNotIn('"x"', text)
         self.assertNotIn("scores", rating)
+
+    def test_participant_cards_in_reading_order_like_the_zone_picker(self):
+        # The participant zone picker (participant.html mxBuild), the beamer
+        # picker and the results list: q2, q1, q3, q4, then the edges.
+        self.configure(matrix_edges=True, matrix_max_per_person=20)
+        for zone in ("e_left", "q4", "e_bottom", "q3", "e_right", "q1", "e_top"):
+            self.add(title=zone, zone=zone)
+        self.rate_stage()
+        zones = []
+        for card in self.part()["cards"]:
+            if card["zone"] not in zones:
+                zones.append(card["zone"])
+        self.assertEqual(
+            zones, ["q2", "q1", "q3", "q4", "e_top", "e_right", "e_bottom", "e_left"]
+        )
 
     def test_participant_no_foreign_ratings_unless_revealed(self):
         self.rate_stage()
@@ -9776,7 +9821,7 @@ class MatrixAiApplyTests(MatrixTestCase):
         self.assertEqual(cm.exception.status, 409)
         self.assertEqual(
             cm.exception.detail,
-            "Der Stapel wurde inzwischen verändert – Rückgängig ist nicht mehr möglich.",
+            "The stack has changed since the proposal — undo is no longer possible.",
         )
         self.assertEqual(self.snapshot(), before)
 
@@ -9925,12 +9970,18 @@ class MatrixAiApiTests(MatrixTestCase):
 
     def test_propose_gating(self):
         with override_settings(**AI_OFF), patch(self.CHAT) as chat:
-            self.assertEqual(self.post("ai-propose", {"level": "same"}).status_code, 503)
+            off = self.post("ai-propose", {"level": "same"})
+        self.assertEqual(off.status_code, 503)
+        self.assertEqual(off.json()["detail"], "AI is not configured.")
         chat.assert_not_called()
         self.assertEqual(self.propose(level="wild").status_code, 400)
         self.assertEqual(self.propose(level=None).status_code, 400)
         self.configure(wordcloud_ai_enabled=False)
-        self.assertEqual(self.propose().status_code, 400)
+        disabled = self.propose()
+        self.assertEqual(disabled.status_code, 400)
+        self.assertEqual(
+            disabled.json()["detail"], "AI features are not enabled for this question."
+        )
         self.configure(wordcloud_ai_enabled=True)
         self.stacked(self.a, self.b)  # with C hidden: 2 visible tops
         MatrixCard.objects.filter(pk=self.c.pk).update(hidden=True)
@@ -10067,3 +10118,194 @@ class MatrixAiApiTests(MatrixTestCase):
             self.assertEqual(response.status_code, 400, body)
             self.broadcast.assert_not_called()
         self.assertFalse(MatrixCard.objects.filter(summary=True).exists())
+
+
+# --- pre-1.0 drift fixes (mind map / matrix / vote mirrors) -----------------
+
+
+class MindmapVotesCountRatersTests(MindmapRatingTestCase):
+    """D1: a mind map's "votes" also count raters (like the matrix) — a seeded
+    tree that was only rated must not show 0."""
+
+    def test_rated_seed_without_contributions_counts_raters(self):
+        from .models import MindmapContribution
+
+        node = MindmapNode.objects.create(
+            run=self.run, question=self.mq, text="Wind", text_key="wind", seeded=True
+        )
+        self.start_rating()
+        t1, t2 = self.join(), self.join()
+        self.assertEqual(self.rate(t1, node.pk, delta=1).status_code, 200)
+        self.assertEqual(self.rate(t2, node.pk, delta=1).status_code, 200)
+        self.assertFalse(MindmapContribution.objects.exists())
+        self.assertEqual(build_payloads(self.room)["presenter"]["votes"], 2)
+        self.set_phase(Run.Phase.FINISHED)
+        self.client.force_login(self.owner)
+        results = self.client.get(
+            f"/api/question-sets/{self.question_set.pk}/results/"
+        ).json()["results"]
+        item = next(q for q in results[0]["questions"] if q["kind"] == "mindmap")
+        self.assertEqual(item["votes"], 2)
+
+
+class RecordingVoteAiTests(LiveTestCase):
+    """D2: a recording vote on an ``ai_evaluate`` free-text question is handed
+    to the background evaluation like a live vote."""
+
+    def test_recording_vote_schedules_evaluation(self):
+        oq = Question.objects.create(
+            question_set=self.question_set, kind=Question.Kind.OPEN_TEXT,
+            text="<p>Hauptstadt?</p>", position=5, ai_evaluate=True,
+        )
+        run = Run.objects.create(question_set=self.question_set, phase=Run.Phase.FINISHED)
+        rec = run.enable_recording()
+        with patch("live.ai_evaluation.schedule") as sched:
+            response = self.client.post(
+                f"/api/live/recording/{rec}/vote/",
+                {"token": self.join(), "question": oq.pk, "text": "Paris"},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 201, response.content)
+        vote = Vote.objects.get(question=oq)
+        sched.assert_called_once_with(vote.pk, self.room.pk)
+
+
+class VoteControlCharTests(LiveTestCase):
+    """D3: control/format characters (NUL above all) never reach Postgres."""
+
+    def _text_question(self, kind, **fields):
+        return Question.objects.create(
+            question_set=self.question_set, kind=kind, text="<p>Q?</p>",
+            position=5, **fields,
+        )
+
+    def test_word_cloud_vote_strips_nul(self):
+        wq = self._text_question(Question.Kind.WORD_CLOUD, allow_multiple=True)
+        self.open_question(wq)
+        token = self.join()
+        response = self.vote(token, text="Wi\x00nd")
+        self.assertEqual(response.status_code, 201, response.content)
+        vote = Vote.objects.get(question=wq)
+        self.assertEqual(vote.text, "Wind")
+        self.assertEqual(vote.text_key, "wind")
+        # The repeat guard sees the cleaned term.
+        self.assertEqual(self.vote(token, text="Wind").status_code, 409)
+
+    def test_free_text_vote_strips_control_and_format_chars(self):
+        oq = self._text_question(Question.Kind.OPEN_TEXT)
+        self.open_question(oq)
+        response = self.vote(self.join(), text="Wi\x00nd\u200b ist gut")
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(Vote.objects.get(question=oq).text, "Wind ist gut")
+
+    def test_non_tab_newline_controls_are_stripped(self):
+        # Only tab/newline/CR (and VT/FF) count as whitespace to keep — the
+        # separator controls U+001C–U+001F and NEL (U+0085) are dropped.
+        from .models import strip_control_chars
+
+        self.assertEqual(
+            strip_control_chars("a\tb\nc\r\x1cd\x1fe\x85f"), "a\tb\nc\rdef"
+        )
+
+    def _retract(self, token, text):
+        return self.client.post(
+            f"/api/live/rooms/{self.room.code}/retract/",
+            {"token": token, "text": text}, content_type="application/json",
+        )
+
+    def test_retract_matches_stripped_term(self):
+        wq = self._text_question(Question.Kind.WORD_CLOUD, allow_multiple=True)
+        self.open_question(wq)
+        token = self.join()
+        self.assertEqual(self.vote(token, text="Wi\u200bnd").status_code, 201)
+        self.assertEqual(self.vote(token, text="Solar").status_code, 201)
+        response = self._retract(token, "Wi\u200bnd")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["deleted"], 1)
+        self.assertEqual(
+            list(Vote.objects.filter(question=wq).values_list("text", flat=True)),
+            ["Solar"],
+        )
+
+    def test_retract_with_nul_does_not_crash(self):
+        wq = self._text_question(Question.Kind.WORD_CLOUD, allow_multiple=True)
+        self.open_question(wq)
+        token = self.join()
+        self.assertEqual(self.vote(token, text="Wind").status_code, 201)
+        response = self._retract(token, "Wi\x00nd")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["deleted"], 1)
+        self.assertEqual(self._retract(token, "\x00").status_code, 400)
+
+    def test_emoji_zwj_sequence_survives(self):
+        oq = self._text_question(Question.Kind.OPEN_TEXT)
+        self.open_question(oq)
+        family = "\U0001F468\u200d\U0001F469\u200d\U0001F467 Familie"
+        response = self.vote(self.join(), text=family)
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(Vote.objects.get(question=oq).text, family)
+
+    def test_bidi_override_is_stripped(self):
+        oq = self._text_question(Question.Kind.OPEN_TEXT)
+        self.open_question(oq)
+        response = self.vote(self.join(), text="\u202eabc")
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(Vote.objects.get(question=oq).text, "abc")
+
+    def test_only_control_chars_is_empty_answer(self):
+        oq = self._text_question(Question.Kind.OPEN_TEXT)
+        self.open_question(oq)
+        self.assertEqual(self.vote(self.join(), text="\x00\x01").status_code, 400)
+        self.assertFalse(Vote.objects.filter(question=oq).exists())
+
+    def test_recording_vote_strips_nul(self):
+        wq = self._text_question(Question.Kind.WORD_CLOUD, allow_multiple=True)
+        run = Run.objects.create(question_set=self.question_set, phase=Run.Phase.FINISHED)
+        rec = run.enable_recording()
+        response = self.client.post(
+            f"/api/live/recording/{rec}/vote/",
+            {"token": self.join(), "question": wq.pk, "text": "Wi\x00nd"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(Vote.objects.get(question=wq).text, "Wind")
+
+
+class MindmapParticipantViewDriftTests(MindmapTestCase):
+    """D5: error bodies carry ``extra`` like every other view; ``mine`` only
+    answers for mind-map questions."""
+
+    def test_add_and_remove_return_full_error_body(self):
+        from .mindmap import MindmapError
+
+        self.open_mindmap()
+        token = self.join()
+        error = MindmapError("Nope.", status=409, conflict=True)
+        with patch("live.mindmap.add_term", side_effect=error):
+            response = self.add(token, "A")
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"detail": "Nope.", "conflict": True})
+        with patch("live.mindmap.remove_term", side_effect=error):
+            response = self.remove(token, 1)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"detail": "Nope.", "conflict": True})
+
+    def test_mine_refuses_non_mindmap_question(self):
+        self.open_mindmap()
+        response = self.mine(self.join(), question=self.question.pk)
+        self.assertEqual(response.status_code, 404)
+
+
+class MatrixCsvCategoryFallbackTests(MatrixTestCase):
+    """D13a: CSV category names fall back to another language like the AI
+    prompt does, instead of showing the colour key."""
+
+    def test_name_only_in_other_language(self):
+        self.configure(matrix_category_mode="named", matrix_categories=[
+            {"key": "blue", "name": {"de": "", "en": "Idea"}},
+            {"key": "red", "name": {"de": "Risiko", "en": "Risk"}},
+        ])
+        self.add(title="Top", category="blue")
+        # Canonical language is "de" (settings): its name is empty here.
+        rows = mxs.csv_rows(self.run, self.xq)
+        self.assertEqual(rows[0]["category"], "Idea")

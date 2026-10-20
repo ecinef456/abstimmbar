@@ -87,14 +87,21 @@ export default function MindmapRanking({
   };
   const { t } = useTranslation();
   const present = size === "present";
+  // Dark theme only in the management UI; the beamer stays light.
+  const muted = `text-slate-500 ${present ? "" : "dark:text-slate-400"}`;
   const shown = limit ? entries.slice(0, limit) : entries;
   if (shown.length === 0)
-    return <p className="text-slate-400">{t("No ratings yet.")}</p>;
+    return (
+      <p data-testid="mindmap-ranking" className={muted}>
+        {t("No ratings yet.")}
+      </p>
+    );
+  const rank = (i: number) => <span className="sr-only">{t("Rank {{n}}", { n: i + 1 })}: </span>;
   const label = (e: RankedEntry) => (
     <>
       {e.text}
       {e.path.length > 0 && (
-        <span className={`ml-2 font-normal text-slate-400 ${present ? "text-base" : "text-xs"}`}>
+        <span className={`ml-2 font-normal ${muted} ${present ? "text-base" : "text-xs"}`}>
           {e.path.join(" › ")}
         </span>
       )}
@@ -102,7 +109,7 @@ export default function MindmapRanking({
   );
   const more =
     limit && entries.length > limit ? (
-      <p className={`text-slate-400 ${present ? "text-base" : "text-xs"}`}>
+      <p className={`${muted} ${present ? "text-base" : "text-xs"}`}>
         {t("More rated terms: {{n}}", { n: entries.length - limit })}
       </p>
     ) : null;
@@ -110,20 +117,28 @@ export default function MindmapRanking({
   if (mode === "points") {
     const total = entries.reduce((sum, e) => sum + scoreValue(e.score), 0);
     return (
-      <div className={present ? "space-y-4" : "space-y-3"}>
-        {shown.map((e, i) => (
-          <ResultBar
-            key={e.id}
-            index={i}
-            letter={String(i + 1)}
-            label={label(e)}
-            count={scoreValue(e.score)}
-            pct={total ? Math.round((scoreValue(e.score) / total) * 100) : 0}
-            color={colorOf(e, i)}
-            size={size}
-            animate={animate}
-          />
-        ))}
+      <div data-testid="mindmap-ranking" className={present ? "space-y-4" : "space-y-3"}>
+        <ol aria-label={t("Ranking")} className={present ? "space-y-4" : "space-y-3"}>
+          {shown.map((e, i) => (
+            <li key={e.id}>
+              <ResultBar
+                index={i}
+                letter={String(i + 1)}
+                label={
+                  <>
+                    {rank(i)}
+                    {label(e)}
+                  </>
+                }
+                count={scoreValue(e.score)}
+                pct={total ? Math.round((scoreValue(e.score) / total) * 100) : 0}
+                color={colorOf(e, i)}
+                size={size}
+                animate={animate}
+              />
+            </li>
+          ))}
+        </ol>
         {more}
       </div>
     );
@@ -138,54 +153,59 @@ export default function MindmapRanking({
   const trackH = present ? 30 : 18;
   const radius = present ? 10 : 6;
   return (
-    <div className={present ? "space-y-4" : "space-y-3"}>
-      {shown.map((e, i) => {
-        const s = e.score as { up: number; down: number; balance: number };
-        const sign = s.balance > 0 ? "+" : s.balance < 0 ? "−" : "±";
-        return (
-          <div key={e.id}>
-            <div className={`mb-1 flex items-center gap-2.5 ${present ? "text-xl" : "text-sm"}`}>
-              <span
-                aria-hidden
-                className={`inline-flex shrink-0 items-center justify-center rounded-md font-bold ${present ? "h-7 w-7 text-sm" : "h-5 w-5 text-[11px]"}`}
-                style={{ background: colorOf(e, i), color: INK }}
-              >
-                {i + 1}
-              </span>
-              <span className="min-w-0 [overflow-wrap:anywhere]">{label(e)}</span>
-              <span
-                className={`ml-auto shrink-0 whitespace-nowrap tabular-nums ${present ? "" : "dark:text-slate-300"}`}
-                aria-label={t("{{up}} plus, {{down}} minus, balance {{balance}}", {
-                  up: s.up,
-                  down: s.down,
-                  balance: s.balance,
-                })}
-              >
-                <span style={{ color: UP_INK }} className="font-semibold">+{s.up}</span>
-                <span className="text-slate-400"> / </span>
-                <span style={{ color: DOWN_INK }} className="font-semibold">−{s.down}</span>
+    <div data-testid="mindmap-ranking" className={present ? "space-y-4" : "space-y-3"}>
+      <ol aria-label={t("Ranking")} className={present ? "space-y-4" : "space-y-3"}>
+        {shown.map((e, i) => {
+          const s = e.score as { up: number; down: number; balance: number };
+          const sign = s.balance > 0 ? "+" : s.balance < 0 ? "−" : "±";
+          return (
+            <li key={e.id}>
+              <div className={`mb-1 flex items-center gap-2.5 ${present ? "text-xl" : "text-sm"}`}>
                 <span
-                  className={`ml-2 inline-block rounded-full px-2 font-bold ${present ? "" : "text-xs"}`}
-                  style={{
-                    background: s.balance > 0 ? UP : s.balance < 0 ? WRONG : NEUTRAL_TILE,
-                    color: INK,
-                  }}
+                  aria-hidden
+                  className={`inline-flex shrink-0 items-center justify-center rounded-md font-bold ${present ? "h-7 w-7 text-sm" : "h-5 w-5 text-[11px]"}`}
+                  style={{ background: colorOf(e, i), color: INK }}
                 >
-                  {sign}
-                  {Math.abs(s.balance)}
+                  {i + 1}
                 </span>
-              </span>
-            </div>
-            <div
-              className={`flex overflow-hidden bg-slate-100 ${present ? "" : "dark:bg-slate-800"}`}
-              style={{ height: trackH, borderRadius: radius }}
-            >
-              <div style={{ width: `${(s.up / max) * 100}%`, background: UP }} />
-              <div style={{ width: `${(s.down / max) * 100}%`, background: DOWN }} />
-            </div>
-          </div>
-        );
-      })}
+                <span className="min-w-0 [overflow-wrap:anywhere]">
+                  {rank(i)}
+                  {label(e)}
+                </span>
+                <span
+                  className={`ml-auto shrink-0 whitespace-nowrap tabular-nums ${present ? "" : "dark:text-slate-300"}`}
+                  aria-label={t("{{up}} plus, {{down}} minus, balance {{balance}}", {
+                    up: s.up,
+                    down: s.down,
+                    balance: s.balance,
+                  })}
+                >
+                  <span style={{ color: UP_INK }} className="font-semibold">+{s.up}</span>
+                  <span className={muted}> / </span>
+                  <span style={{ color: DOWN_INK }} className="font-semibold">−{s.down}</span>
+                  <span
+                    className={`ml-2 inline-block rounded-full px-2 font-bold ${present ? "" : "text-xs"}`}
+                    style={{
+                      background: s.balance > 0 ? UP : s.balance < 0 ? WRONG : NEUTRAL_TILE,
+                      color: INK,
+                    }}
+                  >
+                    {sign}
+                    {Math.abs(s.balance)}
+                  </span>
+                </span>
+              </div>
+              <div
+                className={`flex overflow-hidden bg-slate-100 ${present ? "" : "dark:bg-slate-800"}`}
+                style={{ height: trackH, borderRadius: radius }}
+              >
+                <div style={{ width: `${(s.up / max) * 100}%`, background: UP }} />
+                <div style={{ width: `${(s.down / max) * 100}%`, background: DOWN }} />
+              </div>
+            </li>
+          );
+        })}
+      </ol>
       {more}
     </div>
   );

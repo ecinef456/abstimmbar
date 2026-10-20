@@ -16,10 +16,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderPlus, Languages, Loader2, Merge, MoveRight, Sparkles, X } from "lucide-react";
-import { live } from "../api";
+import { detailText, errorDetail, live } from "../api";
 import type { LiveMindmap, LiveMindmapNode, MindmapAiOp, MindmapAiSettings } from "../api";
 import { AI_MARK } from "./MindMap";
-import { requestDetail } from "./mindmapModeration";
 
 interface Proposal {
   proposal: string;
@@ -136,7 +135,7 @@ export function useMindmapAi({
         selected: res.ops.map((o) => o.index),
       });
     } catch (err) {
-      if (mine === seq.current) setError(requestDetail(err));
+      if (mine === seq.current) setError(errorDetail(err));
     } finally {
       if (mine === seq.current) setBusy(null);
     }
@@ -153,7 +152,7 @@ export function useMindmapAi({
       if (mine !== seq.current) return;
       setProposal((p) => (p ? { ...p, preview: res.preview, active: res.active } : p));
     } catch (err) {
-      if (mine === seq.current) setError(requestDetail(err));
+      if (mine === seq.current) setError(errorDetail(err));
     } finally {
       if (mine === seq.current) setBusy(null);
     }
@@ -311,7 +310,7 @@ export function MindmapAiDrawer({
         )}
         {ai.error && (
           <p className="text-red-700" role="alert">
-            {t(ai.error)}
+            {detailText(ai.error, t)}
           </p>
         )}
         {proposal && (

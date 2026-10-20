@@ -2,6 +2,7 @@
 // Copyright 2026 Universität Osnabrück (virtUOS)
 
 import type { LocalizedText } from "@basicbar/ui";
+import type { TFunction } from "i18next";
 import type { MatrixColor } from "./matrixPalette";
 import type { SetType } from "./setTypes";
 
@@ -701,6 +702,53 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (response.status === 204) return undefined as T;
   return response.json();
+}
+
+/** JSON body of a failed `request()` (it throws the body as the message),
+ *  or null when there is none (network error, bare status code). */
+export function requestBody(err: unknown): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse((err as Error).message);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+    /* not JSON */
+  }
+  return null;
+}
+
+/** `detail` of a failed `request()`, or undefined when the body has none. */
+export function requestDetail(err: unknown): string | undefined {
+  const detail = requestBody(err)?.detail;
+  return typeof detail === "string" ? detail : undefined;
+}
+
+/** `detail` of a failed request, else the error message (untranslated). */
+export function errorDetail(err: unknown): string {
+  return requestDetail(err) ?? String((err as Error)?.message ?? err);
+}
+
+/** `detail` or else the first field error of a failed request, else the
+ *  error message (untranslated). */
+export function requestError(err: unknown): string {
+  const body = requestBody(err);
+  if (!body) return String((err as Error)?.message ?? err);
+  const value = body.detail ?? Object.values(body)[0];
+  return String(Array.isArray(value) ? value[0] : value);
+}
+
+const AI_ERROR_PREFIX = "AI error: ";
+
+/** A server `detail` in the UI language: details are English source strings
+ *  (translation keys); "AI error: <reason>" keeps the provider's reason. */
+export function detailText(detail: string, t: TFunction): string {
+  if (detail.startsWith(AI_ERROR_PREFIX))
+    return t("AI error: {{reason}}", { reason: detail.slice(AI_ERROR_PREFIX.length) });
+  return t(detail);
+}
+
+/** Translated message of a failed (AI) request. */
+export function aiErrorText(err: unknown, t: TFunction): string {
+  return detailText(errorDetail(err), t);
 }
 
 export const api = {

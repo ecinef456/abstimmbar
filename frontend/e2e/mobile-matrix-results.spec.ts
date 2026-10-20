@@ -73,6 +73,11 @@ for (const scheme of ['light', 'dark'] as const) {
         // The list below carries the details.
         const list = page.getByTestId('matrix-list');
         await expect(list.locator(`[data-card-id="${a}"]`)).toContainText('Beantwortet Fragen rund um die Uhr');
+        // Reading order like the zone pickers: q2, q1, q3, q4, then the edges.
+        await expect(list.locator('h4')).toHaveText([
+          'nicht nützlich & modern', 'nützlich & modern', 'nicht nützlich & altbacken',
+          'zwischen nützlich & modern und nützlich & altbacken',
+        ]);
 
         const { violations } = await new AxeBuilder({ page })
           .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])

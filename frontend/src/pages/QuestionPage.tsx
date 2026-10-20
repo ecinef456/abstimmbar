@@ -7,7 +7,11 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Check, ChevronLeft, ChevronRight, Eye, FileQuestion, Files, FolderInput, ImageOff, ImagePlus, Link2, Pencil, Shuffle, TriangleAlert, X } from "lucide-react";
 import {
   API_BASE_URL,
+  aiErrorText,
   api,
+  requestBody,
+  requestDetail,
+  requestError,
   type AnswerOption,
   type MatrixCategory,
   type MatrixCategoryMode,
@@ -41,16 +45,8 @@ import HomeCrumb from "../components/HomeCrumb";
 import MatrixSettings, { matrixProblem, type MatrixSettingsValue, type MatrixUpdate } from "../components/MatrixSettings";
 import SortableList from "../components/SortableList";
 import TranslatableField from "../components/TranslatableField";
-import { Button, EmptyState, Field, InfoHint, MenuItem, MoreMenu, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
+import { Button, ClampedNumberInput, EmptyState, Field, InfoHint, MenuItem, MoreMenu, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
 import { KIND_LABEL, REVEAL_LABEL } from "./SetPage";
-
-function aiErrorText(err: unknown): string {
-  try {
-    return JSON.parse((err as Error).message).detail ?? String(err);
-  } catch {
-    return String(err);
-  }
-}
 
 /** Which languages of a translatable field look outdated, computed live in
  * the editor (#91) so the amber marker appears the moment you edit one
@@ -700,16 +696,11 @@ export default function QuestionPage() {
       if (!stay) navigate(`/sets/${setId}`);
       return true;
     } catch (err) {
-      let modeError = "";
-      try {
-        const body = JSON.parse((err as Error).message);
-        const msg = body?.mindmap_rating_mode ?? body?.matrix_rating_mode;
-        modeError = Array.isArray(msg) ? String(msg[0] ?? "") : typeof msg === "string" ? msg : "";
-      } catch {
-        /* not a JSON body */
-      }
+      const body = requestBody(err);
+      const msg = body?.mindmap_rating_mode ?? body?.matrix_rating_mode;
+      const modeError = Array.isArray(msg) ? String(msg[0] ?? "") : typeof msg === "string" ? msg : "";
       setRatingModeError(modeError ? t(modeError) : "");
-      setError(modeError ? t(modeError) : String(err));
+      setError(modeError ? t(modeError) : t(requestError(err)));
       return false;
     } finally {
       setSaving(false);
@@ -767,11 +758,7 @@ export default function QuestionPage() {
       // the result is visible.
       navigate(`/sets/${moveTarget}`);
     } catch (err) {
-      try {
-        setMoveError(JSON.parse((err as Error).message).detail ?? String(err));
-      } catch {
-        setMoveError(String(err));
-      }
+      setMoveError(t(requestDetail(err) ?? String(err)));
     }
   }
 
@@ -794,7 +781,7 @@ export default function QuestionPage() {
       setAiDistractors(distractors);
       if (distractors.length === 0) setAiDistractorError(t("No suggestions received."));
     } catch (err) {
-      setAiDistractorError(aiErrorText(err));
+      setAiDistractorError(aiErrorText(err, t));
     } finally {
       setAiBusy("");
     }
@@ -813,7 +800,7 @@ export default function QuestionPage() {
       setAiVariants(variants);
       if (variants.length === 0) setAiError(t("No suggestions received."));
     } catch (err) {
-      setAiError(aiErrorText(err));
+      setAiError(aiErrorText(err, t));
     } finally {
       setAiBusy("");
     }
@@ -1608,15 +1595,12 @@ export default function QuestionPage() {
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 {t("Depth")}
-                <input
-                  type="number"
+                <ClampedNumberInput
                   min={1}
                   max={8}
-                  value={String(mindmapDepth)}
-                  onChange={(event) =>
-                    setMindmapDepth(Math.min(8, Math.max(1, Number(event.target.value) || 1)))
-                  }
-                  className="w-16 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
+                  value={mindmapDepth}
+                  onChange={setMindmapDepth}
+                  className="w-16"
                 />
                 <InfoHint
                   text={t(
@@ -1626,17 +1610,11 @@ export default function QuestionPage() {
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 {t("Terms per person")}
-                <input
-                  type="number"
+                <ClampedNumberInput
                   min={0}
                   max={300}
-                  value={String(mindmapMaxPerPerson)}
-                  onChange={(event) =>
-                    setMindmapMaxPerPerson(
-                      Math.min(300, Math.max(0, Number(event.target.value) || 0)),
-                    )
-                  }
-                  className="w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
+                  value={mindmapMaxPerPerson}
+                  onChange={setMindmapMaxPerPerson}
                 />
                 <span className="text-slate-400">{t("(0 = no limit)")}</span>
               </label>
@@ -1709,17 +1687,12 @@ export default function QuestionPage() {
                 <>
                   <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                     {mindmapRatingMode === "points" ? t("Points per person") : t("Ratings per person")}
-                    <input
-                      type="number"
+                    <ClampedNumberInput
                       min={1}
                       max={50}
-                      value={String(mindmapRatingBudget)}
-                      onChange={(event) =>
-                        setMindmapRatingBudget(
-                          Math.min(50, Math.max(1, Number(event.target.value) || 1)),
-                        )
-                      }
-                      className="w-16 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
+                      value={mindmapRatingBudget}
+                      onChange={setMindmapRatingBudget}
+                      className="w-16"
                     />
                     <InfoHint
                       text={
@@ -1825,14 +1798,10 @@ export default function QuestionPage() {
             </p>
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               {t("Maximum contributions per person")}
-              <input
-                type="number"
+              <ClampedNumberInput
                 min={0}
-                value={String(wordcloudMaxAnswers)}
-                onChange={(event) =>
-                  setWordcloudMaxAnswers(Math.max(0, Number(event.target.value) || 0))
-                }
-                className="w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none"
+                value={wordcloudMaxAnswers}
+                onChange={setWordcloudMaxAnswers}
               />
               <span className="text-slate-400">{t("(0 = no limit, 1 = a single answer)")}</span>
             </label>

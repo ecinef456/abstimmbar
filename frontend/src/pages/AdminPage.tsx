@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronUp, FileText, Lock, Radio, Trash2 } from "lucide-react";
-import { api, type AdminStats, type LtiPlatform, type LtiToolInfo, type ManagePage, type ManageSite } from "../api";
+import { api, requestError, type AdminStats, type LtiPlatform, type LtiToolInfo, type ManagePage, type ManageSite } from "../api";
 import { useApp } from "../App";
 import { localizedText, type LocalizedText, TranslationControlsSlot } from "@basicbar/ui";
 import Donut, { type DonutSegment } from "../components/Donut";
@@ -405,6 +405,7 @@ function AppearanceSettings() {
   const [betaEnabled, setBetaEnabled] = useState(false);
   const [betaNotice, setBetaNotice] = useState<LocalizedText>("");
   const [saved, setSaved] = useState(false);
+  const [logoError, setLogoError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -426,7 +427,12 @@ function AppearanceSettings() {
   }
 
   async function upload(file: File) {
-    setSite(await api.uploadLogo(file));
+    setLogoError("");
+    try {
+      setSite(await api.uploadLogo(file));
+    } catch (err) {
+      setLogoError(t(requestError(err)));
+    }
   }
 
   async function removeLogo() {
@@ -474,6 +480,11 @@ function AppearanceSettings() {
             </Button>
           )}
         </div>
+        {logoError && (
+          <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+            {logoError}
+          </p>
+        )}
       </Field>
 
       <div className="mt-6 max-w-2xl">
@@ -959,13 +970,7 @@ function LtiPlatformForm({
       else await api.createLtiPlatform(data);
       onSaved();
     } catch (err) {
-      try {
-        const parsed = JSON.parse((err as Error).message);
-        const value = parsed.detail ?? Object.values(parsed)[0];
-        setError(Array.isArray(value) ? value[0] : String(value));
-      } catch {
-        setError(String(err));
-      }
+      setError(t(requestError(err)));
     }
   }
 
@@ -1090,13 +1095,7 @@ function PageForm({
       else await api.createPage(data);
       onSaved();
     } catch (err) {
-      try {
-        const parsed = JSON.parse((err as Error).message);
-        const value = parsed.detail ?? Object.values(parsed)[0];
-        setError(Array.isArray(value) ? value[0] : String(value));
-      } catch {
-        setError(String(err));
-      }
+      setError(t(requestError(err)));
     }
   }
 

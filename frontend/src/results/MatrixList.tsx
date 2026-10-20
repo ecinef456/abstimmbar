@@ -3,13 +3,14 @@
 
 /** Compact list below the results board: the cards grouped by field (zone
  *  named like the participant page, x part first) with category, title,
- *  description, stack info and the hidden flag. Also the text alternative of
+ *  description, stack info and the hidden flag. Fields in reading order
+ *  (q2, q1, q3, q4, edges) like the zone pickers. Also the text alternative of
  *  the board. */
 import { useTranslation } from "react-i18next";
 import type { MatrixBoard, MatrixSettingsPayload } from "../api";
 import { categoryLabel } from "../matrixPalette";
 import { MatrixSummaryMark, matrixStacks, matrixZoneName, stackCount } from "./Matrix";
-import { ZONES } from "./matrixGeometry";
+import { READING_ZONES } from "./matrixGeometry";
 
 export default function MatrixList({
   board,
@@ -22,7 +23,7 @@ export default function MatrixList({
   const lang = i18n.language.startsWith("de") ? "de" : "en";
   const stacks = matrixStacks(board.cards);
   const byId = new Map(board.cards.map((c) => [c.id, c]));
-  const zones = ZONES.filter((z) => stacks.some((s) => s.card.zone === z));
+  const zones = READING_ZONES.filter((z) => stacks.some((s) => s.card.zone === z));
   if (!zones.length) {
     return <p className="text-sm text-slate-500 dark:text-slate-400">{t("No cards yet.")}</p>;
   }

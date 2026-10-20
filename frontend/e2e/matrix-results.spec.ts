@@ -212,6 +212,10 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(list.getByRole('heading', { name: 'nützlich & modern', exact: true })).toBeVisible();
       await expect(list.getByRole('heading', { name: 'nicht nützlich & altbacken', exact: true })).toBeVisible();
       await expect(list.getByRole('heading', { name: 'nicht nützlich & modern', exact: true })).toBeVisible();
+      // Reading order like the zone pickers: q2, q1, q3, q4, then the edges.
+      await expect(list.locator('h4')).toHaveText([
+        'nicht nützlich & modern', 'nützlich & modern', 'nicht nützlich & altbacken',
+      ]);
       await expect(list.locator(`[data-card-id="${chatbot}"]`)).toContainText('Beantwortet Fragen');
       await expect(list.getByText('gestapelt auf „Chatbot“')).toBeVisible();
       await expect(list.locator(`[data-card-id="${secret}"]`)).toContainText('(ausgeblendet)');

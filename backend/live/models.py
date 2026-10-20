@@ -8,11 +8,42 @@ participant token — no user account, no IP, no fingerprint. The token's
 sole purpose is preventing double votes within a run.
 """
 import secrets
+import unicodedata
 from typing import ClassVar
 
 from django.db import models
 
 from common.models import TimeStampedModel
+
+# Whitespace controls kept in vote text (free-text answers may span lines);
+# every other Cc character (incl. U+001C–U+001F and NEL U+0085) is dropped.
+VOTE_KEPT_CONTROL_CHARS = frozenset("\t\n\r\v\f")
+# Invisible / bidi format characters (Cf) stripped from vote text: zero width
+# space, LRM/RLM, the bidi embeddings/overrides/isolates, word joiner and
+# invisible operators, BOM. Deliberately NOT all of Cf: U+200C/U+200D
+# (ZWNJ/ZWJ) stay, because emoji ZWJ sequences (e.g. family emojis) and some
+# scripts (Persian, Indic) need them.
+VOTE_STRIPPED_FORMAT_CHARS = frozenset(
+    [0x200B, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2060, 0x2065),
+     *range(0x2066, 0x206A), 0xFEFF]
+)
+
+
+def strip_control_chars(text):
+    """``text`` without control characters (Cc — NUL must never reach
+    Postgres) and without the invisible/bidi format characters in
+    ``VOTE_STRIPPED_FORMAT_CHARS``. Tab/newline/CR/VT/FF
+    (``VOTE_KEPT_CONTROL_CHARS``, line breaks of free-text answers) are kept;
+    callers collapse/strip whitespace as before.
+    Deliberately no NFKC (unlike ``rooms.mindmap.normalize_text``): it would
+    change ``Vote.text_key`` for existing votes."""
+    return "".join(
+        ch for ch in text
+        if ch in VOTE_KEPT_CONTROL_CHARS or (
+            unicodedata.category(ch) != "Cc"
+            and ord(ch) not in VOTE_STRIPPED_FORMAT_CHARS
+        )
+    )
 
 
 def generate_token_key():
@@ -161,6 +192,7 @@ class Vote(models.Model):
     # ``allow_multiple`` deliberately store several votes per token (#14).
 
     def save(self, *args, **kwargs):
+        self.text = strip_control_chars(self.text)
         if self.question.kind == "word_cloud":
             # Word clouds: single short term, whitespace collapsed.
             self.text = " ".join(self.text.split())[:60]

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { ChartColumnDecreasing, Download, Trash2 } from "lucide-react";
 import {
+  aiErrorText,
   api,
   results,
   type FreeTextEvaluation,
@@ -40,14 +41,6 @@ import {
   termColor,
 } from "../results/palette";
 
-function aiErrorText(err: unknown): string {
-  try {
-    return JSON.parse((err as Error).message).detail ?? String(err);
-  } catch {
-    return String(err);
-  }
-}
-
 /** Word-cloud result with an optional AI cleanup (merge spelling variants and
  * synonyms, group into thematic clusters). Non-destructive: the raw votes are
  * untouched, and the teacher can flip back to the original at any time. */
@@ -56,11 +49,14 @@ function WordCloudResult({
   questionId,
   words,
   aiEnabled,
+  aiOff = false,
 }: {
   runId: number;
   questionId: number;
   words: { text: string; count: number }[];
   aiEnabled: boolean;
+  /** AI is on globally but switched off for this question: show a hint. */
+  aiOff?: boolean;
 }) {
   const { t } = useTranslation();
   const [optimized, setOptimized] = useState<WordCloudOptimization | null>(null);
@@ -76,7 +72,7 @@ function WordCloudResult({
       setOptimized(data);
       setShowOptimized(true);
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -128,6 +124,11 @@ function WordCloudResult({
           ))}
         </div>
       )}
+      {aiOff && words.length > 0 && (
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          {t("AI is turned off for this question.")}
+        </p>
+      )}
       {aiEnabled && words.length > 0 && (
         <div className="mt-3">
           <AiAssistPanel title={t("Optimize word cloud")}>
@@ -175,12 +176,15 @@ function FreeTextResult({
   questionId,
   words,
   aiEnabled,
+  aiOff = false,
   modelSolution,
 }: {
   runId: number;
   questionId: number;
   words: { text: string; count: number }[];
   aiEnabled: boolean;
+  /** AI is on globally but switched off for this question: show a hint. */
+  aiOff?: boolean;
   /** The question's stored Musterlösung (model_solution), used to prefill
    *  the reference input below — never overwrites a teacher's own edit. */
   modelSolution: string;
@@ -209,7 +213,7 @@ function FreeTextResult({
       setEvaluation(data);
       setShowEvaluation(true);
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -282,6 +286,11 @@ function FreeTextResult({
           )}
         </div>
       )}
+      {aiOff && words.length > 0 && (
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          {t("AI is turned off for this question.")}
+        </p>
+      )}
       {aiEnabled && words.length > 0 && (
         <div className="mt-3">
           <AiAssistPanel title={t("Evaluate free text")}>
@@ -334,7 +343,7 @@ function RunReport({ runId, aiEnabled }: { runId: number; aiEnabled: boolean }) 
       const data = await results.summarize(runId);
       setReport(data.report);
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -399,6 +408,10 @@ export default function ResultsPage() {
 
   const modelSolutionByQuestion = new Map(
     questions.map((q) => [q.id, q.model_solution]),
+  );
+  // The question's own AI switch (the backend rejects AI actions without it).
+  const aiSwitchByQuestion = new Map(
+    questions.map((q) => [q.id, q.wordcloud_ai_enabled]),
   );
 
   // Runs come newest-first; the newest is the default selection.
@@ -683,7 +696,8 @@ export default function ResultsPage() {
                               runId={run.run}
                               questionId={question.id}
                               words={question.words}
-                              aiEnabled={aiEnabled}
+                              aiEnabled={aiEnabled && !!aiSwitchByQuestion.get(question.id)}
+                              aiOff={aiEnabled && !aiSwitchByQuestion.get(question.id)}
                             />
                           )}
                           {question.words && question.kind === "open_text" && (
@@ -691,7 +705,8 @@ export default function ResultsPage() {
                               runId={run.run}
                               questionId={question.id}
                               words={question.words}
-                              aiEnabled={aiEnabled}
+                              aiEnabled={aiEnabled && !!aiSwitchByQuestion.get(question.id)}
+                              aiOff={aiEnabled && !aiSwitchByQuestion.get(question.id)}
                               modelSolution={modelSolutionByQuestion.get(question.id) ?? ""}
                             />
                           )}

@@ -61,6 +61,7 @@ from .models import (
     SelfCheckAttempt,
     Vote,
     WordCloudModeration,
+    strip_control_chars,
 )
 from .results import (
     likert_summary,
@@ -439,7 +440,7 @@ def vote(request, code):
         return Response({"status": "ok"}, status=status.HTTP_201_CREATED)
 
     if question.kind in Question.TEXT_KINDS:
-        text = str(request.data.get("text", "")).strip()
+        text = strip_control_chars(str(request.data.get("text", ""))).strip()
         if not text:
             return Response({"detail": "Empty answer."}, status=400)
         option_ids = []
@@ -451,7 +452,7 @@ def vote(request, code):
                 run=run, question=question, token=token, text_key=key
             ).exists():
                 return Response(
-                    {"detail": "Diesen Begriff haben Sie schon genannt."},
+                    {"detail": "You have already submitted this term."},
                     status=status.HTTP_409_CONFLICT,
                 )
     else:
@@ -516,7 +517,9 @@ def retract(request, code):
     question = run.active_question
     if question is None:
         return Response({"detail": "Voting is closed."}, status=status.HTTP_409_CONFLICT)
-    raw = str(request.data.get("text", "")).strip()
+    # Same cleaning as the vote path, so a stored (stripped) term matches the
+    # raw chip text and a NUL never reaches Postgres.
+    raw = strip_control_chars(str(request.data.get("text", ""))).strip()
     key = " ".join(raw.split())[:60].casefold()[:60]
     if not key:
         return Response({"detail": "Empty answer."}, status=400)
@@ -777,7 +780,7 @@ def mindmap_add(request, code):
             request.data.get("description", ""),
         )
     except mindmap.MindmapError as error:
-        return Response({"detail": error.detail}, status=error.status)
+        return Response(error.body(), status=error.status)
     broadcast(room, debounce=mindmap.BROADCAST_DEBOUNCE)
     return Response(
         {
@@ -800,7 +803,7 @@ def mindmap_remove(request, code):
     try:
         deleted = mindmap.remove_term(run, question, token, request.data.get("node"))
     except mindmap.MindmapError as error:
-        return Response({"detail": error.detail}, status=error.status)
+        return Response(error.body(), status=error.status)
     broadcast(room, debounce=mindmap.BROADCAST_DEBOUNCE)
     return Response(
         {
@@ -825,7 +828,8 @@ def mindmap_mine(request, code):
     if run is None:
         return Response({"nodes": []})
     question = Question.objects.filter(
-        question_set=run.question_set, pk=mindmap._parse_id(request.data.get("question"))
+        question_set=run.question_set, kind=Question.Kind.MINDMAP,
+        pk=mindmap._parse_id(request.data.get("question")),
     ).first()
     if question is None:
         return Response({"detail": "Unknown question."}, status=404)
@@ -1158,10 +1162,10 @@ def matrix_ai_propose(request, run_id, question_id):
     if not isinstance(cross_field, bool):
         return Response({"detail": "cross_field must be true or false."}, status=400)
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     if not question.wordcloud_ai_enabled:
         return Response(
-            {"detail": "KI-Funktionen sind für diese Frage nicht aktiviert."}, status=400
+            {"detail": "AI features are not enabled for this question."}, status=400
         )
     if matrix.is_rating(run, question):
         return Response({"detail": matrix.STACKS_LOCKED}, status=409)
@@ -1171,7 +1175,7 @@ def matrix_ai_propose(request, run_id, question_id):
     try:
         reply = ai.chat_json(system, user)
     except ai.AIError as exc:
-        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+        return Response({"detail": f"AI error: {exc}"}, status=502)
     if cross_field and isinstance(reply, dict):
         # Hints are not asked for (such cards are grouped instead): neither
         # shown nor counted as dropped.
@@ -1351,7 +1355,7 @@ def _parse_answer(question, data):
     options). Raises _AnswerError(detail) on invalid input. Shared shape with
     the live vote view."""
     if question.kind in Question.TEXT_KINDS:
-        text = str(data.get("text", "")).strip()
+        text = strip_control_chars(str(data.get("text", ""))).strip()
         if not text:
             raise _AnswerError("Empty answer.")
         return text, [], []
@@ -1534,7 +1538,7 @@ def recording_vote(request, token):
             source=Vote.Source.RECORDING, text_key=key,
         ).exists():
             return Response(
-                {"detail": "Diesen Begriff haben Sie schon genannt."},
+                {"detail": "You have already submitted this term."},
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -1546,6 +1550,13 @@ def recording_vote(request, token):
         if option_ids:
             vote_obj.options.set(options)
 
+    # Same background AI hand-off as the live vote view: evaluate opted-in
+    # free-text answers (else they stay "pending" forever), and let a shown
+    # live AI word-cloud view recompute (no-op unless one is active).
+    if question.kind == Question.Kind.OPEN_TEXT and question.ai_evaluate:
+        ai_evaluation.schedule(vote_obj.pk, room.pk)
+    if question.kind in Question.TEXT_KINDS:
+        ai_wordcloud_live.schedule(run.pk, question.pk, room.pk)
     payload = {"status": "ok", **_question_results(run, question)}
     feedback = _self_paced_feedback(run, question, set(option_ids))
     if feedback is not None:
@@ -2474,10 +2485,10 @@ def mindmap_ai_optimize(request, run_id, question_id):
     except _BadField as error:
         return Response({"detail": str(error)}, status=400)
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     if not question.wordcloud_ai_enabled:
         return Response(
-            {"detail": "KI-Funktionen sind für diese Frage nicht aktiviert."}, status=400
+            {"detail": "AI features are not enabled for this question."}, status=400
         )
     changed = [f for f, v in updates.items() if v != getattr(question, f)]
     for field in changed:
@@ -2498,7 +2509,7 @@ def mindmap_ai_optimize(request, run_id, question_id):
     try:
         reply = ai.chat_json(system, user)
     except ai.AIError as exc:
-        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+        return Response({"detail": f"AI error: {exc}"}, status=502)
     ops = ai_mindmap.parse_ops(reply)
     malformed = ai_mindmap.raw_count(reply) - len(ops)
     result = mindmap.simulate_ops(run, question, ops, options)
@@ -2595,7 +2606,7 @@ def optimize_wordcloud(request, run_id, question_id):
     and synonyms, group into thematic clusters. Non-destructive — the raw
     votes are untouched; counts are recomputed server-side."""
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
     if not _require_owner(request.user, run.question_set.room):
         raise Http404
@@ -2603,7 +2614,11 @@ def optimize_wordcloud(request, run_id, question_id):
         Question, pk=question_id, question_set=run.question_set
     )
     if question.kind != Question.Kind.WORD_CLOUD:
-        return Response({"detail": "Nur für Wortwolken verfügbar."}, status=400)
+        return Response({"detail": "Only available for word clouds."}, status=400)
+    if not question.wordcloud_ai_enabled:
+        return Response(
+            {"detail": "AI features are not enabled for this question."}, status=400
+        )
     words = words_with_counts(run, question, limit=200)
     if not words:
         return Response({"clusters": [], "merged": []})
@@ -2615,7 +2630,7 @@ def optimize_wordcloud(request, run_id, question_id):
             ai_wordcloud.build_optimize_prompt(words),
         )
     except ai.AIError as exc:
-        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+        return Response({"detail": f"AI error: {exc}"}, status=502)
     return Response(ai_wordcloud.apply_optimization(words, data))
 
 
@@ -2628,7 +2643,7 @@ def freetext_summary(request, run_id, question_id):
     (``wordcloud_merge_concepts``, ``wordcloud_grouping``) and the run's
     moderation overlay. Non-destructive and not cached server-side."""
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
     if not _require_owner(request.user, run.question_set.room):
         raise Http404
@@ -2636,10 +2651,10 @@ def freetext_summary(request, run_id, question_id):
         Question, pk=question_id, question_set=run.question_set
     )
     if question.kind != Question.Kind.OPEN_TEXT:
-        return Response({"detail": "Nur für Freitext-Fragen verfügbar."}, status=400)
+        return Response({"detail": "Only available for free-text questions."}, status=400)
     if not question.wordcloud_ai_enabled:
         return Response(
-            {"detail": "KI-Zusammenfassung ist für diese Frage nicht aktiviert."},
+            {"detail": "AI summary is not enabled for this question."},
             status=400,
         )
     words = words_with_counts(run, question, limit=ai_freetext_summary.INPUT_MAX)
@@ -2654,10 +2669,11 @@ def freetext_summary(request, run_id, question_id):
             chat_json=ai.chat_json,
         )
     except ai.AIError as exc:
-        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+        return Response({"detail": f"AI error: {exc}"}, status=502)
     return Response({"merged": result["merged"], "clusters": result["clusters"]})
 
 
+# NB: the translation key "Instruction too long (max. 1000 characters)." (de/translation.json) must follow if this changes.
 WORDCLOUD_GROUPING_MAX = 1000
 # Body keys of the ai-settings endpoint; the Question field is wordcloud_<key>.
 MERGE_FLAG_KEYS = ("merge_variants", "merge_synonyms", "merge_concepts")
@@ -2705,7 +2721,7 @@ def wordcloud_ai_settings(request, run_id, question_id):
             and grouping != question.wordcloud_grouping
         ):
             return Response(
-                {"detail": f"Anweisung zu lang (max. {WORDCLOUD_GROUPING_MAX} Zeichen)."},
+                {"detail": f"Instruction too long (max. {WORDCLOUD_GROUPING_MAX} characters)."},
                 status=400,
             )
     merge_updates = {}
@@ -2716,7 +2732,7 @@ def wordcloud_ai_settings(request, run_id, question_id):
                 return Response({"detail": f"{key} must be a boolean."}, status=400)
             merge_updates[key] = value
     if enabled and not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=409)
+        return Response({"detail": "AI is not configured."}, status=409)
 
     fields = []
     settings_changed = False
@@ -2780,11 +2796,11 @@ def wordcloud_ai(request, run_id):
         return Response({"status": "ok", "active": False})
     if question.kind not in Question.TEXT_KINDS or not question.wordcloud_ai_enabled:
         return Response(
-            {"detail": "KI-Aufräumen ist für diese Frage nicht aktiviert."},
+            {"detail": "AI clean-up is not enabled for this question."},
             status=400,
         )
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     ai_wordcloud_live.set_active(run.pk, question.pk, room.pk, True)
     return Response({"status": "ok", "active": True})
 
@@ -2797,7 +2813,7 @@ def evaluate_freetext(request, run_id, question_id):
     recomputed server-side. An optional ``reference`` (expected answer or
     criterion) sharpens the judgement."""
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
     if not _require_owner(request.user, run.question_set.room):
         raise Http404
@@ -2805,7 +2821,11 @@ def evaluate_freetext(request, run_id, question_id):
         Question, pk=question_id, question_set=run.question_set
     )
     if question.kind != Question.Kind.OPEN_TEXT:
-        return Response({"detail": "Nur für Freitext-Fragen verfügbar."}, status=400)
+        return Response({"detail": "Only available for free-text questions."}, status=400)
+    if not question.wordcloud_ai_enabled:
+        return Response(
+            {"detail": "AI features are not enabled for this question."}, status=400
+        )
     categories = question.evaluation_categories
     answers = words_with_counts(run, question, limit=200)
     if not answers:
@@ -2827,7 +2847,7 @@ def evaluate_freetext(request, run_id, question_id):
             ),
         )
     except ai.AIError as exc:
-        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+        return Response({"detail": f"AI error: {exc}"}, status=502)
     result = ai_freetext.apply_evaluation(answers, data, categories)
     result["chart"] = question.evaluation_chart
     return Response(result)
@@ -2839,13 +2859,13 @@ def run_summary(request, run_id):
     """Optional AI short report of one run: a compact German Markdown
     summary of the (anonymous, already-aggregated) results. Display-only."""
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
     if not _require_owner(request.user, run.question_set.room):
         raise Http404
     results = run_results(run)
     if not results["votes_total"]:
-        return Response({"detail": "Noch keine Antworten für einen Bericht."}, status=400)
+        return Response({"detail": "No answers yet for a report."}, status=400)
     try:
         data = ai.chat_json(
             ai_report.report_system(),
@@ -2857,10 +2877,10 @@ def run_summary(request, run_id):
             ),
         )
     except ai.AIError as exc:
-        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+        return Response({"detail": f"AI error: {exc}"}, status=502)
     report = str(data.get("report", "")).strip()[: ai_report.REPORT_MAX]
     if not report:
-        return Response({"detail": "Kein Bericht erhalten."}, status=502)
+        return Response({"detail": "No report received."}, status=502)
     # Render the LLM's Markdown to sanitized HTML so the client shows it via
     # RichText like all other rich content (editor-unify #49).
     return Response({"report": render_markdown(report)})

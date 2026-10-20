@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Sparkles, Undo2, X } from "lucide-react";
-import { live } from "../api";
+import { detailText, errorDetail, live, requestBody } from "../api";
 import type {
   MatrixAiEdit,
   MatrixAiLevel,
@@ -32,7 +32,6 @@ import type {
 import { ToggleSwitch } from "../components/ui";
 import { AI_MARK } from "./MindMap";
 import { matrixStacks } from "./Matrix";
-import { requestBody, requestDetail } from "./mindmapModeration";
 
 const TITLE_MAX = 60;
 /** Drawer width (rem); the board fits beside it (MatrixPanel). */
@@ -154,7 +153,7 @@ export function useMatrixAi({
         edits,
       });
     } catch (err) {
-      if (mine === seq.current) setError(requestDetail(err));
+      if (mine === seq.current) setError(errorDetail(err));
     } finally {
       if (mine === seq.current) setBusy(null);
     }
@@ -212,7 +211,7 @@ export function useMatrixAi({
       setProposal(null);
       setHighlight(null);
     } catch (err) {
-      if (mine === seq.current) setError(requestDetail(err));
+      if (mine === seq.current) setError(errorDetail(err));
     } finally {
       if (mine === seq.current) setBusy(null);
     }
@@ -231,7 +230,7 @@ export function useMatrixAi({
       notify(t("The grouping was undone."));
     } catch (err) {
       if (mine !== seq.current) return;
-      setError(requestDetail(err));
+      setError(errorDetail(err));
       // The server refused (stack changed, expired): this step is gone for
       // good — only a network error leaves "Undo" to try again.
       if (requestBody(err)) setUndo(null);
@@ -471,7 +470,7 @@ export function MatrixAiDrawer({
         )}
         {ai.error && (
           <p className="text-red-700" role="alert">
-            {t(ai.error)}
+            {detailText(ai.error, t)}
           </p>
         )}
         {proposal && (

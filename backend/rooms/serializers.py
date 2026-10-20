@@ -21,10 +21,13 @@ from common.serializers import TranslationSyncMixin
 from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Room, Section, UploadedImage
 from .naming import generate_default_titles
+from .question_fields import clean_evaluation_categories
 from .sanitize import clean_html, clean_media_url
 from .transfer import sync_after_question
 
 CONTENT_DEFAULT_LANGUAGE = settings.MODELTRANSLATION_DEFAULT_LANGUAGE
+# Mind map and matrix share the rating-mode lock and its message.
+RATING_MODE_LOCKED = "The rating mode cannot be changed while a running session is rating."
 
 # Kinds whose editor requires answer options (excludes likert's preset scale
 # and the text kinds). Distinct from models.CHOICE_KINDS on purpose.
@@ -462,17 +465,7 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
         return value
 
     def validate_evaluation_categories(self, value):
-        # 2–5 trimmed, unique, non-empty labels; else the default scale.
-        from .models import default_verdicts
-
-        cleaned, seen = [], set()
-        for raw in value or []:
-            label = str(raw).strip()[:40]
-            key = label.casefold()
-            if label and key not in seen:
-                seen.add(key)
-                cleaned.append(label)
-        return cleaned if 2 <= len(cleaned) <= 5 else default_verdicts()
+        return clean_evaluation_categories(value)
 
     def validate_question_set(self, question_set):
         user = self.context["request"].user
@@ -519,23 +512,27 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                 {"options": "Text questions have no answer options."}
             )
         # Mindmap rating phase: switching the mode (points ↔ plus/minus/off)
-        # would reinterpret ratings already given in a running session.
+        # would reinterpret ratings already given in a running session, or
+        # switch participant devices mid-rating — locked while a running
+        # session is in the rating stage or already has ratings.
         if (
             self.instance is not None
             and "mindmap_rating_mode" in attrs
             and attrs["mindmap_rating_mode"] != self.instance.mindmap_rating_mode
         ):
-            from live.models import MindmapRating, Run
+            from live.models import MindmapPhase, MindmapRating, Run
 
-            if MindmapRating.objects.filter(node__question=self.instance).exclude(
-                node__run__phase=Run.Phase.FINISHED
-            ).exists():
-                raise serializers.ValidationError({
-                    "mindmap_rating_mode": (
-                        "The rating mode cannot be changed while a running "
-                        "session already has ratings."
-                    )
-                })
+            if (
+                MindmapRating.objects.filter(node__question=self.instance)
+                .exclude(node__run__phase=Run.Phase.FINISHED)
+                .exists()
+                or MindmapPhase.objects.filter(
+                    question=self.instance, stage=MindmapPhase.Stage.RATE
+                ).exclude(run__phase=Run.Phase.FINISHED).exists()
+            ):
+                raise serializers.ValidationError(
+                    {"mindmap_rating_mode": RATING_MODE_LOCKED}
+                )
         # Matrix rating phase: same lock — only while a running session is
         # in the rating stage or already has ratings.
         if (
@@ -553,12 +550,9 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                     question=self.instance, stage=MatrixPhase.Stage.RATE
                 ).exclude(run__phase=Run.Phase.FINISHED).exists()
             ):
-                raise serializers.ValidationError({
-                    "matrix_rating_mode": (
-                        "The rating mode cannot be changed while a running "
-                        "session is rating."
-                    )
-                })
+                raise serializers.ValidationError(
+                    {"matrix_rating_mode": RATING_MODE_LOCKED}
+                )
         # Mindmap: the predefined branches must fit the (possibly changed)
         # depth — re-checked whenever either is written.
         if kind == Question.Kind.MINDMAP and (

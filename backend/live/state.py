@@ -243,8 +243,8 @@ def build_payloads(room):
                 presenter["mindmap"]["rating"] = rating
             # Presenter-only: active moderation-log entries (#201, drawer).
             presenter["mindmap"]["moderation_log"] = mindmap_log.payload(run, question)
-            # "votes" of a mind map = distinct contributing participants.
-            presenter["votes"] = mindmap.contributor_count(run, question)
+            # "votes" of a mind map = distinct contributing or rating participants.
+            presenter["votes"] = mindmap_rating.votes(run, question)
             # Presenter-only: the AI optimisation settings (beamer star panel).
             presenter["question"]["mindmap_ai"] = mindmap.ai_settings(question)
         elif is_matrix:

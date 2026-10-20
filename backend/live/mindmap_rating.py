@@ -40,6 +40,7 @@ from .mindmap import (
     _effectively_hidden,
     _load_tree,
     _lock_run,
+    contributor_count,
     is_rating,
 )
 from .models import MindmapPhase, MindmapRating, Run
@@ -194,6 +195,13 @@ def aggregate(run, question, visible=None):
             entry = scores.setdefault(key, {"points": 0})
             entry["points"] += max(value, 0)
     return scores, len({token for _node, token, _value in rows})
+
+
+def votes(run, question):
+    """"votes" of a mind map: distinct participants who contributed terms or
+    rated (a seeded tree that was only rated must not show 0) — like
+    ``matrix_rating.votes``."""
+    return max(contributor_count(run, question), aggregate(run, question)[1])
 
 
 def _settings(question):

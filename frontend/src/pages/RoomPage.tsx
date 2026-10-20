@@ -8,6 +8,7 @@ import { Archive, ChartColumnDecreasing, ChevronDown, Crown, DoorOpen, Heart, La
 import { useEasyMode } from "../App";
 import {
   api,
+  requestError,
   results,
   type Collaborator,
   type PresentationCorner,
@@ -163,16 +164,6 @@ function sortSets(list: QuestionSet[], key: SortKey): QuestionSet[] {
     if (key === "questions") return b.question_count - a.question_count;
     return b.updated_at.localeCompare(a.updated_at); // "updated"
   });
-}
-
-function fieldError(err: unknown): string {
-  try {
-    const data = JSON.parse((err as Error).message);
-    const value = data.detail ?? Object.values(data)[0];
-    return Array.isArray(value) ? value[0] : String(value);
-  } catch {
-    return String(err);
-  }
 }
 
 /** Room identity + features, edited when creating a room (RoomsPage) and
@@ -350,7 +341,7 @@ function OwnersPanel({ roomId }: { roomId: number }) {
       setOwners(data.owners);
       setValue("");
     } catch (err) {
-      setError(fieldError(err));
+      setError(t(requestError(err)));
     }
   }
 
@@ -368,7 +359,7 @@ function OwnersPanel({ roomId }: { roomId: number }) {
       }
       setOwners(data.owners);
     } catch (err) {
-      setError(fieldError(err));
+      setError(t(requestError(err)));
     }
   }
 
@@ -378,7 +369,7 @@ function OwnersPanel({ roomId }: { roomId: number }) {
       const data = await api.transferRoomOwner(roomId, owner.id);
       setOwners(data.owners);
     } catch (err) {
-      setError(fieldError(err));
+      setError(t(requestError(err)));
     }
   }
 
@@ -582,7 +573,7 @@ export default function RoomPage() {
       setSettingsDraft(null);
       setPendingSwitch(null);
     } catch (err) {
-      setSettingsError(fieldError(err));
+      setSettingsError(t(requestError(err)));
     }
   }
 

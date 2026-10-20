@@ -469,10 +469,14 @@ def csv_rows(run, question):
     ``id, title, description, category, zone, x, y, stack`` (``stack`` = title of
     the stack's top card for members, else empty)."""
     canonical = seed_langs()[0]
-    names = {
-        c["key"]: (c.get("name") or {}).get(canonical, "") or c["key"]
-        for c in question.matrix_categories or []
-    }
+    # Canonical name, else the first filled translation (like the AI prompt,
+    # ``ai_matrix._canonical``), else the colour key.
+    names = {}
+    for c in question.matrix_categories or []:
+        name = c.get("name") or {}
+        names[c["key"]] = (
+            name.get(canonical) or next((v for v in name.values() if v), "") or c["key"]
+        )
     rows = list(_cards(run, question))
     titles = {c.pk: c.title for c in rows}
     hidden_ids = {c.pk for c in rows if c.hidden}
@@ -753,7 +757,7 @@ def unsign_proposal(run, question, blob):
 
 UNDO_SALT = "matrix-ai-undo"
 UNDO_MAX_AGE = PROPOSAL_MAX_AGE
-UNDO_CHANGED = "Der Stapel wurde inzwischen verändert – Rückgängig ist nicht mehr möglich."
+UNDO_CHANGED = "The stack has changed since the proposal — undo is no longer possible."
 SKIP_LIMIT = "limit"  # card limit reached, no room for a summary card
 
 

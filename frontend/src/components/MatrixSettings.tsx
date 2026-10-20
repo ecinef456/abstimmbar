@@ -3,14 +3,13 @@
 
 /** Settings panel of the four-field matrix question (axes around a drawn
  *  coordinate cross, edges, description, cards per person, categories). */
-import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { getDefaultContentLang, localizedMap, type LocalizedText } from "@basicbar/ui";
 import type { MatrixCategory, MatrixCategoryMode, MatrixRatingMode } from "../api";
 import { MATRIX_PALETTE, categoryLabel, colorName, type MatrixColor } from "../matrixPalette";
 import TranslatableField from "./TranslatableField";
-import { InfoHint, SegmentedControl, ToggleSwitch } from "./ui";
+import { ClampedNumberInput, InfoHint, SegmentedControl, ToggleSwitch } from "./ui";
 
 export interface MatrixSettingsValue {
   xFrom: LocalizedText;
@@ -438,35 +437,12 @@ export default function MatrixSettings({
   );
 }
 
-const numberInput =
-  "w-20 rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none";
-
-/** Number input with a local string draft: clearing it with backspace must not
- *  snap to 1 while typing; the value is clamped to 1–max (default 100) on blur. */
+/** "… per person" with a clamped 1–max (default 100) number field. */
 function MaxPerPerson({ value, onCommit, label, max = 100 }: { value: number; onCommit: (n: number) => void; label: string; max?: number }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-  const commit = () => {
-    const n = Math.min(max, Math.max(1, Math.round(Number(draft)) || 1));
-    setDraft(String(n));
-    onCommit(n);
-  };
   return (
     <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
       {label}
-      <input
-        type="number"
-        min={1}
-        max={max}
-        value={draft}
-        onChange={(event) => {
-          setDraft(event.target.value);
-          const n = Number(event.target.value);
-          if (event.target.value !== "" && n >= 1 && n <= max) onCommit(Math.round(n));
-        }}
-        onBlur={commit}
-        className={numberInput}
-      />
+      <ClampedNumberInput value={value} onChange={onCommit} min={1} max={max} />
     </label>
   );
 }

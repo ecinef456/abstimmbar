@@ -100,9 +100,9 @@ class SiteLogoView(APIView):
         is_image = (file.content_type or "").startswith("image/")
         is_svg = file.name.lower().endswith(".svg")
         if not (is_image or is_svg):
-            return Response({"detail": "Nur Bilddateien (auch SVG)."}, status=400)
+            return Response({"detail": "Only image files (including SVG)."}, status=400)
         if file.size > MAX_LOGO_BYTES:
-            return Response({"detail": "Logo überschreitet 5 MB."}, status=400)
+            return Response({"detail": "The logo exceeds 5 MB."}, status=400)
         config = SiteConfig.load()
         if config.logo:
             config.logo.delete(save=False)
