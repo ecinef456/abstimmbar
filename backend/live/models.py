@@ -386,8 +386,6 @@ class MindmapPhase(models.Model):
         "rooms.Question", on_delete=models.CASCADE, related_name="+"
     )
     stage = models.CharField(max_length=10, choices=Stage.choices, default=Stage.COLLECT)
-    # Last time the rating stage was (re)started.
-    rating_started_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints: ClassVar = [
@@ -522,8 +520,6 @@ class MatrixPhase(models.Model):
         "rooms.Question", on_delete=models.CASCADE, related_name="+"
     )
     stage = models.CharField(max_length=10, choices=Stage.choices, default=Stage.COLLECT)
-    # Last time the rating stage was (re)started.
-    rating_started_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints: ClassVar = [

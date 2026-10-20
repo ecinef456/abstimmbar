@@ -836,25 +836,6 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
             _touch(target)
         return Response({"copied": len(ids)}, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=["post"], url_path="reorder-sections")
-    def reorder_sections(self, request, pk=None):
-        """Persist a new section order: ``{"section_ids": [3, 1, 2]}``."""
-        question_set = self.get_object()
-        ids = request.data.get("section_ids")
-        sections = {s.pk: s for s in question_set.sections.all()}
-        if not isinstance(ids, list) or set(ids) != set(sections):
-            return Response(
-                {"detail": "section_ids must list every section of this set exactly once."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        for position, section_id in enumerate(ids):
-            section = sections[section_id]
-            if section.position != position:
-                section.position = position
-                section.save(update_fields=["position"])
-        _touch(question_set)
-        return Response({"status": "ok"})
-
 
 class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer

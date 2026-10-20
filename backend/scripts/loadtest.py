@@ -146,7 +146,7 @@ async def main():
             await presenter_login(presenter, args.base)
             run = await presenter_post(
                 presenter, args.base,
-                f"/api/question-sets/{question_set.pk}/start-run/", {"reset": True},
+                f"/api/question-sets/{question_set.pk}/start-run/", {"existing": "delete"},
             )
 
             tasks = [

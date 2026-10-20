@@ -2646,19 +2646,14 @@ class SectionTests(ApiTestCase):
         question.refresh_from_db()
         self.assertIsNone(question.section_id)
 
-    def test_reorder_sections(self):
-        a = self.create_section("A").json()
-        b = self.create_section("B").json()
+    def test_reorder_sections_endpoint_removed(self):
+        # Superseded by reorder-outline (removed before 1.0).
         response = self.client.post(
             f"/api/question-sets/{self.qset.pk}/reorder-sections/",
-            {"section_ids": [b["id"], a["id"]]},
+            {"section_ids": []},
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 200)
-        from rooms.models import Section
-
-        self.assertEqual(Section.objects.get(pk=b["id"]).position, 0)
-        self.assertEqual(Section.objects.get(pk=a["id"]).position, 1)
+        self.assertEqual(response.status_code, 404)
 
     def test_non_owner_cannot_create_section(self):
         self.client.force_login(self.other)

@@ -1899,11 +1899,13 @@ def _finish_other_room_runs(room, keep_set):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def start_run(request, set_id):
-    """Start presenting: reuse the unfinished run, or reset (delete results).
+    """Start presenting: reuse the unfinished run, or start fresh.
 
-    Body: {"reset": bool, "mode": "live"|"self_paced"} — reset deletes all
-    previous runs of this set including votes ("Ergebnisse löschen? ja");
-    otherwise new votes add to the existing ones (Cliqr behaviour).
+    Body: {"existing": "delete"|"continue"|"archive", "mode":
+    "live"|"self_paced"} — ``delete`` removes all previous runs of this set
+    including votes, ``continue`` keeps counting into the latest run,
+    ``archive`` keeps previous runs as archives (Cliqr behaviour for
+    continue). The pre-1.0 ``reset`` flag is ignored.
     Teacher-paced ↔ self-paced is switchable (concept §6.3): starting in
     the other mode repurposes the unfinished run.
     """
@@ -1930,22 +1932,16 @@ def start_run(request, set_id):
         #   delete   — wipe all previous runs and start empty
         #   continue — keep counting into the most recent run (same Durchführung)
         #   archive  — leave previous runs as named archives, start a fresh one
-        # (legacy ``reset`` maps to delete / continue.)
         existing = request.data.get("existing")
         user = request.user
-        if (
-            existing is None
-            and not request.data.get("reset")
-            and getattr(user, "effective_easy_mode", False)
-        ):
+        if existing is None and getattr(user, "effective_easy_mode", False):
             # Easy mode (#52): no start dialog — auto-archive when the latest
             # non-empty run is from another calendar day, else continue. Driven
             # by ``effective_easy_mode`` (explicit choice, else Pro default for
             # staff / Simple default for everyone else) so an admin who opted
             # into Simple gets this too, not just non-staff users. Only kicks in
-            # when the request carries no explicit signal at all (no
-            # ``existing``, no legacy ``reset``) — an easy-mode UI never sends
-            # either, but pre-existing/legacy callers that do must be unaffected.
+            # when the request carries no explicit ``existing`` — an easy-mode
+            # UI never sends one, but callers that do must be unaffected.
             if _recently_started(question_set):
                 # An ongoing session (a question opened within the window) always
                 # continues, even across a calendar-day boundary.
@@ -1961,7 +1957,7 @@ def start_run(request, set_id):
                 else:
                     existing = "continue"
         if existing not in {"delete", "continue", "archive"}:
-            existing = "delete" if request.data.get("reset") else "continue"
+            existing = "continue"
 
         if existing == "delete":
             Run.objects.filter(question_set=question_set).delete()

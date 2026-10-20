@@ -328,10 +328,6 @@ msgid "Model solution"
 msgstr "Musterlösung"
 
 #: live/templates/live/participant.html
-msgid "Try again"
-msgstr "Nochmal"
-
-#: live/templates/live/participant.html
 msgid "Start over"
 msgstr "Nochmal von vorne"
 
@@ -376,10 +372,6 @@ msgstr "Tragen Sie Ihre Begriffe ein und schicken Sie sie gemeinsam ab."
 #: live/templates/live/participant.html
 msgid "Submit all"
 msgstr "Alle abschicken"
-
-#: live/templates/live/participant.html
-msgid "Remove field"
-msgstr "Feld entfernen"
 
 #: live/templates/live/participant.html
 msgid "Clear field"

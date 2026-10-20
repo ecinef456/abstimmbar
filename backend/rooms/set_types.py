@@ -2,7 +2,9 @@
 # Copyright 2026 Universität Osnabrück (virtUOS)
 
 """Declarative rules per QuestionSet.type (#75): which question kinds a set of
-each type may contain and how the set is run. (A free-text question without a
+each type may contain. Run style per type: live poll = teacher-started live
+run, self-paced = participants work through it on their own, self-check =
+standing link with no teacher-started run. (A free-text question without a
 model solution is allowed everywhere; the editor only warns for self-checks.) Adding a new set type is one entry here (+ the frontend mirror in
 `frontend/src/setTypes.ts`). Kept as data, not scattered if-branches."""
 
@@ -12,11 +14,9 @@ _ALL_KINDS = tuple(kind for kind, _ in Question.Kind.choices)
 
 SET_TYPES = {
     QuestionSet.SetType.LIVE_POLL: {
-        "run_mode": "live",
         "allowed_kinds": _ALL_KINDS,
     },
     QuestionSet.SetType.SELF_PACED: {
-        "run_mode": "self_paced",
         # Mindmap and matrix are shared, presenter-driven activities: live
         # polls only.
         "allowed_kinds": tuple(
@@ -26,7 +26,6 @@ SET_TYPES = {
     },
     QuestionSet.SetType.SELF_CHECK: {
         # Only kinds with an auto-checkable answer / shown solution.
-        "run_mode": None,  # standing link, no teacher-started run (Phase 3)
         "allowed_kinds": ("single_choice", "multiple_choice", "ordering", "open_text"),
     },
 }
@@ -39,6 +38,3 @@ def _rules(set_type):
 def allowed_kinds(set_type) -> tuple:
     return _rules(set_type)["allowed_kinds"]
 
-
-def run_mode(set_type):
-    return _rules(set_type)["run_mode"]
