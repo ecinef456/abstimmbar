@@ -4,7 +4,7 @@
 /** Global footer: admin-managed page links plus a fixed credit line. Shown
  * on every page of the app shell (including the pre-login landing). */
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { api, type FooterPageLink } from "../api";
 import { localizedText } from "@basicbar/ui";
 import { useTranslation } from "react-i18next";

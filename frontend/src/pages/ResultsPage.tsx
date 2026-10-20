@@ -5,7 +5,7 @@
  * presentation, viewable after the lecture; runs are deletable. */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import { ChartColumnDecreasing, Download, Trash2 } from "lucide-react";
 import {
   aiErrorText,

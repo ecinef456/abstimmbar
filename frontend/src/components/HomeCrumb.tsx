@@ -5,7 +5,7 @@
  * list, used by every page's breadcrumb trail (#69, #74) instead of a
  * "My rooms" text link. */
 import { Home } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 
 export default function HomeCrumb() {

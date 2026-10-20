@@ -3,7 +3,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Outlet, matchPath, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, matchPath, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { driver } from "driver.js";
 import type { Driver } from "driver.js";

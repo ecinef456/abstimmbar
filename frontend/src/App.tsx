@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { Link, Navigate, Outlet, useNavigate, useOutletContext } from "react-router-dom";
+import { Link, Navigate, Outlet, useNavigate, useOutletContext } from "react-router";
 import {
   BarChart3,
   Info,

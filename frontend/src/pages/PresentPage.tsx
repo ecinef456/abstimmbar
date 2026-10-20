@@ -7,7 +7,7 @@
  * ←/→ navigate, Esc ends. */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { Trans, useTranslation } from "react-i18next";
 import { ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, Pencil, Redo2, Sparkles, ThumbsUp, Timer, Undo2, Unlink, Users, X } from "lucide-react";
 import {
