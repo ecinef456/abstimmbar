@@ -141,6 +141,11 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # The Caddyfile is configured purely via these variables (no local edits).
+    environment:
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL (Let's Encrypt expiry notices)}
+      ABSTIMMBAR_FRAME_ANCESTORS: ${ABSTIMMBAR_FRAME_ANCESTORS:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Optional: mount institutional TLS certificates (e.g. HARICA) when not

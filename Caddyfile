@@ -1,20 +1,28 @@
 # Caddyfile — Abstimmbar production reverse proxy with automatic HTTPS.
 #
-# Replace abstimmbar.example.org with your domain and set a real ACME contact
-# email. Caddy obtains and renews a Let's Encrypt certificate automatically as
-# long as ports 80 and 443 are reachable and the domain's DNS points here.
-# For institutional certificates (e.g. HARICA) mount them into the container
-# and use `tls /etc/caddy/certs/<name>.crt /etc/caddy/certs/<name>.key`.
+# This file needs NO local edits: it is configured through environment
+# variables (set in .env, passed to the caddy service by docker-compose.prod.yml):
+#   PUBLIC_BASE_URL             site address, bare origin, e.g.
+#                               https://abstimmbar.example.org (no path)
+#   ACME_EMAIL                  Let's Encrypt contact (expiry notices)
+#   ABSTIMMBAR_FRAME_ANCESTORS  optional, space-separated LMS origins allowed
+#                               to embed the SPA in an iframe (LTI)
+# Caddy obtains and renews a Let's Encrypt certificate automatically as long
+# as ports 80 and 443 are reachable and the domain's DNS points here. The
+# https:// scheme in PUBLIC_BASE_URL makes the site HTTPS-only (plain HTTP is
+# redirected by Caddy's automatic redirect on port 80).
 #
-# The `header Content-Security-Policy` line in the SPA `handle` block below
-# carries your LMS domain, for LTI iframe embedding — see that block.
+# Manual option, institutional certificates (e.g. HARICA): mount them into the
+# container (see docker-compose.prod.yml) and add inside the site block
+# `tls /etc/caddy/certs/<name>.crt /etc/caddy/certs/<name>.key`. This is a
+# deliberate local edit; ACME_EMAIL is then unused but still required.
 
 {
-	# Contact address for Let's Encrypt (expiry notices). Replace it.
-	email admin@example.org
+	# Contact address for Let's Encrypt (expiry notices), from ACME_EMAIL.
+	email {$ACME_EMAIL}
 }
 
-abstimmbar.example.org {
+{$PUBLIC_BASE_URL} {
 	encode zstd gzip
 
 	# API (including the SSE stream), Django admin, OIDC and LTI endpoints,
@@ -69,14 +77,13 @@ abstimmbar.example.org {
 
 	# Everything else → the built SPA, with client-side routing fallback.
 	handle {
-		# LTI iframe embedding (optional, opt-in): to let the institutional LMS
-		# embed the SPA in an iframe, UNCOMMENT the next line and replace the
-		# origin with your LMS (space-separate multiple). Only needed for
-		# in-iframe launches; "new window" launches don't need this. Django
-		# already sets frame-ancestors for /p/ and /lti/ from the registered
-		# platforms; this line covers the Caddy-served SPA. Left commented so a
-		# default install stays 'self'-only (no external framing).
-		# header Content-Security-Policy "frame-ancestors 'self' https://moodle.example.org"
+		# LTI iframe embedding (optional): set ABSTIMMBAR_FRAME_ANCESTORS in .env
+		# to the LMS origin(s), space-separated, to let the LMS embed the SPA in
+		# an iframe. Only needed for in-iframe launches; "new window" launches
+		# don't need it. Django already sets frame-ancestors for /p/ and /lti/
+		# from the registered platforms; this line covers the Caddy-served SPA.
+		# Empty (default) = 'self' only, no external framing.
+		header Content-Security-Policy "frame-ancestors 'self' {$ABSTIMMBAR_FRAME_ANCESTORS}"
 
 		root * /srv/www
 		try_files {path} /index.html
