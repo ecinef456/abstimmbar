@@ -88,7 +88,7 @@ const board = (page: Page) => page.locator('[data-matrix-board]');
 const card = (page: Page, id: number) => board(page).locator(`[data-card-id="${id}"]`);
 const footer = (page: Page) => page.locator('footer');
 const seg = (page: Page, id: string) => footer(page).locator(`[data-help="${id}"]`);
-const raters = (page: Page) => page.locator('[title="Teilnehmende, die bewertet haben"]');
+const raters = (page: Page) => page.locator('[title="Teilnehmende, die bewertet haben"] .tabular-nums');
 
 async function openPresenter(page: Page, setId: number) {
   await page.goto(`/sets/${setId}/present?resume=continue`);

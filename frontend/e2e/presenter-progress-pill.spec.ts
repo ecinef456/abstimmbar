@@ -54,7 +54,9 @@ function connect(code: string, n: number): () => void {
 }
 
 const pill = (page: Page) => page.getByTestId('live-stats');
-const seg = (page: Page, title: string) => pill(page).locator(`[title="${title}"]`);
+/** The number of a segment (its sr-only label is asserted separately). */
+const seg = (page: Page, title: string) =>
+  pill(page).locator(`[title="${title}"]`).locator('.tabular-nums');
 const CONNECTED = 'Verbundene Teilnehmende';
 const ANSWERED = 'Teilnehmende, die geantwortet haben';
 const RATED = 'Teilnehmende, die bewertet haben';
@@ -118,6 +120,9 @@ test('choice question: two numbers, fill share = answered / connected', async ({
     await expect(seg(page, ANSWERED)).toHaveText('3');
     await expect.poll(() => share(page)).toBe(0.75);
     await shot(page, 'pill-75');
+    // Screen readers get a labelled group with a text label per number.
+    await expect(pill(page)).toHaveAccessibleName('Beteiligung');
+    await expect(pill(page).locator('.sr-only')).toHaveText([CONNECTED, ANSWERED]);
     await expectNoAxeViolations(page);
   } finally {
     close();

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 Universität Osnabrück (virtUOS)
 
-"""``presenter["progress"]`` of the SSE snapshot: the beamer's bottom-left
+"""``presenter["counter"]`` of the SSE snapshot: the beamer's bottom-left
 progress pill (answered participants, items against the capacity).
 
 Shape (additive, presenter only)::
@@ -45,8 +45,8 @@ def _board(run, question, rating, prefix, rate_stage, count_items, unit):
     """Mind map / matrix: collecting counts the participants' terms/cards
     against ``*_max_per_person``; the rating stage counts points/ratings
     given against the rating budget. ``answered`` = contributors ∪ raters."""
+    visible = rating.visible_ids(run, question)  # the tree is loaded once
     if rating.stage_of(run, question) == rate_stage:
-        visible = rating._visible_ids(run, question)
         scores, _raters = rating.aggregate(run, question, visible)
         updown = getattr(question, f"{prefix}_rating_mode") == RATING_UPDOWN
         return _block(
@@ -56,15 +56,15 @@ def _board(run, question, rating, prefix, rate_stage, count_items, unit):
             "ratings" if updown else "points",
         )
     return _block(
-        rating.answered_count(run, question),
-        count_items(run, question),
+        rating.answered_count(run, question, visible),
+        count_items(run, question, visible),
         _limit(getattr(question, f"{prefix}_max_per_person")),
         unit,
     )
 
 
 def progress_payload(run, question):
-    """The ``progress`` block of the presenter snapshot for ``question``."""
+    """The ``counter`` block of the presenter snapshot for ``question``."""
     kind = question.kind
     if kind == Question.Kind.MINDMAP:
         return _board(
@@ -74,7 +74,7 @@ def progress_payload(run, question):
     if kind == Question.Kind.MATRIX:
         return _board(
             run, question, matrix_rating, "matrix", MatrixPhase.Stage.RATE,
-            matrix.participant_card_count, "cards",
+            lambda run, question, _visible: matrix.participant_card_count(run, question), "cards",
         )
     votes = run.votes.filter(question=question)
     answered = votes.values("token").distinct().count()

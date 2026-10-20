@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Grid2x2, Star, Tags, ThumbsUp, Users, type LucideIcon } from "lucide-react";
-import type { LiveProgress } from "../api";
+import type { LiveCounter } from "../api";
 import { EASE } from "./motion";
 
 export function shareColor(share: number): string {
@@ -27,8 +27,8 @@ export function shareColor(share: number): string {
  * over white: rose 9.0, yellow 9.6, light green 9.6, green 8.4 (all ≥ 4.5). */
 const TINT = 0.18;
 
-type Progress = LiveProgress;
-type ProgressUnit = LiveProgress["unit"];
+type Progress = LiveCounter;
+type ProgressUnit = LiveCounter["unit"];
 
 const UNITS: Record<Exclude<ProgressUnit, "answers">, { icon: LucideIcon; label: string }> = {
   terms: { icon: Tags, label: "Terms created of possible" },
@@ -85,6 +85,8 @@ export default function ProgressPill({
   return (
     <div
       className={`flex items-center gap-3 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-sm text-slate-700 shadow-sm backdrop-blur ${className}`}
+      role="group"
+      aria-label={t("Participation")}
       aria-live="polite"
       data-testid="live-stats"
       data-share={share.toFixed(2)}
@@ -113,17 +115,20 @@ export default function ProgressPill({
       <span className="relative flex items-center gap-1.5" title={t("Connected participants")}>
         <Users aria-hidden className="h-4 w-4 text-slate-500" />
         <span className="min-w-[2ch] tabular-nums">{participants}</span>
+        <span className="sr-only">{t("Connected participants")}</span>
       </span>
       <span className="relative flex items-center gap-1.5" title={answeredLabel ?? t("Participants who have answered")}>
         <Check aria-hidden className="h-4 w-4 text-slate-500" />
         <span className="min-w-[2ch] tabular-nums">{progress.answered}</span>
+        <span className="sr-only">{answeredLabel ?? t("Participants who have answered")}</span>
       </span>
       {unit && UnitIcon && (
         <span className="relative flex items-center gap-1.5" title={t(unit.label)} data-progress-items="">
           <UnitIcon aria-hidden className="h-4 w-4 text-slate-500" />
           <span className="min-w-[5ch] tabular-nums">
-            {capacity != null ? `${progress.items} / ${capacity}` : progress.items}
+            {capacity ? `${progress.items} / ${capacity}` : progress.items}
           </span>
+          <span className="sr-only">{t(unit.label)}</span>
         </span>
       )}
     </div>

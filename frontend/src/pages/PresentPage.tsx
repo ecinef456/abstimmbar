@@ -18,7 +18,7 @@ import {
   errorDetail,
   live,
   results,
-  type LiveProgress,
+  type LiveCounter,
   type LiveState,
   type Question,
   type RunResults,
@@ -1729,7 +1729,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // Self-paced dashboard (concept §6.3): QR for joining plus live progress;
   // participants drive themselves, the teacher only watches and ends.
   if (selfPaced) {
-    const progress = Array.isArray(state.progress) ? state.progress : [];
+    const progress = state.progress ?? [];
     const denominator = Math.max(
       state.participants ?? 0,
       ...progress.map((row) => row.votes),
@@ -3275,14 +3275,12 @@ function Shell({
 /** Permanent, phase-independent counter fixed to the lower-left corner of the
  * beamer view (#35): a progress pill with the connected clients, the
  * participants who have answered and — for item-based kinds — items against
- * the capacity (`state.progress`, absent without an active question). Sits
+ * the capacity (`state.counter`, absent without an active question). Sits
  * just above the footer action bar so the two never overlap. */
 function LiveStats({ state, raters }: { state: LiveState; raters?: number }) {
   const { t } = useTranslation();
-  const progress: LiveProgress =
-    state.progress && !Array.isArray(state.progress)
-      ? state.progress
-      : { answered: state.votes ?? 0, items: null, per_person: null, unit: "answers" };
+  const progress: LiveCounter =
+    state.counter ?? { answered: state.votes ?? 0, items: null, per_person: null, unit: "answers" };
   const rating = progress.unit === "points" || progress.unit === "ratings" || raters != null;
   return (
     <ProgressPill

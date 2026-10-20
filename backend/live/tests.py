@@ -1711,6 +1711,9 @@ class SelfPacedTests(LiveTestCase):
         }
         self.assertEqual(progress["2+2?"], 1)
         self.assertEqual(presenter["votes_total"], 1)
+        # The live pill's key must not collide with the dashboard list.
+        self.assertIsInstance(presenter["progress"], list)
+        self.assertNotIn("counter", presenter)
 
     def test_start_stamps_quiz_ends_at_from_limit(self):
         self.question_set.quiz_time_limit = 120
@@ -10342,11 +10345,22 @@ class MatrixCsvCategoryFallbackTests(MatrixTestCase):
 
 
 class PresenterProgressTests(LiveTestCase):
-    """``presenter["progress"]``: answered participants, items and the
+    """``presenter["counter"]``: answered participants, items and the
     per-person capacity per question kind (beamer fill pill)."""
 
     def progress(self):
-        return build_payloads(self.room)["presenter"]["progress"]
+        return build_payloads(self.room)["presenter"]["counter"]
+
+    def test_absent_without_active_question(self):
+        # idle (no run)
+        self.assertNotIn("counter", build_payloads(self.room)["presenter"])
+        # lobby
+        run = Run.objects.create(question_set=self.question_set, phase=Run.Phase.LOBBY)
+        self.assertNotIn("counter", build_payloads(self.room)["presenter"])
+        # finished
+        run.phase = Run.Phase.FINISHED
+        run.save()
+        self.assertNotIn("counter", build_payloads(self.room)["presenter"])
 
     def tokens(self, n):
         return [ParticipantToken.objects.create(room=self.room) for _ in range(n)]
