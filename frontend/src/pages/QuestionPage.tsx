@@ -11,6 +11,7 @@ import {
   api,
   requestBody,
   requestDetail,
+  requestError,
   type AnswerOption,
   type MatrixCategory,
   type MatrixCategoryMode,
@@ -699,7 +700,7 @@ export default function QuestionPage() {
       const msg = body?.mindmap_rating_mode ?? body?.matrix_rating_mode;
       const modeError = Array.isArray(msg) ? String(msg[0] ?? "") : typeof msg === "string" ? msg : "";
       setRatingModeError(modeError ? t(modeError) : "");
-      setError(modeError ? t(modeError) : String(err));
+      setError(modeError ? t(modeError) : t(requestError(err)));
       return false;
     } finally {
       setSaving(false);

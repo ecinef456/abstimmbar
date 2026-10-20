@@ -627,6 +627,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     mmRatingsNone: "{% trans 'No ratings left' %}",
     mmGivePoint: "{% trans 'Give a point' %}",
     mmTakePoint: "{% trans 'Take back a point' %}",
+    mxNothingToRemove: "{% trans 'Nothing to remove yet.' %}",
     mmYourPoints: "{% trans 'Your points: {n}' %}",
     mmOnePoint: "{% trans 'Only one point per entry.' %}",
     mmLike: "{% trans 'Like' %}",
@@ -3748,7 +3749,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       if (left <= 0) { mxNote(id, I18N.mmPointsNone); return; }
       body = { delta: 1 };
     } else if (action === "minus") {
-      if (value <= 0) return;
+      if (value <= 0) { mxNote(id, I18N.mxNothingToRemove); return; }
       body = { delta: -1 };
     } else {
       const want = action === "up" ? 1 : -1;
@@ -3931,9 +3932,11 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
         if (canRate && points) {
           // Blocked controls use aria-disabled (not disabled) like the mind
           // map: they stay focusable, say why, and a tap shows the note.
+          const take = I18N.mmTakePoint + " (" + I18N.mmYourPoints.replace("{n}", String(value)) + ")";
           const minus = btn("", "minus",
-            I18N.mmTakePoint + " (" + I18N.mmYourPoints.replace("{n}", String(value)) + ") — " + card.title, "−");
+            take + " — " + card.title + (value <= 0 ? " — " + I18N.mxNothingToRemove : ""), "−");
           minus.setAttribute("aria-disabled", String(value <= 0));
+          minus.title = value <= 0 ? I18N.mxNothingToRemove : take;
           const val = document.createElement("span");
           val.className = "mx-rval";
           const vv = document.createElement("span");

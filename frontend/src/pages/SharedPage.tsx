@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Link2 } from "lucide-react";
-import { api, type Room, type SharedSet } from "../api";
+import { api, requestError, type Room, type SharedSet } from "../api";
 import { Button, EmptyState, Field } from "../components/ui";
 import { localizedText } from "@basicbar/ui";
 import { licenseLabel } from "../licenses";
@@ -57,7 +57,7 @@ export default function SharedPage() {
       const copied = await api.copySharedSet(token!, target);
       navigate(`/sets/${copied.id}`);
     } catch (err) {
-      setError(t("Copy failed: {{error}}", { error: String(err) }));
+      setError(t("Copy failed: {{error}}", { error: t(requestError(err)) }));
       setBusy(false);
     }
   }

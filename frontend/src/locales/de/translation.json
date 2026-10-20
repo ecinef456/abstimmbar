@@ -1320,5 +1320,7 @@
   "This question has results. Please delete the results first or copy the set.": "Zu dieser Frage liegen Ergebnisse vor. Bitte erst die Ergebnisse löschen oder das Set kopieren.",
   "After-questions are only available for choice and Likert questions.": "Nachher-Fragen gibt es nur für Auswahl- und Likert-Fragen.",
   "An after-question cannot itself get an after-question.": "Eine Nachher-Frage kann selbst keine Nachher-Frage erhalten.",
-  "This question already has an after-question.": "Zu dieser Frage gibt es bereits eine Nachher-Frage."
+  "This question already has an after-question.": "Zu dieser Frage gibt es bereits eine Nachher-Frage.",
+  "AI is turned off for this question.": "Die KI ist für diese Frage ausgeschaltet.",
+  "The logo exceeds 5 MB.": "Das Logo überschreitet 5 MB."
 }

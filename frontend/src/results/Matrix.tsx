@@ -147,8 +147,8 @@ const KEY_STEP = 0.05;
 const KEY_STEP_LARGE = 0.2;
 /** Pointer travel (px) before a press becomes a drag. */
 const DRAG_SLOP = 4;
-/** Reading order of the zones (tab order of the cards). */
-const READING_ORDER = ["q2", "e_top", "q1", "e_left", "e_right", "q3", "e_bottom", "q4"];
+/** Spatial tab order of the board cards; differs on purpose from READING_ZONES (list order). */
+const BOARD_TAB_ORDER = ["q2", "e_top", "q1", "e_left", "e_right", "q3", "e_bottom", "q4"];
 
 interface DragState {
   id: number;
@@ -427,7 +427,7 @@ export default function Matrix({
     )
     .sort(
       (a, b) =>
-        READING_ORDER.indexOf(a.card.zone) - READING_ORDER.indexOf(b.card.zone) ||
+        BOARD_TAB_ORDER.indexOf(a.card.zone) - BOARD_TAB_ORDER.indexOf(b.card.zone) ||
         b.card.y - a.card.y ||
         a.card.x - b.card.x ||
         a.card.id - b.card.id,

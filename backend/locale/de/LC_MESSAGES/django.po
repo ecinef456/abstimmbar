@@ -526,6 +526,10 @@ msgid "Take back a point"
 msgstr "Einen Punkt zurücknehmen"
 
 #: live/templates/live/participant.html
+msgid "Nothing to remove yet."
+msgstr "Noch nichts zu entfernen."
+
+#: live/templates/live/participant.html
 msgid "Your points: {n}"
 msgstr "Ihre Punkte: {n}"
 

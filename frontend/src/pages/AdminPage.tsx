@@ -405,6 +405,7 @@ function AppearanceSettings() {
   const [betaEnabled, setBetaEnabled] = useState(false);
   const [betaNotice, setBetaNotice] = useState<LocalizedText>("");
   const [saved, setSaved] = useState(false);
+  const [logoError, setLogoError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -426,7 +427,12 @@ function AppearanceSettings() {
   }
 
   async function upload(file: File) {
-    setSite(await api.uploadLogo(file));
+    setLogoError("");
+    try {
+      setSite(await api.uploadLogo(file));
+    } catch (err) {
+      setLogoError(t(requestError(err)));
+    }
   }
 
   async function removeLogo() {
@@ -474,6 +480,11 @@ function AppearanceSettings() {
             </Button>
           )}
         </div>
+        {logoError && (
+          <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+            {logoError}
+          </p>
+        )}
       </Field>
 
       <div className="mt-6 max-w-2xl">

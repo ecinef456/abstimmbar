@@ -2673,6 +2673,7 @@ def freetext_summary(request, run_id, question_id):
     return Response({"merged": result["merged"], "clusters": result["clusters"]})
 
 
+# NB: the translation key "Instruction too long (max. 1000 characters)." (de/translation.json) must follow if this changes.
 WORDCLOUD_GROUPING_MAX = 1000
 # Body keys of the ai-settings endpoint; the Question field is wordcloud_<key>.
 MERGE_FLAG_KEYS = ("merge_variants", "merge_synonyms", "merge_concepts")
