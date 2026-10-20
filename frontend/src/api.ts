@@ -1159,6 +1159,14 @@ export interface LiveOption {
   recording?: number;
 }
 
+/** `presenter.progress` of a live run (absent without an active question). */
+export interface LiveProgress {
+  answered: number;
+  items: number | null;
+  per_person: number | null;
+  unit: "answers" | "terms" | "cards" | "points" | "ratings";
+}
+
 export interface LiveState {
   room: {
     code: string;
@@ -1172,8 +1180,10 @@ export interface LiveState {
   mode?: "live" | "self_paced";
   set_title?: LocalizedText;
   run_id?: number;
-  /** Self-paced dashboard: per-question vote counts. */
-  progress?: { id: number; text: LocalizedText; votes: number }[];
+  /** Self-paced dashboard: per-question vote counts. Live presenter with an
+   *  active question: the beamer counter's progress block (answered
+   *  participants, items against `per_person` × participants). */
+  progress?: { id: number; text: LocalizedText; votes: number }[] | LiveProgress;
   votes_total?: number;
   reveal_answers?: RevealAnswers;
   revealed?: boolean;

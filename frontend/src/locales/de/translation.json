@@ -592,7 +592,11 @@
   "present_lobby_hint": "verbunden · Erste Frage mit <1>S</1> oder <3>→</3>",
   "present_reveal_hint_l": "Richtige Antwort mit <1>L</1> einblenden",
   "Connected participants": "Verbundene Teilnehmende",
-  "Votes for the current question": "Stimmen für die aktuelle Frage",
+  "Participants who have answered": "Teilnehmende, die geantwortet haben",
+  "Terms created of possible": "Erstellte Begriffe von insgesamt möglichen",
+  "Cards created of possible": "Erstellte Karten von insgesamt möglichen",
+  "Points given of possible": "Vergebene Punkte von insgesamt möglichen",
+  "Ratings given of possible": "Abgegebene Bewertungen von insgesamt möglichen",
 
   "Page not found": "Seite nicht gefunden",
   "Question not found": "Frage nicht gefunden",

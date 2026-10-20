@@ -27,9 +27,16 @@ seine Taste.
   (++esc++) [verlässt die Präsentation](#verlassen-oder-beenden).
 
 Unten links zeigt eine kleine Anzeige die **verbundenen Teilnehmenden** und
-die **abgegebenen Stimmen**. Ein farbiger Ring zeigt den Anteil, der schon
-geantwortet hat: rot unter 50 %, gelb bis 80 %, hellgrün bis 95 %,
-dunkelgrün darüber; haben alle geantwortet, leuchtet er kurz auf.
+die Teilnehmenden, die **schon geantwortet** haben. Bei Fragen, in denen jede
+Person mehrere Beiträge abgeben kann – Wortwolke mit mehreren Begriffen,
+Mindmap, Vier-Felder-Matrix sowie deren Bewertung –, kommt eine dritte Zahl
+hinzu: die erstellten Begriffe, Karten oder vergebenen Punkte bzw. Bewertungen
+von den insgesamt möglichen (verbundene Teilnehmende × Höchstzahl pro Person).
+Die Anzeige füllt sich von links mit Farbe und einem schmalen Balken am
+unteren Rand – bei mehreren Beiträgen nach diesem Anteil, sonst nach dem
+Anteil der Teilnehmenden, die geantwortet haben: rot unter 50 %, gelb bis
+80 %, hellgrün bis 95 %, dunkelgrün darüber; ist sie voll, leuchtet sie kurz
+auf.
 
 ## Ansichten: Frage, Ergebnisse, Lösung
 

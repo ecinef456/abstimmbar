@@ -26,9 +26,16 @@ over an icon and a tooltip tells you its name and its key.
   (++esc++) [leaves the presentation](#leave-or-end).
 
 At the bottom left, a small indicator shows the **connected participants**
-and the **votes cast**. A coloured ring shows the share who have already
-answered: red below 50 %, yellow up to 80 %, light green up to 95 %, dark
-green above that; once everyone has answered, it briefly lights up.
+and the participants who have **already answered**. For questions where each
+person can contribute several times — a word cloud with several terms, a
+mind map, a four-field matrix and their ratings — a third number is added:
+the terms or cards created, or the points or ratings given, out of the total
+possible (connected participants × the maximum per person). The indicator
+fills from the left with colour and a thin bar along its bottom edge — by
+this share when several contributions are possible, otherwise by the share
+of participants who have answered: red below 50 %, yellow up to 80 %, light
+green up to 95 %, dark green above that; once it is full, it briefly lights
+up.
 
 ## Views: question, results, solution
 

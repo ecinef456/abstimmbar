@@ -36,10 +36,10 @@
 }
 .ab-fade-in { animation: ab-fade-in 250ms ease-out backwards; }
 .ab-pop { animation: ab-pop 500ms cubic-bezier(.2, 1.6, .4, 1) both; }
-/* Vote ring: one glow when everyone has answered (like a new word-cloud term). */
-@keyframes ab-ring-flash {
-  0%, 100% { filter: none; transform: rotate(-90deg) scale(1); }
-  30% { filter: drop-shadow(0 0 6px currentColor); transform: rotate(-90deg) scale(1.35); }
+/* Progress pill: one glow when it is full (like a new word-cloud term). */
+@keyframes ab-fill-flash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  30% { box-shadow: 0 0 14px 4px var(--ab-fill, currentColor); }
 }
-.ab-ring-flash { animation: ab-ring-flash 1100ms ease-out; }
+.ab-fill-flash { animation: ab-fill-flash 1100ms ease-out; }
 .ab-chip-in { animation: ab-chip-in 500ms cubic-bezier(.2, 1.4, .4, 1) both; }
