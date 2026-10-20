@@ -203,7 +203,7 @@ export default function MindmapModerationList({
                     className={BTN}
                     onClick={(e) => show(e, h.id)}
                     title={t("Show this entry on the beamer again")}
-                    aria-label={t("Show {{word}} on the beamer again", { word: h.text })}
+                    aria-label={t("Show again: {{word}}", { word: h.text })}
                   >
                     {t("Show again")}
                   </button>

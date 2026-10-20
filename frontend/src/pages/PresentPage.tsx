@@ -239,10 +239,11 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     }
   };
   // Mindmap counterpart of the moderation hint (+, drag, double-click, ×,
-  // undo). "_v2": shown again once for the stage-2 gestures.
+  // undo). "_v3": shown again once so presenters learn the "Attach here"
+  // tab (merge vs. attach was not discoverable; "_v2" was the stage-2 gestures).
   const [mmHintSeen, setMmHintSeen] = useState(() => {
     try {
-      return localStorage.getItem("abstimmbar_mm_moderation_hint_v2") === "1";
+      return localStorage.getItem("abstimmbar_mm_moderation_hint_v3") === "1";
     } catch {
       return false;
     }
@@ -250,7 +251,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const dismissMmHint = () => {
     setMmHintSeen(true);
     try {
-      localStorage.setItem("abstimmbar_mm_moderation_hint_v2", "1");
+      localStorage.setItem("abstimmbar_mm_moderation_hint_v3", "1");
     } catch {
       /* ignore */
     }
@@ -2117,7 +2118,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               className="mx-auto mt-2 flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm text-slate-700">
               <Info className="h-4 w-4 shrink-0 text-brand-600" aria-hidden />
               <p className="flex-1">
-                {t("Tip: + adds a term. Drag a term onto another to merge them, or onto “Attach here” beside it to move it there; double-click renames, × hides (the pencil on the right shows hidden terms and your moderation steps for selective reset). Ctrl+Z undoes.")}
+                {t("Tip: + adds a term. Drag a term onto another to merge them, or onto the “Attach here” tab beside it (shown while dragging) to attach it there as a sub-term; double-click renames, × hides (the pencil on the right shows hidden terms and your moderation steps for selective reset). Ctrl+Z undoes.")}
               </p>
               <button
                 type="button"
@@ -3771,7 +3772,7 @@ function ModerationPanel({
                 className="ml-2 shrink-0 text-brand-700 hover:underline"
                 onClick={() => onRestore(h.key)}
                 title={t("Show this entry on the beamer again")}
-                aria-label={t("Show {{word}} on the beamer again", { word: h.key })}
+                aria-label={t("Show again: {{word}}", { word: h.key })}
               >
                 {t("Show again")}
               </button>

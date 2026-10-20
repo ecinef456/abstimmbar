@@ -172,8 +172,11 @@ Sie moderieren die Mindmap direkt auf dem Beamer:
 
 - Mit **+** an einem Begriff fügen Sie auf Zuruf einen Unterbegriff hinzu.
 - Ziehen Sie einen Begriff **auf** einen anderen, werden beide
-  zusammengeführt (die Unterbegriffe wandern mit); ziehen Sie ihn auf die Zone
-  **„hier anhängen“** daneben, wird er samt Teilbaum dorthin verschoben.
+  zusammengeführt (die Unterbegriffe wandern mit); ziehen Sie ihn auf die
+  Lasche **„Hier einhängen“** daneben, wird er samt Teilbaum dorthin
+  verschoben. Sobald Sie ziehen, zeigt jeder Begriff seine Lasche: Auf den
+  Begriff ziehen führt zusammen, auf die Lasche „Hier einhängen“ daneben hängt
+  als Unterbegriff an.
 - Ein Doppelklick benennt einen Begriff um, × blendet ihn samt Teilbaum aus.
 - Mit ++ctrl+z++ / ++cmd+z++ machen Sie den letzten Schritt rückgängig.
 

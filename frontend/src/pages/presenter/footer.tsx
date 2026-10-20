@@ -87,7 +87,7 @@ export const PRESENTER_HELP: Record<string, HelpEntry> = {
   "handle.moderate": { name: "Moderate", text: "Hide, merge or restore entries." },
   "handle.mm-moderate": {
     name: "Moderate",
-    text: "Show hidden terms again; reset single merges, moves, renames and AI changes.",
+    text: "Show hidden terms again; reset single merges, moves, renames and AI changes. On the map: drag a term onto another to merge, onto the “Attach here” tab beside it to attach it as a sub-term.",
   },
   "handle.ai": { name: "AI settings", text: "AI on/off and how it merges or groups." },
   "handle.mm-ai": { name: "AI mind map", text: "Let AI tidy up the mind map." },

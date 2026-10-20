@@ -133,6 +133,10 @@ test('lists merges, moves, renames and AI changes; resets one in the middle', as
 
   await openDrawer(page);
   await expect(section(page, 'Ausgeblendet')).toContainText('Papier');
+  // Label in name (WCAG 2.5.3): the accessible name starts with the visible text.
+  await expect(section(page, 'Ausgeblendet').getByRole('button', { name: /Papier/ })).toHaveAccessibleName(
+    /^Wieder einblenden/,
+  );
   await expect(section(page, 'Zusammengeführt')).toContainText('„Windkraft“ in „Windenergie“ zusammengeführt');
   await expect(section(page, 'Verschoben')).toContainText('„Rotor“ verschoben: Technik → Windenergie');
   await expect(section(page, 'Umbenannt')).toContainText('„Wnd“ → „Wind“ umbenannt');
@@ -259,4 +263,92 @@ test('locked while rating', async ({ page, trackRoom }) => {
   await expect(drawer(page)).toContainText('Während der Bewertung nicht möglich.');
   await expect(section(page, 'Zusammengeführt').getByRole('button', { name: /Zurücksetzen/ })).toBeDisabled();
   await shot(page, 'mm-log-rating');
+});
+
+test('while dragging every term shows its "attach here" tab; a parent\'s tab attaches as a child', async ({ page, trackRoom }) => {
+  const s = await seed(page, trackRoom);
+  const energie = await s.add('Energie');
+  await s.add('Wind', energie);
+  const solar = await s.add('Solar');
+  const papier = await s.add('Papier');
+  await openPresenter(page, s.room.setId);
+  const map = page.getByTestId('mindmap');
+  const node = (id: number) => map.locator(`[data-mm-node="${id}"]`);
+  const tab = (id: number) => map.locator(`[data-mm-tab="${id}"]`);
+  await expect(node(papier)).toBeVisible();
+  await page.waitForTimeout(700); // fit / layout transition settles
+  const centre = async (l: ReturnType<typeof node>) => {
+    const bb = (await l.boundingBox())!;
+    return { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 };
+  };
+  // Grab "Papier" and hold it over the body of "Solar".
+  const from = await centre(node(papier));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 6, from.y + 6, { steps: 2 });
+  const over = await centre(node(solar));
+  await page.mouse.move(over.x, over.y, { steps: 10 });
+  // Every other term (Energie, Wind, Solar) offers its tab — not the dragged one.
+  await expect(map.locator('[data-mm-tab]')).toHaveCount(3);
+  await expect(tab(papier)).toHaveCount(0);
+  await expect(tab(solar)).toHaveAttribute('data-active', '');
+  await expect(tab(energie)).not.toHaveAttribute('data-active', '');
+  // The merge bubble also says how to attach instead.
+  const bubble = map.getByRole('status');
+  await expect(bubble).toContainText('Mit „Solar“ zusammenführen');
+  await expect(bubble).toContainText('Zum Anhängen als Unterbegriff auf die Lasche „Hier einhängen“ ziehen');
+  // The parent's icon-only tab is labelled.
+  await expect(tab(energie)).toHaveAttribute('title', 'Hier einhängen');
+  const axe = await new AxeBuilder({ page })
+    .include('[data-testid="mindmap"]')
+    // The dragged term itself is deliberately faded (its ghost follows the pointer).
+    .exclude(`[data-mm-node="${papier}"]`)
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(axe.violations).toEqual([]);
+  await shot(page, 'mm-drag-tabs');
+  // Over the parent's body: its icon-only tab gets its label below it.
+  const body = await centre(node(energie));
+  await page.mouse.move(body.x, body.y, { steps: 10 });
+  await expect(tab(energie)).toHaveAttribute('data-active', '');
+  await expect(map.locator(`[data-mm-tab-label="${energie}"]`)).toHaveText('Hier einhängen');
+  await expect(bubble).toContainText('Mit „Energie“ zusammenführen');
+  await shot(page, 'mm-drag-parent-body');
+  // Straight onto the parent's (icon-only) tab: attach below "Energie".
+  const t = await centre(tab(energie));
+  await page.mouse.move(t.x, t.y, { steps: 10 });
+  await expect(tab(energie)).toHaveAttribute('data-active', '');
+  await expect(bubble).toContainText('Unter „Energie“ einhängen');
+  await shot(page, 'mm-drag-parent-tab');
+  await page.mouse.up();
+  await expect.poll(s.parents).toMatchObject({ Papier: 'Energie', Wind: 'Energie', Solar: null });
+});
+
+test('a drop straight onto a leaf\'s tab (without crossing its body) attaches below it', async ({ page, trackRoom }) => {
+  const s = await seed(page, trackRoom);
+  const energie = await s.add('Energie');
+  await s.add('Wind', energie);
+  const solar = await s.add('Solar');
+  const papier = await s.add('Papier');
+  await openPresenter(page, s.room.setId);
+  const map = page.getByTestId('mindmap');
+  const node = (id: number) => map.locator(`[data-mm-node="${id}"]`);
+  await expect(node(solar)).toBeVisible();
+  await page.waitForTimeout(700); // fit / layout transition settles
+  const bb = (await node(solar).boundingBox())!;
+  const from = { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 6, from.y + 6, { steps: 2 });
+  const tab = map.locator(`[data-mm-tab="${papier}"]`);
+  await expect(tab).toBeVisible();
+  const tb = (await tab.boundingBox())!;
+  const vw = page.viewportSize()!.width;
+  // Centre of the tab's on-screen part, reached in one jump.
+  const x = (Math.max(tb.x, 0) + Math.min(tb.x + tb.width, vw - 1)) / 2;
+  await page.mouse.move(x, tb.y + tb.height / 2, { steps: 1 });
+  await expect(tab).toHaveAttribute('data-active', '');
+  await expect(map.getByRole('status')).toContainText('Unter „Papier“ einhängen');
+  await page.mouse.up();
+  await expect.poll(s.parents).toMatchObject({ Solar: 'Papier', Papier: null, Wind: 'Energie' });
 });
