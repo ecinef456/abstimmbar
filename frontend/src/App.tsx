@@ -239,11 +239,45 @@ export default function App() {
   const wasTourActiveRef = useRef(false);
   const easyMode = whoami?.easy_mode ?? false;
 
+  // Mode switch feedback (#77): a short status notice, and — switching to
+  // Expert — a brief highlight of the controls that just appeared
+  // (`.pro-just-enabled [data-pro-only]`, index.css).
+  const [modeNotice, setModeNotice] = useState<{ text: string; n: number } | null>(null);
+  const proPulseTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!modeNotice) return;
+    const id = window.setTimeout(() => setModeNotice(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [modeNotice]);
+  useEffect(
+    () => () => {
+      window.clearTimeout(proPulseTimer.current);
+      document.documentElement.classList.remove("pro-just-enabled");
+    },
+    [],
+  );
+
   const setEasyMode = (easyMode: boolean) => {
     void api
       .setMode(easyMode)
       .then((res) => {
         setWhoami((prev) => (prev ? { ...prev, easy_mode: res.easy_mode } : prev));
+        setModeNotice((prev) => ({
+          text: res.easy_mode
+            ? t("Simple mode: advanced options are hidden.")
+            : t("Expert mode: sections, before/after questions, AI and further options are now visible."),
+          n: (prev?.n ?? 0) + 1,
+        }));
+        const root = document.documentElement;
+        window.clearTimeout(proPulseTimer.current);
+        root.classList.remove("pro-just-enabled");
+        if (!res.easy_mode) {
+          root.classList.add("pro-just-enabled");
+          proPulseTimer.current = window.setTimeout(
+            () => root.classList.remove("pro-just-enabled"),
+            2500,
+          );
+        }
       })
       .catch(() => {});
   };
@@ -391,10 +425,18 @@ export default function App() {
                   className="w-max"
                   ariaLabel={t("Mode")}
                   value={whoami.easy_mode ? "simple" : "pro"}
-                  onChange={(v) => setEasyMode(v === "simple")}
+                  onChange={(v) => {
+                    if ((v === "simple") !== whoami.easy_mode) setEasyMode(v === "simple");
+                  }}
                   options={[
                     { value: "simple", label: t("Simple") },
-                    { value: "pro", label: t("Expert") },
+                    {
+                      value: "pro",
+                      label: t("Expert"),
+                      title: t(
+                        "Expert mode shows advanced options: sections, before/after questions, AI, bilingual content, recording mode, duplicating and exporting sets.",
+                      ),
+                    },
                   ]}
                 />
               </div>
@@ -432,6 +474,24 @@ export default function App() {
       </main>
 
       <Footer />
+
+      {/* Global status notice (mode switch, #77): the live region stays
+          mounted so screen readers announce each new message. */}
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-4 z-[9000] flex justify-center px-4"
+        role="status"
+        aria-live="polite"
+        data-toast
+      >
+        {modeNotice && (
+          <div
+            key={modeNotice.n}
+            className="ab-fade-in pointer-events-auto max-w-sm rounded-lg border border-slate-300 bg-white px-4 py-2 text-center text-sm text-slate-700 shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            {modeNotice.text}
+          </div>
+        )}
+      </div>
 
       {showWelcome && (
         <WelcomeDialog onStart={handleWelcomeStart} onSkip={handleWelcomeSkip} />

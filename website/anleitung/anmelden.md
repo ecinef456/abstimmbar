@@ -24,7 +24,9 @@ einen QR-Code oder den Raumcode bei (siehe
 Bei der ersten Nutzung startet die Oberfläche im **einfachen Modus** mit den
 wichtigsten Funktionen. Über den Modus-Umschalter oben rechts („Einfach“ /
 „Experte“) wechseln Sie jederzeit in den **Experten-Modus** mit allen
-Einstellungen. Ihre Wahl wird gespeichert.
+Einstellungen. Ihre Wahl wird gespeichert. Nach dem Umschalten bestätigt
+ein kurzer Hinweis unten den neuen Modus; beim Wechsel in den Experten-Modus
+werden die neu erschienenen Bedienelemente kurz hervorgehoben.
 
 Nur im Experten-Modus sehen Sie unter anderem:
 

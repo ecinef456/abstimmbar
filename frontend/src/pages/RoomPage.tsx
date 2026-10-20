@@ -26,6 +26,7 @@ import {
   InfoHint,
   MenuItem,
   MoreMenu,
+  ProOnly,
   SegmentedControl,
   Select,
   TextInput,
@@ -233,7 +234,7 @@ export function RoomSettingsForm({
         value={draft.description}
         onChange={(description) => onChange({ description })}
       />
-      {!easyMode && (
+      <ProOnly easyMode={easyMode}>
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-300">
           {t("Room features")}
@@ -294,10 +295,10 @@ export function RoomSettingsForm({
           )}
         </div>
       </fieldset>
-      )}
+      </ProOnly>
 
       {/* Info shown to participants after a vote ends (#24). */}
-      {!easyMode && (
+      <ProOnly easyMode={easyMode}>
       <TranslatableField
         variant="rich"
         label={t("Closing info for participants")}
@@ -307,7 +308,7 @@ export function RoomSettingsForm({
           "Shown after a vote ends — e.g. further links, literature, contact. Appears below the site-wide info.",
         )}
       />
-      )}
+      </ProOnly>
     </div>
   );
 }
@@ -778,7 +779,7 @@ export default function RoomPage() {
 
       {/* Created/changed metadata: kept in Pro mode (useful when several
           people co-edit a room), hidden in the decluttered Simple mode (#78). */}
-      {!easyMode && (
+      <ProOnly easyMode={easyMode}>
         <p className="mb-3 text-xs text-slate-400">
           {room.created_by_name
             ? t("Created on {{date}} by {{name}}", {
@@ -794,7 +795,7 @@ export default function RoomPage() {
               })
             : t("Last changed on {{date}}", { date: formatDateTime(room.updated_at) })}
         </p>
-      )}
+      </ProOnly>
 
       {pendingSwitch && (
         <div
@@ -1032,7 +1033,8 @@ export default function RoomPage() {
                   {/* Archive current results & prepare a fresh run (#27) —
                       only when there is something to archive. Easy mode
                       (#52) hides it; MR1's auto-archive replaces it. */}
-                  {!easyMode && set.has_results && (
+                  {set.has_results && (
+                    <ProOnly easyMode={easyMode}>
                     <Button
                       variant="ghost"
                       aria-label={t("Archive results of {{title}}", { title: localizedText(set.title) })}
@@ -1042,6 +1044,7 @@ export default function RoomPage() {
                     >
                       <Archive aria-hidden className="h-4 w-4" />
                     </Button>
+                    </ProOnly>
                   )}
                   <Button
                     variant="ghost"

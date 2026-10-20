@@ -38,6 +38,7 @@ import {
   MenuItem,
   MoreMenu,
   Select,
+  ProOnly,
   TextInput,
 } from "../components/ui";
 import { LICENSE_OPTIONS, licenseNeedsHolder } from "../licenses";
@@ -183,7 +184,7 @@ export function SetSettingsForm({
         value={draft.description}
         onChange={(description) => onChange({ description })}
       />
-      {!easyMode && (
+      <ProOnly easyMode={easyMode}>
         <fieldset>
           <legend className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-300">
             {t("Answers & results")}
@@ -320,7 +321,7 @@ export function SetSettingsForm({
             )}
           </div>
         </fieldset>
-      )}
+      </ProOnly>
       {/* Self-paced quizzes can carry an overall time budget (#75). Shown last,
           so it sits right above the Save button — like the question time limit.
           Other set types have no "total run time" concept; visible in easy mode
@@ -1515,7 +1516,8 @@ export default function SetPage() {
           {/* Answer-flow summary reflects pro-only settings, so it is hidden in
               the decluttered simple mode (#78). Quiz-Block (#75) has its own
               settings, so it shows a self-paced-specific summary. */}
-          {!easyMode && set.type === "self_paced" && (
+          {set.type === "self_paced" && (
+            <ProOnly easyMode={easyMode}>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               {t("Show correct answers right after answering")}:{" "}
               <strong className="font-semibold text-slate-700 dark:text-slate-200">
@@ -1532,8 +1534,10 @@ export default function SetPage() {
                   : `${set.quiz_time_limit / 60} min`}
               </strong>
             </p>
+            </ProOnly>
           )}
-          {!easyMode && set.type === "self_check" && (
+          {set.type === "self_check" && (
+            <ProOnly easyMode={easyMode}>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               {t("Show questions in a random order")}:{" "}
               <strong className="font-semibold text-slate-700 dark:text-slate-200">
@@ -1544,8 +1548,10 @@ export default function SetPage() {
                 {set.reveal_only_in_summary ? t("yes") : t("no")}
               </strong>
             </p>
+            </ProOnly>
           )}
-          {!easyMode && set.type !== "self_paced" && set.type !== "self_check" && (
+          {set.type !== "self_paced" && set.type !== "self_check" && (
+            <ProOnly easyMode={easyMode}>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               {t("Correct answers:")}{" "}
               <strong className="font-semibold text-slate-700 dark:text-slate-200">
@@ -1560,8 +1566,9 @@ export default function SetPage() {
                 {set.show_results_to_participants ? t("yes") : t("no")}
               </strong>
             </p>
+            </ProOnly>
           )}
-          {!easyMode && (
+          <ProOnly easyMode={easyMode}>
             <p className="mt-1 text-xs text-slate-400">
               {t("Created {{created}} · Updated {{updated}}", {
                 created: formatDate(set.created_at),
@@ -1569,7 +1576,7 @@ export default function SetPage() {
               })}
               {set.share_token && t(" · shareable via link")}
             </p>
-          )}
+          </ProOnly>
           {metaError && <p className="mt-1 text-sm text-danger">{metaError}</p>}
         </div>
       )}
@@ -1875,7 +1882,7 @@ export default function SetPage() {
         <div className="flex flex-wrap items-center gap-2">
           {/* Authoring actions surfaced next to "Neue Frage" (#21, #23).
               Easy mode (#52): sections are a Pro feature. */}
-          {!easyMode && (
+          <ProOnly easyMode={easyMode}>
             <Button
               variant={editingSections ? "primary" : "secondary"}
               aria-pressed={editingSections}
@@ -1890,7 +1897,7 @@ export default function SetPage() {
             >
               <ListTree aria-hidden className="h-4 w-4" />{t("Sections")}
             </Button>
-          )}
+          </ProOnly>
           {aiVisible && (
             <div data-tour="set.ai-generate">
               <Button
@@ -1915,7 +1922,8 @@ export default function SetPage() {
 
       {/* Recording mode (#53): opt-in before presenting (Pro only). A
           Lernkontrolle is never presented, so it has no recording mode. */}
-      {!easyMode && set.type !== "self_check" && questions.length > 0 && (
+      {set.type !== "self_check" && questions.length > 0 && (
+        <ProOnly easyMode={easyMode}>
         <label className="mb-4 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
           <input
             type="checkbox"
@@ -1930,6 +1938,7 @@ export default function SetPage() {
             )}
           />
         </label>
+        </ProOnly>
       )}
 
       {editingSections && (
@@ -2109,7 +2118,8 @@ export default function SetPage() {
                         )}
                         {/* Pro only (#91): a persisted stale-translation flag,
                             sitting with the row actions. */}
-                        {!easyMode && hasStaleTranslation && (
+                        {hasStaleTranslation && (
+                          <ProOnly easyMode={easyMode}>
                           <span
                             title={t("translation may be outdated")}
                             className="inline-flex shrink-0 px-1 text-amber-500"
@@ -2119,8 +2129,10 @@ export default function SetPage() {
                               className="h-4 w-4"
                             />
                           </span>
+                          </ProOnly>
                         )}
-                        {!easyMode && set.type !== "self_check" && (
+                        {set.type !== "self_check" && (
+                          <ProOnly easyMode={easyMode}>
                           <Button
                             variant="ghost"
                             aria-label={t("Present this question")}
@@ -2134,6 +2146,7 @@ export default function SetPage() {
                           >
                             <Play aria-hidden className="h-4 w-4" />
                           </Button>
+                          </ProOnly>
                         )}
                         {/* Lernkontrolle (#75 phase 3): per-question deep
                             link into the standing practice page. */}
