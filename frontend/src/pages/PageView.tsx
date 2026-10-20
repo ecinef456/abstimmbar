@@ -5,7 +5,7 @@
  * For the privacy slug it appends the auto-generated data-collection table
  * from the backend registry below the admin-authored prose. */
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 import { api, type DataCollection, type PageDetail } from "../api";

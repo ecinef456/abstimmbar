@@ -5,7 +5,7 @@
  * anyone logged in with the link sees a preview and copies the set into
  * one of their own rooms — editing stays with the owners. */
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Link2 } from "lucide-react";
 import { api, requestError, type Room, type SharedSet } from "../api";
