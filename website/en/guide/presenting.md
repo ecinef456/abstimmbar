@@ -167,8 +167,10 @@ You moderate the mind map right on the projector:
 
 - With **+** on a term, you add a sub-term when someone calls one out.
 - Drag a term **onto** another and the two are merged (sub-terms come
-  along); drag it onto the **“Attach here”** zone beside it and it moves
-  there together with its subtree.
+  along); drag it onto the **“Attach here”** tab beside it and it moves
+  there together with its subtree. As soon as you drag, every term shows its
+  tab: dropping on the term merges, dropping on the “Attach here” tab beside
+  it attaches as a sub-term.
 - Double-click to rename a term; × hides it along with its subtree.
 - ++ctrl+z++ / ++cmd+z++ undoes the last step.
 

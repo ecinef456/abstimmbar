@@ -18,7 +18,7 @@
  * "attach here" tab beside a term (or onto the root) moves it there, double-
  * click renames. Invalid targets are shown red with the reason; the checks
  * mirror the server's (`backend/live/mindmap.py`). */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -1139,6 +1139,13 @@ export default function MindMap({
       if (p.id === dragId) return { active: null, target: null };
       return { active: p.id, target: { kind: "merge", id: p.id, problem: mergeProblem(dragId, p.id) } };
     }
+    // While dragging every term shows its tab, so any of them is a target
+    // (bodies first: tabs never cover a term anyway).
+    for (let i = layout.nodes.length - 1; i >= 0; i--) {
+      const p = layout.nodes[i];
+      if (p.id === dragId || isAncestor(dragId, p.id) || !inside(tabRect(p), x, y)) continue;
+      return { active: p.id, target: { kind: "move", id: p.id, problem: moveProblem(dragId, p.id) } };
+    }
     const r = layout.root;
     if (Math.abs(x) <= r.w / 2 + 16 && Math.abs(y) <= r.h / 2 + 16)
       return { active: null, target: { kind: "move", id: null, problem: moveProblem(dragId, null) } };
@@ -1519,23 +1526,93 @@ export default function MindMap({
   };
 
   // While dragging: the dragged term's branch is dimmed, a ghost follows the
-  // pointer, the hovered term offers its "attach here" tab, and a bubble
-  // names the action (or why it isn't possible).
+  // pointer, every other term shows its "attach here" tab (dimmed; the
+  // hovered term's one highlighted) so the second drop target is visible
+  // before the pointer gets there, and a bubble names the action (or why it
+  // isn't possible).
+  const dragId = nodeDrag?.id ?? null;
   const dimmed = useMemo(() => {
     const out = new Set<number>();
-    if (!nodeDrag) return out;
+    if (dragId === null) return out;
     const walk = (n: LiveMindmapNode) => {
       out.add(n.id);
       n.children.forEach(walk);
     };
-    const n = byId.get(nodeDrag.id);
+    const n = byId.get(dragId);
     if (n) walk(n);
     return out;
-  }, [nodeDrag, byId]);
-  const dragOverlay = (): {
-    world: ReactNode;
-    bubble: { x: number; y: number; text: string; bad: boolean } | null;
-  } | null => {
+  }, [dragId, byId]);
+  const dragActive = nodeDrag?.active ?? null;
+  const dragTgt = nodeDrag?.target ?? null;
+  const tabState: "off" | "on" | "bad" =
+    dragTgt?.kind === "move" && dragTgt.id !== null && dragTgt.id === dragActive
+      ? dragTgt.problem
+        ? "bad"
+        : "on"
+      : "off";
+  // Rebuilt only when the hovered term or its state changes, not on every
+  // pointer move (maps can have hundreds of terms); positions come from the
+  // existing layout.
+  const tabsEl = useMemo(() => {
+    if (dragId === null) return null;
+    const label = t("Attach here");
+    return layout.nodes.map((p) => {
+      if (dimmed.has(p.id)) return null;
+      const tr = tabRect(p);
+      const active = p.id === dragActive;
+      const on = active && tabState !== "off";
+      const bad = on && tabState === "bad";
+      return (
+        <Fragment key={p.id}>
+          <div
+            data-mm-tab={p.id}
+            data-active={active ? "" : undefined}
+            role={tr.narrow ? "img" : undefined}
+            aria-label={tr.narrow ? label : undefined}
+            title={label}
+            className={`pointer-events-none absolute left-0 top-0 flex items-center justify-center gap-1 rounded-xl text-sm font-semibold ${
+              active ? "shadow-sm" : ""
+            }`}
+            style={{
+              width: tr.w,
+              height: tr.h,
+              transform: `translate(${tr.x}px, ${tr.y}px)`,
+              border: on
+                ? `2px dashed ${bad ? BAD : GOOD}`
+                : active
+                  ? "2px dashed #64748b"
+                  : "1.5px dashed rgba(100,116,139,0.5)",
+              background: on ? (bad ? BAD_BG : GOOD_BG) : active ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.7)",
+              color: on ? (bad ? BAD : GOOD) : "#475569",
+            }}
+          >
+            <CornerDownRight className="h-4 w-4 shrink-0" aria-hidden />
+            {!tr.narrow && label}
+          </div>
+          {/* Beside a parent the tab is icon-only (the gap before the
+              children): the hovered one gets its label below it (the
+              bubble sits above), never over the children. While the tab
+              itself is hovered the bubble names the action instead. */}
+          {tr.narrow && active && !on && (
+            <div
+              aria-hidden
+              data-mm-tab-label={p.id}
+              className="pointer-events-none absolute left-0 top-0 whitespace-nowrap rounded-md border border-slate-400 bg-white px-1.5 py-0.5 text-xs font-semibold shadow-sm"
+              style={{
+                transform: `translate(${tr.x + tr.w / 2}px, ${tr.y + tr.h + 4}px) translate(-50%, 0)`,
+                color: "#475569",
+              }}
+            >
+              {label}
+            </div>
+          )}
+        </Fragment>
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragId, dragActive, tabState, dimmed, layout, t]);
+  type Bubble = { x: number; y: number; text: string; hint?: string; bad: boolean };
+  const dragOverlay = (): { world: ReactNode; bubble: Bubble | null } | null => {
     if (!nodeDrag) return null;
     const src = byId.get(nodeDrag.id);
     const srcBox = boxes.get(nodeDrag.id);
@@ -1545,10 +1622,8 @@ export default function MindMap({
     const colors = nodeColors(srcPlaced.depth, hue);
     const tgt = nodeDrag.target;
     const act = nodeDrag.active !== null ? placedById.get(nodeDrag.active) : undefined;
-    const tabOn = tgt?.kind === "move" && tgt.id !== null && tgt.id === nodeDrag.active;
-    const tabBad = tabOn && !!tgt?.problem;
     // Bubble anchor (world): above the target.
-    let bubble: { x: number; y: number; text: string; bad: boolean } | null = null;
+    let bubble: Bubble | null = null;
     if (tgt) {
       const word = (id: number) => mindmapNodeText(byId.get(id)!);
       if (tgt.kind === "merge" && tgt.id !== null) {
@@ -1557,6 +1632,10 @@ export default function MindMap({
           x: p.x,
           y: p.y - p.h / 2 - 10,
           text: tgt.problem ?? t("Merge into “{{word}}”", { word: word(tgt.id) }),
+          // Second line: the other gesture, when it is possible here.
+          hint: moveProblem(nodeDrag.id, tgt.id)
+            ? undefined
+            : t("To attach it as a sub-term, drop it on the “Attach here” tab"),
           bad: !!tgt.problem,
         };
       } else if (tgt.id !== null && act) {
@@ -1591,24 +1670,7 @@ export default function MindMap({
             background: rootOn ? (tgt?.problem ? BAD_BG : GOOD_BG) : undefined,
           }}
         />
-        {act && (
-          <div
-            data-mm-tab=""
-            className="pointer-events-none absolute left-0 top-0 flex items-center justify-center gap-1 rounded-xl text-sm font-semibold"
-            style={{
-              ...(() => {
-                const tr = tabRect(act);
-                return { width: tr.w, height: tr.h, transform: `translate(${tr.x}px, ${tr.y}px)` };
-              })(),
-              border: `2px dashed ${tabOn ? (tabBad ? BAD : GOOD) : "rgba(100,116,139,0.6)"}`,
-              background: tabOn ? (tabBad ? BAD_BG : GOOD_BG) : "rgba(255,255,255,0.85)",
-              color: tabOn ? (tabBad ? BAD : GOOD) : "#475569",
-            }}
-          >
-            <CornerDownRight className="h-4 w-4 shrink-0" aria-hidden />
-            {!tabRect(act).narrow && t("Attach here")}
-          </div>
-        )}
+        {tabsEl}
         {/* Ghost of the dragged term. */}
         <div
           className="pointer-events-none absolute left-0 top-0 rounded-[14px] shadow-xl"
@@ -1661,6 +1723,7 @@ export default function MindMap({
         }}
       >
         {b.text}
+        {b.hint && <span className="block text-xs font-normal">{b.hint}</span>}
       </div>
     );
   };

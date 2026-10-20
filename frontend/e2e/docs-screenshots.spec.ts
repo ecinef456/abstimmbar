@@ -126,7 +126,7 @@ async function login(page: Page) {
       localStorage.setItem('abstimmbar_theme', 'light');
       localStorage.setItem('abstimmbar_lang', lang);
       // One-time moderation/AI tips on the beamer: already seen.
-      for (const key of ['abstimmbar_wc_moderation_hint', 'abstimmbar_mm_moderation_hint_v2', 'abstimmbar_wc_ai_hint'])
+      for (const key of ['abstimmbar_wc_moderation_hint', 'abstimmbar_mm_moderation_hint_v3', 'abstimmbar_wc_ai_hint'])
         localStorage.setItem(key, '1');
     } catch {
       /* ignore */

@@ -260,3 +260,62 @@ test('locked while rating', async ({ page, trackRoom }) => {
   await expect(section(page, 'Zusammengeführt').getByRole('button', { name: /Zurücksetzen/ })).toBeDisabled();
   await shot(page, 'mm-log-rating');
 });
+
+test('while dragging every term shows its "attach here" tab; a parent\'s tab attaches as a child', async ({ page, trackRoom }) => {
+  const s = await seed(page, trackRoom);
+  const energie = await s.add('Energie');
+  await s.add('Wind', energie);
+  const solar = await s.add('Solar');
+  const papier = await s.add('Papier');
+  await openPresenter(page, s.room.setId);
+  const map = page.getByTestId('mindmap');
+  const node = (id: number) => map.locator(`[data-mm-node="${id}"]`);
+  const tab = (id: number) => map.locator(`[data-mm-tab="${id}"]`);
+  await expect(node(papier)).toBeVisible();
+  await page.waitForTimeout(700); // fit / layout transition settles
+  const centre = async (l: ReturnType<typeof node>) => {
+    const bb = (await l.boundingBox())!;
+    return { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 };
+  };
+  // Grab "Papier" and hold it over the body of "Solar".
+  const from = await centre(node(papier));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 6, from.y + 6, { steps: 2 });
+  const over = await centre(node(solar));
+  await page.mouse.move(over.x, over.y, { steps: 10 });
+  // Every other term (Energie, Wind, Solar) offers its tab — not the dragged one.
+  await expect(map.locator('[data-mm-tab]')).toHaveCount(3);
+  await expect(tab(papier)).toHaveCount(0);
+  await expect(tab(solar)).toHaveAttribute('data-active', '');
+  await expect(tab(energie)).not.toHaveAttribute('data-active', '');
+  // The merge bubble also says how to attach instead.
+  const bubble = map.getByRole('status');
+  await expect(bubble).toContainText('Mit „Solar“ zusammenführen');
+  await expect(bubble).toContainText('Zum Anhängen als Unterbegriff auf die Lasche „Hier einhängen“ ziehen');
+  // The parent's icon-only tab is labelled.
+  await expect(tab(energie)).toHaveAttribute('title', 'Hier einhängen');
+  const axe = await new AxeBuilder({ page })
+    .include('[data-testid="mindmap"]')
+    // The dragged term itself is deliberately faded (its ghost follows the pointer).
+    .exclude(`[data-mm-node="${papier}"]`)
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(axe.violations).toEqual([]);
+  await shot(page, 'mm-drag-tabs');
+  // Over the parent's body: its icon-only tab gets its label below it.
+  const body = await centre(node(energie));
+  await page.mouse.move(body.x, body.y, { steps: 10 });
+  await expect(tab(energie)).toHaveAttribute('data-active', '');
+  await expect(map.locator(`[data-mm-tab-label="${energie}"]`)).toHaveText('Hier einhängen');
+  await expect(bubble).toContainText('Mit „Energie“ zusammenführen');
+  await shot(page, 'mm-drag-parent-body');
+  // Straight onto the parent's (icon-only) tab: attach below "Energie".
+  const t = await centre(tab(energie));
+  await page.mouse.move(t.x, t.y, { steps: 10 });
+  await expect(tab(energie)).toHaveAttribute('data-active', '');
+  await expect(bubble).toContainText('Unter „Energie“ einhängen');
+  await shot(page, 'mm-drag-parent-tab');
+  await page.mouse.up();
+  await expect.poll(s.parents).toMatchObject({ Papier: 'Energie', Wind: 'Energie', Solar: null });
+});
