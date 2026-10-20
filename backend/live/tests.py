@@ -1070,6 +1070,17 @@ class ParticipantPageTests(LiveTestCase):
         self.assertContains(self.client.get(f"/p/{self.room.code}/"), self.room.title)
         self.assertEqual(self.client.get("/p/00000000/").status_code, 404)
 
+    def test_pages_declare_favicon(self):
+        # Project logo as favicon + touch icon + theme colour (static files).
+        for url in ("/p/", f"/p/{self.room.code}/"):
+            html = self.client.get(url).content.decode()
+            self.assertIn(
+                '<link rel="icon" type="image/svg+xml" href="/static/common/favicon.svg">', html
+            )
+            self.assertIn('href="/static/common/favicon-32.png"', html)
+            self.assertIn('rel="apple-touch-icon" href="/static/common/apple-touch-icon.png"', html)
+            self.assertIn('<meta name="theme-color" content="#2f7346">', html)
+
     def test_unknown_code_renders_friendly_page(self):
         resp = self.client.get("/p/nope-nope-nope/")
         self.assertEqual(resp.status_code, 404)

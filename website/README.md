@@ -90,6 +90,9 @@ statisch ausliefern, z. B. unter `/abstimmbar/` per
 - `index.md` — Startseite, `anleitung/` — Anleitung für Lehrende (ein Kapitel
   pro Datei), `assets/` — Theme (Farben wie in der App) und Logo; `en/` —
   dasselbe auf Englisch (`en/guide/`).
+- Die App-Favicons (`frontend/public/`, `backend/common/static/common/`) sind
+  Kopien von `assets/logo.svg`; ändert sich das Logo, die Dateien neu erzeugen
+  mit `cd frontend && node scripts/make-favicons.mjs`.
 - `installation.md` und `lti.md` binden `docs/deployment.md` bzw.
   `docs/lti.md` per `pymdownx.snippets` ein — Änderungen dort machen, nicht
   hier (und die englischen Fassungen in `en/` nachziehen, s. o.). Links aus diesen Dokumenten auf andere Dateien in `docs/` schreibt
