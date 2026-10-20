@@ -115,7 +115,8 @@ def _job_payload(job):
         "id": job.id, "status": job.status,
         "done_chunks": job.done_chunks, "total_chunks": job.total_chunks,
         "drafts": job.drafts, "truncated": job.truncated,
-        "source_chars": job.source_chars, "notice": job.notice, "error": job.error,
+        "source_chars": job.source_chars, "notice": job.notice,
+        "unsuitable_reason": job.unsuitable_reason, "error": job.error,
         "pages": job.pages, "density": job.density,
         "target_count": job.target_count, "reviewed": job.reviewed,
     }

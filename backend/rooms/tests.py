@@ -4681,6 +4681,59 @@ class GenerationWorkerTests(TransactionTestCase):
         self.assertEqual(job.total_chunks, 2)  # capped
         self.assertIn("überschreit", job.notice.lower())
 
+    def test_unsuitable_reason_surfaces_when_no_questions(self):
+        from unittest import mock
+
+        from django.test import override_settings
+
+        from . import generation
+        from .views import _job_payload
+        job = self._job("Inhaltsverzeichnis")
+        reply = {"questions": [], "unsuitable_reason": "  Nur ein Inhaltsverzeichnis.  "}
+        with override_settings(**AI_ON), \
+             mock.patch("rooms.generation.ai.chat_json", return_value=reply):
+            generation.run_generation_job(job.id)
+        job.refresh_from_db()
+        self.assertEqual(job.status, self.GenerationJob.Status.DONE)
+        self.assertEqual(job.drafts, [])
+        self.assertEqual(job.unsuitable_reason, "Nur ein Inhaltsverzeichnis.")
+        self.assertEqual(
+            _job_payload(job)["unsuitable_reason"], "Nur ein Inhaltsverzeichnis."
+        )
+
+    def test_unsuitable_reason_is_dropped_when_questions_exist(self):
+        from unittest import mock
+
+        from django.test import override_settings
+
+        from . import generation
+        from .views import _job_payload
+        job = self._job("Stoff")
+        reply = {
+            "questions": [{"kind": "open_text", "text": "Frage 1"}],
+            "unsuitable_reason": "Teile sind unbrauchbar.",
+        }
+        with override_settings(**AI_ON), \
+             mock.patch("rooms.generation.ai.chat_json", return_value=reply):
+            generation.run_generation_job(job.id)
+        job.refresh_from_db()
+        self.assertEqual(len(job.drafts), 1)
+        self.assertEqual(job.unsuitable_reason, "")
+        self.assertEqual(_job_payload(job)["unsuitable_reason"], "")
+
+    def test_no_unsuitable_reason_when_the_model_gives_none(self):
+        from unittest import mock
+
+        from django.test import override_settings
+
+        from . import generation
+        job = self._job("Stoff")
+        with override_settings(**AI_ON), \
+             mock.patch("rooms.generation.ai.chat_json", return_value={"questions": []}):
+            generation.run_generation_job(job.id)
+        job.refresh_from_db()
+        self.assertEqual(job.unsuitable_reason, "")
+
     def test_chunk_error_is_skipped(self):
         from unittest import mock
 

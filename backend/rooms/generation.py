@@ -120,6 +120,7 @@ def run_generation_job(job_id):
             failed_chunks = 0
             done = 0
             drafts = list(job.drafts)
+            reason = ""
             target = job.target_count or settings.AI_GEN_MAX_QUESTIONS
             num = max(1, len(chunks))
             per = max(1, round(target / num))
@@ -140,6 +141,7 @@ def run_generation_job(job_id):
                         ),
                     )
                     new = ai_generate.build_drafts(data, job.kinds, per)
+                    reason = reason or ai_generate.unsuitable_reason(data)
                     drafts = merge_drafts(drafts, new)[:target]
                 except (ai.AIError, ValueError, KeyError, TypeError):
                     failed_chunks += 1
@@ -165,6 +167,7 @@ def run_generation_job(job_id):
                 drafts=drafts,
                 done_chunks=done,
                 notice=notice,
+                unsuitable_reason="" if drafts else reason,
             )
         except Exception as exc:  # noqa: BLE001 -- never leave a job stuck in running
             GenerationJob.objects.filter(pk=job_id).exclude(

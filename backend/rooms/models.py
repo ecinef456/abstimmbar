@@ -252,6 +252,8 @@ class GenerationJob(TimeStampedModel):
     truncated = models.BooleanField(default=False)
     source_chars = models.PositiveIntegerField(default=0)
     notice = models.TextField(blank=True)
+    # The model's own reason for declining (set only when no questions came out).
+    unsuitable_reason = models.CharField(max_length=300, blank=True)
     error = models.TextField(blank=True)
     pages = models.PositiveIntegerField(default=0)
     density = models.FloatField(default=1.0)
