@@ -1,31 +1,30 @@
-Django==5.1.4
-djangorestframework==3.15.2
+Django==5.2.18
+djangorestframework==3.18.3
 # Gemeinsame Basis der -bar-Tools (LibreTranslate/LiteLLM/Capabilities);
 # Versionswechsel = Tag in der URL heben, Migrationsschritte im dortigen CHANGELOG.
-basicbar-integrations @ https://github.com/virtUOS/basicbar/archive/refs/tags/integrations/v0.2.2.tar.gz#subdirectory=packages/django/basicbar-integrations
+basicbar-integrations @ https://github.com/virtUOS/basicbar/archive/refs/tags/integrations/v0.3.0.tar.gz#subdirectory=packages/django/basicbar-integrations
 basicbar-auth @ https://github.com/virtUOS/basicbar/archive/refs/tags/auth/v0.2.2.tar.gz#subdirectory=packages/django/basicbar-auth
-basicbar-lti @ https://github.com/virtUOS/basicbar/archive/refs/tags/lti/v0.1.4.tar.gz#subdirectory=packages/django/basicbar-lti
-django-cors-headers==4.6.0
-psycopg[binary,pool]==3.2.3
+basicbar-lti @ https://github.com/virtUOS/basicbar/archive/refs/tags/lti/v0.1.5.tar.gz#subdirectory=packages/django/basicbar-lti
+django-cors-headers==4.9.0
+psycopg[binary,pool]==3.3.6
 mozilla-django-oidc==4.0.1
 # HTML allowlist sanitizing for editor content (ADR-0007).
-nh3==0.2.20
+nh3==0.3.7
 # Server-side Markdown → HTML for the framework-free participant page
 # (closing info, #24); output is passed through the nh3 allowlist.
-Markdown==3.7
-Pillow==11.0.0
-gunicorn==23.0.0
+Markdown==3.11.2
+Pillow==12.3.0
 # ASGI server — SSE streams need async views without thread-per-connection
 # (ADR-0003). [standard] brings uvloop, httptools and watchfiles (--reload).
-uvicorn[standard]==0.34.0
+uvicorn[standard]==0.54.0
 # QR codes for the participant short URL (presenter start screen).
-qrcode==8.0
+qrcode==8.2
 # LTI 1.3 / LTI Advantage tool implementation (concept §8.1, ADR-0005).
 PyLTI1p3==2.0.0
 # Per-language columns for authored content fields (#33 MR2).
-django-modeltranslation==0.19.11
+django-modeltranslation==0.20.6
 # Text extraction from uploaded documents for the optional AI features:
 # PDF (pypdf), PowerPoint (python-pptx) and OpenDocument slides (odfpy).
-pypdf==5.1.0
+pypdf==6.21.1
 python-pptx==1.0.2
 odfpy==1.4.1

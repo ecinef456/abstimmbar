@@ -3,7 +3,7 @@
 # serve directly (see docker-compose.prod.yml) — this image is the single
 # versioned artifact for a release; Caddy itself does no building.
 
-FROM node:22-slim AS frontend-build
+FROM node:24-slim AS frontend-build
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci

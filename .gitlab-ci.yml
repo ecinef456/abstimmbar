@@ -29,7 +29,7 @@ backend-test:
 
 frontend-build:
   stage: build
-  image: node:22-slim
+  image: node:24-slim
   script:
     - cd frontend
     - npm ci
