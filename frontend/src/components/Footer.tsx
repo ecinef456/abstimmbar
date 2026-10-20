@@ -8,6 +8,7 @@ import { Link } from "react-router";
 import { api, type FooterPageLink } from "../api";
 import { localizedText } from "@basicbar/ui";
 import { useTranslation } from "react-i18next";
+import { APP_VERSION } from "../version";
 
 export default function Footer() {
   const { t } = useTranslation();
@@ -38,6 +39,9 @@ export default function Footer() {
         >
           abstimm<span className="font-semibold">BAR</span>
         </a>
+        <span className="text-xs">
+          {t("Version {{version}}", { version: APP_VERSION })}
+        </span>
       </div>
     </footer>
   );

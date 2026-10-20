@@ -11,6 +11,9 @@ COPY frontend/ .
 # Optional build-time override of the in-app guide link (see docs/deployment.md).
 ARG VITE_GUIDE_URL
 ARG VITE_GUIDE_URL_EN
+# App version shown in the footer and admin area: the release workflow passes
+# the git tag (without "v"); local builds show "dev".
+ARG VITE_APP_VERSION=dev
 RUN npm run build
 
 FROM python:3.12-slim

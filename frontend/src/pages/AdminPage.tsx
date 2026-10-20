@@ -15,6 +15,7 @@ import Donut, { type DonutSegment } from "../components/Donut";
 import HomeCrumb from "../components/HomeCrumb";
 import MiniChart, { type ChartSeries } from "../components/MiniChart";
 import TranslatableField from "../components/TranslatableField";
+import { APP_VERSION } from "../version";
 import { Button, ConfirmInline, EmptyState, Field, InfoHint, Select, SegmentedControl, TextInput } from "../components/ui";
 import { proTour, RESTORE_STEP } from "../tour/steps";
 
@@ -105,7 +106,12 @@ function AdminTabs() {
         <nav className="mb-4 text-sm text-slate-500 dark:text-slate-400">
           <HomeCrumb /> / {t("Manage website")}
         </nav>
-        <h1 className="mb-4 text-2xl font-bold">{t("Manage website")}</h1>
+        <div className="mb-4 flex flex-wrap items-baseline gap-x-3">
+          <h1 className="text-2xl font-bold">{t("Manage website")}</h1>
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            {t("Version {{version}}", { version: APP_VERSION })}
+          </span>
+        </div>
         <SegmentedControl
           ariaLabel={t("Admin section")}
           value={tab}

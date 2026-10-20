@@ -81,9 +81,16 @@ jobs:
         id: meta
         with:
           images: ghcr.io/virtuos/abstimmbar
+          # Each release is published as X.Y.Z and vX.Y.Z (matching the git
+          # tag), plus latest.
           tags: |
             type=semver,pattern={{version}}
+            type=semver,pattern=v{{version}}
             type=raw,value=latest
+
+      # App version shown in the footer/admin area: the tag without its "v".
+      - id: appver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v7
         with:
@@ -92,3 +99,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_APP_VERSION=${{ steps.appver.outputs.version }}
