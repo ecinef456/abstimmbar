@@ -26,6 +26,7 @@ from .models import (
     MindmapContribution,
     MindmapNode,
     MindmapPhase,
+    MindmapRating,
     ParticipantToken,
     Run,
     SelfCheckAttempt,
@@ -1710,6 +1711,9 @@ class SelfPacedTests(LiveTestCase):
         }
         self.assertEqual(progress["2+2?"], 1)
         self.assertEqual(presenter["votes_total"], 1)
+        # The live pill's key must not collide with the dashboard list.
+        self.assertIsInstance(presenter["progress"], list)
+        self.assertNotIn("counter", presenter)
 
     def test_start_stamps_quiz_ends_at_from_limit(self):
         self.question_set.quiz_time_limit = 120
@@ -10338,3 +10342,249 @@ class MatrixCsvCategoryFallbackTests(MatrixTestCase):
         # Canonical language is "de" (settings): its name is empty here.
         rows = mxs.csv_rows(self.run, self.xq)
         self.assertEqual(rows[0]["category"], "Idea")
+
+
+class PresenterProgressTests(LiveTestCase):
+    """``presenter["counter"]``: answered participants, items and the
+    per-person capacity per question kind (beamer fill pill)."""
+
+    def progress(self):
+        return build_payloads(self.room)["presenter"]["counter"]
+
+    def test_absent_without_active_question(self):
+        # idle (no run)
+        self.assertNotIn("counter", build_payloads(self.room)["presenter"])
+        # lobby
+        run = Run.objects.create(question_set=self.question_set, phase=Run.Phase.LOBBY)
+        self.assertNotIn("counter", build_payloads(self.room)["presenter"])
+        # finished
+        run.phase = Run.Phase.FINISHED
+        run.save()
+        self.assertNotIn("counter", build_payloads(self.room)["presenter"])
+
+    def tokens(self, n):
+        return [ParticipantToken.objects.create(room=self.room) for _ in range(n)]
+
+    def make(self, kind, **fields):
+        return Question.objects.create(
+            question_set=self.question_set, kind=kind, text="<p>Q</p>", position=5,
+            **fields,
+        )
+
+    # --- vote-based kinds -------------------------------------------------
+
+    def test_choice_no_participants(self):
+        self.open_question()
+        self.assertEqual(
+            self.progress(),
+            {"answered": 0, "items": None, "per_person": None, "unit": "answers"},
+        )
+
+    def test_choice_counts_distinct_voters(self):
+        run = self.open_question()
+        for token in self.tokens(3):
+            vote = Vote.objects.create(run=run, question=self.question, token=token)
+            vote.options.add(self.correct)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 3, "items": None, "per_person": None, "unit": "answers"},
+        )
+
+    def test_wordcloud_single_has_no_items(self):
+        q = self.make(Question.Kind.WORD_CLOUD, allow_multiple=False, wordcloud_max_answers=1)
+        run = self.open_question(q)
+        for token in self.tokens(2):
+            Vote.objects.create(run=run, question=q, token=token, text="A")
+        self.assertEqual(
+            self.progress(),
+            {"answered": 2, "items": None, "per_person": None, "unit": "answers"},
+        )
+
+    def test_wordcloud_multi_counts_terms_against_cap(self):
+        q = self.make(Question.Kind.WORD_CLOUD, allow_multiple=True, wordcloud_max_answers=3)
+        run = self.open_question(q)
+        a, b = self.tokens(2)
+        for text in ("x", "y", "z"):
+            Vote.objects.create(run=run, question=q, token=a, text=text)
+        Vote.objects.create(run=run, question=q, token=b, text="x")
+        self.assertEqual(
+            self.progress(),
+            {"answered": 2, "items": 4, "per_person": 3, "unit": "terms"},
+        )
+
+    def test_wordcloud_multi_unlimited_per_person_is_null(self):
+        q = self.make(Question.Kind.WORD_CLOUD, allow_multiple=True, wordcloud_max_answers=0)
+        run = self.open_question(q)
+        (a,) = self.tokens(1)
+        for text in ("x", "y"):
+            Vote.objects.create(run=run, question=q, token=a, text=text)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 1, "items": 2, "per_person": None, "unit": "terms"},
+        )
+
+    def test_open_text_single(self):
+        q = self.make(Question.Kind.OPEN_TEXT)
+        run = self.open_question(q)
+        (a,) = self.tokens(1)
+        Vote.objects.create(run=run, question=q, token=a, text="t")
+        self.assertEqual(
+            self.progress(),
+            {"answered": 1, "items": None, "per_person": None, "unit": "answers"},
+        )
+
+    # --- mind map ---------------------------------------------------------
+
+    def mindmap_setup(self, **fields):
+        q = self.make(Question.Kind.MINDMAP, **fields)
+        return q, self.open_question(q)
+
+    def node(self, run, q, text, *tokens, parent=None, **flags):
+        node = MindmapNode.objects.create(
+            run=run, question=q, parent=parent, text=text, text_key=text.lower(), **flags
+        )
+        for token in tokens:
+            MindmapContribution.objects.create(node=node, token=token)
+        return node
+
+    def test_mindmap_collecting_counts_visible_contributions(self):
+        q, run = self.mindmap_setup(mindmap_max_per_person=4)
+        a, b = self.tokens(2)
+        solar = self.node(run, q, "Solar", a, b)  # merged: one term, two people
+        self.node(run, q, "Panels", a, parent=solar)
+        hidden = self.node(run, q, "Spam", b, hidden=True)
+        self.node(run, q, "Below spam", a, parent=hidden)  # effectively hidden
+        self.node(run, q, "Seed", b, seeded=True)  # contribution to a seed: quota
+        self.node(run, q, "Teacher", teacher=True)  # no contribution
+        # items = quota used: Solar 2 + Panels 1 + Seed 1 (hidden subtree excluded)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 2, "items": 4, "per_person": 4, "unit": "terms"},
+        )
+
+    def test_mindmap_same_term_by_two_people_counts_twice(self):
+        q, run = self.mindmap_setup(mindmap_max_per_person=2)
+        a, b = self.tokens(2)
+        self.node(run, q, "Solar", a, b)
+        self.assertEqual(self.progress()["items"], 2)
+
+    def test_mindmap_unlimited_per_person_is_null(self):
+        self.mindmap_setup(mindmap_max_per_person=0)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 0, "items": 0, "per_person": None, "unit": "terms"},
+        )
+
+    def test_mindmap_items_above_capacity_not_clamped(self):
+        q, run = self.mindmap_setup(mindmap_max_per_person=1)
+        (a,) = self.tokens(1)
+        self.node(run, q, "A", a)
+        self.node(run, q, "B", a)  # e.g. cap lowered afterwards
+        progress = self.progress()
+        self.assertEqual((progress["items"], progress["per_person"]), (2, 1))
+
+    def test_mindmap_rating_points(self):
+        q, run = self.mindmap_setup(mindmap_rating_mode="points", mindmap_rating_budget=5)
+        MindmapPhase.objects.create(run=run, question=q, stage=MindmapPhase.Stage.RATE)
+        contributor, rater, both = self.tokens(3)
+        a = self.node(run, q, "A", contributor, both)
+        seed = self.node(run, q, "Seed", seeded=True)
+        hidden = self.node(run, q, "H", contributor, hidden=True)
+        MindmapRating.objects.create(node=a, token=rater, value=2)
+        MindmapRating.objects.create(node=seed, token=rater, value=1)
+        MindmapRating.objects.create(node=a, token=both, value=3)
+        MindmapRating.objects.create(node=hidden, token=rater, value=4)  # not counted
+        self.assertEqual(
+            self.progress(),
+            {"answered": 3, "items": 6, "per_person": 5, "unit": "points"},
+        )
+
+    def test_mindmap_rating_updown(self):
+        q, run = self.mindmap_setup(mindmap_rating_mode="updown", mindmap_rating_budget=3)
+        MindmapPhase.objects.create(run=run, question=q, stage=MindmapPhase.Stage.RATE)
+        r1, r2 = self.tokens(2)
+        a = self.node(run, q, "A", seeded=True)
+        b = self.node(run, q, "B", seeded=True)
+        MindmapRating.objects.create(node=a, token=r1, value=1)
+        MindmapRating.objects.create(node=b, token=r1, value=-1)
+        MindmapRating.objects.create(node=a, token=r2, value=1)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 2, "items": 3, "per_person": 3, "unit": "ratings"},
+        )
+
+    def test_mindmap_rating_mode_but_collecting_stays_terms(self):
+        q, run = self.mindmap_setup(
+            mindmap_rating_mode="points", mindmap_max_per_person=2
+        )
+        (a,) = self.tokens(1)
+        self.node(run, q, "A", a)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 1, "items": 1, "per_person": 2, "unit": "terms"},
+        )
+
+    # --- matrix -----------------------------------------------------------
+
+    def matrix_setup(self, **fields):
+        q = self.make(Question.Kind.MATRIX, **fields)
+        return q, self.open_question(q)
+
+    def card(self, run, q, token=None, **flags):
+        return MatrixCard.objects.create(
+            run=run, question=q, token=token, title="C", zone="q1", x=0.5, y=0.5, **flags
+        )
+
+    def test_matrix_collecting_counts_visible_participant_cards(self):
+        q, run = self.matrix_setup(matrix_max_per_person=3)
+        a, b = self.tokens(2)
+        top = self.card(run, q, a)
+        self.card(run, q, b, stack=top)  # stacked member still counts
+        self.card(run, q, a)
+        self.card(run, q, b, hidden=True)
+        hidden_top = self.card(run, q, a, hidden=True)
+        self.card(run, q, b, stack=hidden_top)  # member of a hidden top
+        self.card(run, q, teacher=True)
+        self.card(run, q, teacher=True, summary=True)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 2, "items": 3, "per_person": 3, "unit": "cards"},
+        )
+
+    def test_matrix_no_participants(self):
+        self.matrix_setup(matrix_max_per_person=2)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 0, "items": 0, "per_person": 2, "unit": "cards"},
+        )
+
+    def test_matrix_rating_points_answered_is_union(self):
+        q, run = self.matrix_setup(matrix_rating_mode="points", matrix_rating_budget=4)
+        MatrixPhase.objects.create(run=run, question=q, stage=MatrixPhase.Stage.RATE)
+        contributor, rater, both = self.tokens(3)
+        c1 = self.card(run, q, contributor)
+        c2 = self.card(run, q, both)
+        teacher = self.card(run, q, teacher=True)
+        member = self.card(run, q, contributor, stack=c1)
+        MatrixRating.objects.create(card=c1, token=rater, value=2)
+        MatrixRating.objects.create(card=teacher, token=rater, value=1)
+        MatrixRating.objects.create(card=c2, token=both, value=1)
+        MatrixRating.objects.create(card=member, token=rater, value=3)  # member: not counted
+        # union: contributor, rater, both = 3 (votes() would say max(2, 2) = 2)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 3, "items": 4, "per_person": 4, "unit": "points"},
+        )
+
+    def test_matrix_rating_updown(self):
+        q, run = self.matrix_setup(matrix_rating_mode="updown", matrix_rating_budget=2)
+        MatrixPhase.objects.create(run=run, question=q, stage=MatrixPhase.Stage.RATE)
+        (r,) = self.tokens(1)
+        c1 = self.card(run, q, teacher=True)
+        c2 = self.card(run, q, teacher=True)
+        MatrixRating.objects.create(card=c1, token=r, value=1)
+        MatrixRating.objects.create(card=c2, token=r, value=-1)
+        self.assertEqual(
+            self.progress(),
+            {"answered": 1, "items": 2, "per_person": 2, "unit": "ratings"},
+        )

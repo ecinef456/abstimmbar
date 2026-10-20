@@ -427,6 +427,27 @@ def contributor_count(run, question):
     )
 
 
+def contributor_tokens(run, question):
+    """Ids of the distinct participant tokens that added a card (hidden ones
+    included, like :func:`contributor_count`)."""
+    return set(
+        _cards(run, question).filter(token__isnull=False)
+        .values_list("token_id", flat=True).distinct()
+    )
+
+
+def participant_card_count(run, question):
+    """Visible participant cards (stacked members included; teacher and AI
+    summary cards, hidden cards and members of a hidden top excluded) — the
+    "items" of the beamer's progress pill while collecting."""
+    return (
+        _cards(run, question)
+        .filter(token__isnull=False, teacher=False, summary=False, hidden=False)
+        .exclude(stack__hidden=True)
+        .count()
+    )
+
+
 def board_payload(run, question, presenter):
     """The whole board (``cards``, ``count``, ``contributors``; settings live
     in :func:`settings_payload`). ``presenter=False`` drops hidden cards and

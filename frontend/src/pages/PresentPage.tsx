@@ -9,7 +9,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
-import { ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, Pencil, Redo2, Sparkles, ThumbsUp, Timer, Undo2, Unlink, Users, Vote, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, Pencil, Redo2, Sparkles, ThumbsUp, Timer, Undo2, Unlink, Users, X } from "lucide-react";
 import {
   API_BASE_URL,
   aiErrorText,
@@ -18,6 +18,7 @@ import {
   errorDetail,
   live,
   results,
+  type LiveCounter,
   type LiveState,
   type Question,
   type RunResults,
@@ -29,7 +30,7 @@ import { localizedText, RichText, stripHtml } from "@basicbar/ui";
 import LikertResult from "../components/LikertResult";
 import { useTourSignal } from "../tour/signals";
 import ResultBar, { type BarState } from "../results/ResultBar";
-import VoteRing from "../results/VoteRing";
+import ProgressPill from "../results/ProgressPill";
 import PriorityBar from "../results/PriorityBar";
 import OrderingResult from "../results/OrderingResult";
 import { useReducedMotion } from "../results/motion";
@@ -1827,7 +1828,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       <Shell
         logo={beamerLogo}
         overlay={<JoinCorner room={state.room} />}
-        stats={<LiveStats participants={state.participants ?? 0} votes={state.votes ?? 0} />}
+        stats={<LiveStats state={state} />}
         footer={
           <Footer
             phase={phase}
@@ -1882,16 +1883,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         ) : null
       }
       stats={
-        // Rating phase: the counter shows how many have rated so far.
-        rateStats ? (
-          <LiveStats
-            participants={state.participants ?? 0}
-            votes={rateStats.raters}
-            votesLabel={t("Participants who have rated")}
-          />
-        ) : (
-          <LiveStats participants={state.participants ?? 0} votes={state.votes ?? 0} />
-        )
+        // Rating stage: ✓ counts those who have rated so far (the points /
+        // ratings against the budget come from `progress`).
+        <LiveStats state={state} raters={rateStats?.raters} />
       }
       footer={
         <Footer
@@ -3280,34 +3274,22 @@ function Shell({
 }
 
 /** Permanent, phase-independent counter fixed to the lower-left corner of the
- * beamer view (#35): connected clients and votes cast for the current
- * question, with a small ring for the answered share. Sits just above the
- * footer action bar so the two never overlap. */
-function LiveStats({
-  participants,
-  votes,
-  votesLabel,
-}: {
-  participants: number;
-  votes: number;
-  /** Tooltip of the votes count (default: votes for the current question). */
-  votesLabel?: string;
-}) {
+ * beamer view (#35): a progress pill with the connected clients, the
+ * participants who have answered and — for item-based kinds — items against
+ * the capacity (`state.counter`, absent without an active question). Sits
+ * just above the footer action bar so the two never overlap. */
+function LiveStats({ state, raters }: { state: LiveState; raters?: number }) {
   const { t } = useTranslation();
+  const progress: LiveCounter =
+    state.counter ?? { answered: state.votes ?? 0, items: null, per_person: null, unit: "answers" };
+  const rating = progress.unit === "points" || progress.unit === "ratings" || raters != null;
   return (
-    <div
-      className="fixed left-6 bottom-20 z-20 flex items-center gap-3 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-sm text-slate-500 shadow-sm backdrop-blur"
-      aria-live="polite"
-      data-beamer-inset=""
-    >
-      <VoteRing votes={votes} participants={participants} />
-      <span className="flex items-center gap-1.5 tabular-nums" title={t("Connected participants")}>
-        <Users aria-hidden className="h-4 w-4" /> {participants}
-      </span>
-      <span className="flex items-center gap-1.5 tabular-nums" title={votesLabel ?? t("Votes for the current question")}>
-        <Vote aria-hidden className="h-4 w-4" /> {votes}
-      </span>
-    </div>
+    <ProgressPill
+      className="fixed left-6 bottom-20 z-20"
+      participants={state.participants ?? 0}
+      progress={rating && raters != null ? { ...progress, answered: raters } : progress}
+      answeredLabel={rating ? t("Participants who have rated") : undefined}
+    />
   );
 }
 
