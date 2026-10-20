@@ -184,6 +184,12 @@ IMAGE_WEBP_QUALITY = int(os.environ.get("IMAGE_WEBP_QUALITY", "80"))
 SESSION_COOKIE_NAME = "abstimmbar_sessionid"
 CSRF_COOKIE_NAME = "abstimmbar_csrftoken"
 
+# JSON set import posts a whole exported question set as the request body.
+# DRF 3.17+ applies Django's DATA_UPLOAD_MAX_MEMORY_SIZE (default 2.5 MB) to
+# JSON request.data. Images are referenced by /media/ URL, not embedded, so
+# 10 MiB is generous.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
 # Behind a TLS-terminating reverse proxy in production: trust its forwarded
 # host/scheme so absolute URLs use https, and require secure cookies.
 if not DEBUG:

@@ -1085,6 +1085,40 @@ class TransferTests(ApiTestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_import_accepts_body_above_django_default_limit(self):
+        """DRF 3.17+ applies DATA_UPLOAD_MAX_MEMORY_SIZE to JSON request.data;
+        a ~3 MB export must still import (default limit is 2.5 MB)."""
+        payload = {
+            "format": "abstimmbar-set-v1",
+            "title": "Gross",
+            "description": "x" * 3_000_000,
+            "questions": [
+                {
+                    "kind": "single_choice",
+                    "text": "<p>Hi</p>",
+                    "options": [{"text": "a", "is_correct": False}],
+                }
+            ],
+        }
+        response = self.client.post(
+            f"/api/rooms/{self.room.pk}/import-set/", payload, content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 201, response.content[:300])
+
+    def test_import_rejects_body_above_upload_limit_cleanly(self):
+        """A body over 10 MiB is a clean 400 (Django's SuspiciousOperation
+        handler, HTML body), not a 500."""
+        payload = {
+            "format": "abstimmbar-set-v1",
+            "title": "Riesig",
+            "description": "x" * (10 * 1024 * 1024 + 1024),
+            "questions": [],
+        }
+        response = self.client.post(
+            f"/api/rooms/{self.room.pk}/import-set/", payload, content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_import_v2_sanitizes_non_canonical_language(self):
         """A v2 file's per-language map is sanitized in EVERY language, not
         just the canonical one — a <script> hidden in the "en" entry must
