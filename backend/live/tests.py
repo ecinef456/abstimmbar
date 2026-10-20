@@ -286,6 +286,10 @@ class ControlTests(LiveTestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Vote.objects.count(), 1)
+        # Pro mode, so the request skips the easy-mode auto path and hits the
+        # plain fallback: a legacy ``reset`` without ``existing`` continues.
+        self.owner.easy_mode = False
+        self.owner.save(update_fields=["easy_mode"])
         self.client.post(
             f"/api/question-sets/{self.question_set.pk}/start-run/",
             {"reset": True},
