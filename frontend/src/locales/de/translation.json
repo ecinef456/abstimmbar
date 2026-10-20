@@ -1322,5 +1322,6 @@
   "An after-question cannot itself get an after-question.": "Eine Nachher-Frage kann selbst keine Nachher-Frage erhalten.",
   "This question already has an after-question.": "Zu dieser Frage gibt es bereits eine Nachher-Frage.",
   "AI is turned off for this question.": "Die KI ist für diese Frage ausgeschaltet.",
-  "The logo exceeds 5 MB.": "Das Logo überschreitet 5 MB."
+  "The logo exceeds 5 MB.": "Das Logo überschreitet 5 MB.",
+  "Only image files (including SVG).": "Nur Bilddateien (auch SVG)."
 }
