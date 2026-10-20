@@ -44,6 +44,10 @@ abstimmbar.example.org {
 	handle /r/* {
 		reverse_proxy app:8000
 	}
+	# Self-check links (/c/<token>/ + QR) and the LTI learner redirect → Django.
+	handle /c/* {
+		reverse_proxy app:8000
+	}
 	# Prometheus scrape endpoint — token-guarded by METRICS_TOKEN (404 while
 	# unset); see docs/monitoring.md.
 	handle /metrics {

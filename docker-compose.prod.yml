@@ -105,6 +105,9 @@ services:
       OIDC_CLAIM_EMAIL: ${OIDC_CLAIM_EMAIL:-email}
       OIDC_CLAIM_FIRST_NAME: ${OIDC_CLAIM_FIRST_NAME:-given_name}
       OIDC_CLAIM_LAST_NAME: ${OIDC_CLAIM_LAST_NAME:-family_name}
+      # Match an existing account by username when the e-mail does not match.
+      # Off by default — enable only if the IdP guarantees unique usernames.
+      OIDC_MATCH_BY_USERNAME_FALLBACK: ${OIDC_MATCH_BY_USERNAME_FALLBACK:-0}
       # Optional AI features (LiteLLM). Off unless all four are set.
       AI_PROVIDER: ${AI_PROVIDER:-none}
       AI_BASE_URL: ${AI_BASE_URL:-}

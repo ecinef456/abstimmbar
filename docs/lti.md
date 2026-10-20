@@ -45,7 +45,8 @@ Im Formular „Plattform hinzufügen" werden die Angaben des LMS eingetragen:
 - **Deployment-IDs (kommagetrennt)**: vergibt das LMS **erst nach dem
   Speichern** des Tools (siehe Moodle-Anleitung unten), z. B. `1` oder
   `1, 2` — häufig einfach `1`.
-- **„Nutzende per E-Mail verknüpfen"**: Checkbox, **Standard: an**; siehe
+- **„Nutzende per E-Mail verknüpfen"**: Checkbox, **Standard: aus** (nur für Plattformen aktivieren,
+  die E-Mail-Änderungen bestätigen); siehe
   Abschnitt [Konto-Verknüpfung](#konto-verknüpfung-lti--oidc-issue-1)
   unten für den Sicherheitshinweis, der auch im Formular eingeblendet
   wird, solange die Option aktiv ist.
@@ -120,7 +121,8 @@ LMS-Instanz eindeutig, das Tool-Endpunkte-Panel bleibt für alle gleich.
 Die LTI-`sub` ist plattform-lokal und stimmt nie mit dem OIDC-Subject
 überein — ohne Verknüpfung bekäme dieselbe Lehrperson zwei Konten. Pro
 Plattform gibt es dafür die Option **„Nutzende per E-Mail verknüpfen"**
-(`link_by_email`, im Web-Admin bei der Plattform, **Standard: an**): Beim
+(`link_by_email`, im Web-Admin bei der Plattform, **Standard: aus**; nur für Plattformen aktivieren, die
+E-Mail-Änderungen bestätigen): Beim
 ersten Launch einer unbekannten LTI-`sub` wird ein bestehendes Konto mit
 derselben E-Mail-Adresse wiederverwendet, sofern der Treffer eindeutig ist
 (genau ein Konto; sonst wird wie bisher ein neues LTI-Konto angelegt). Die
@@ -131,9 +133,12 @@ für Name/E-Mail; der Launch überschreibt das Profil nicht.
 
 **Sicherheitsabwägung:** Mit der Option wird das LMS zur Autorität für
 die Konto-Zuordnung — eine im LMS manipulierte E-Mail-Adresse könnte
-sich ein fremdes, noch nicht verknüpftes Konto aneignen. Daher nur für
-eigene, vertrauenswürdige Plattformen aktivieren (Stud.IP/Moodle der
-Hochschule, deren Adressen aus dem IdM stammen). Der Web-Admin zeigt
+sich ein fremdes, noch nicht verknüpftes Konto aneignen. Daher ist die Option
+standardmäßig aus und sollte nur für eigene, vertrauenswürdige
+Plattformen aktiviert werden, die E-Mail-Änderungen bestätigen (z. B.
+Moodle mit E-Mail-Änderungsbestätigung; Adressen aus dem IdM). Andernfalls
+könnte eine Lehrperson im LMS, die ihre eigene E-Mail-Adresse ändern kann,
+ein nicht verknüpftes Konto übernehmen. Der Web-Admin zeigt
 diesen Hinweis auch direkt im Formular an, solange die Option aktiv ist.
 
 ## Cookies & iframes

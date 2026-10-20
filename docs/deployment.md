@@ -206,6 +206,12 @@ erneuert das Let's-Encrypt-Zertifikat automatisch, sobald Domain und Ports
 stimmen. Spätere Änderungen am Caddyfile übernehmen Sie mit
 `sudo docker compose -f docker-compose.prod.yml restart caddy`.
 
+An Django weitergereicht werden die Pfade `/api/`, `/admin/`, `/oidc/`,
+`/lti/`, `/p/`, `/r/`, `/c/`, `/question-preview/` und `/metrics`;
+`/static/` und `/media/` liefert Caddy direkt aus den Volumes `static` und
+`media` aus; alles andere liefert die Oberfläche aus. Setzen Sie einen eigenen
+Reverse-Proxy ein, muss er beides genauso handhaben.
+
 ### Schritt 9 — Dateien für SELinux freigeben
 
 Rocky Linux hat SELinux aktiviert; ohne Label darf ein Container keine vom
@@ -258,7 +264,9 @@ sudo docker compose -f docker-compose.prod.yml exec app python manage.py creates
 ```
 
 Den Eingaben folgen (Benutzername, E-Mail, Passwort); Login danach unter
-`https://abstimmbar.example.org/admin/`. Lehrende melden sich regulär per
+`https://abstimmbar.example.org/admin/`. Dieses Konto bleibt rein
+passwortbasiert unter `/admin/` und wird von keinem OIDC-Login übernommen.
+Lehrende melden sich regulär per
 Uni-Login (OIDC) auf der Startseite an; Mitglieder der Gruppe aus
 `OIDC_ADMIN_GROUP` bekommen dabei automatisch Django-Admin-Rechte.
 

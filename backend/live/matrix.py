@@ -488,7 +488,7 @@ def csv_rows(run, question):
             category = c.category
         result.append({
             "id": c.pk, "title": c.title, "description": c.description, "category": category,
-            "zone": c.zone, "x": f"{c.x:.2f}", "y": f"{c.y:.2f}",
+            "zone": c.zone, "x": round(c.x, 2), "y": round(c.y, 2),
             "stack": titles.get(c.stack_id, "") if c.stack_id else "",
         })
     return result

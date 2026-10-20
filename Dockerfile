@@ -33,4 +33,5 @@ COPY --from=frontend-build /frontend/dist /app/frontend_dist
 
 EXPOSE 8000
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# uvicorn (ASGI), not runserver: the SSE stream view is async (ADR-0003).
+CMD ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*", "--timeout-graceful-shutdown", "5"]

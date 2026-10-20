@@ -222,6 +222,12 @@ Let's Encrypt certificate automatically as soon as the domain and ports are
 right. Apply later changes to the Caddyfile with
 `sudo docker compose -f docker-compose.prod.yml restart caddy`.
 
+The paths passed on to Django are `/api/`, `/admin/`, `/oidc/`, `/lti/`,
+`/p/`, `/r/`, `/c/`, `/question-preview/` and `/metrics`; `/static/` and
+`/media/` are served by Caddy directly from the `static` and `media` volumes;
+everything else is served as the web interface. If you use your own reverse
+proxy, it must handle both the same way.
+
 ### Step 9 — Allow file access under SELinux
 
 Rocky Linux has SELinux enabled; without a label, a container may not read
@@ -273,7 +279,9 @@ sudo docker compose -f docker-compose.prod.yml exec app python manage.py creates
 ```
 
 Follow the prompts (username, email, password); then log in at
-`https://abstimmbar.example.org/admin/`. Teachers sign in as usual with
+`https://abstimmbar.example.org/admin/`. This account stays
+password-only at `/admin/` and is never adopted by an OIDC login.
+Teachers sign in as usual with
 their university login (OIDC) on the start page; members of the group set
 in `OIDC_ADMIN_GROUP` automatically get Django admin rights when they do.
 

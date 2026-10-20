@@ -48,6 +48,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-abstimmbar}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
+      # dev only: heals subject drift after re-importing the Keycloak dev realm
+      OIDC_MATCH_BY_USERNAME_FALLBACK: "1"
       # OIDC (local Keycloak). The browser uses localhost:8081 for the login
       # redirect; the backend reaches Keycloak via host.docker.internal:8081.
       OIDC_RP_CLIENT_ID: ${OIDC_RP_CLIENT_ID:-abstimmbar-backend}
