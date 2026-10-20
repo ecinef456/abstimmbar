@@ -72,11 +72,7 @@ def set_stage(run, question, stage, *, open_vote=False):
             raise MindmapError("Run is finished.", 409)
         phase, _ = MindmapPhase.objects.get_or_create(run=run, question=question)
         phase.stage = stage
-        fields = ["stage"]
-        if stage == MindmapPhase.Stage.RATE:
-            phase.rating_started_at = timezone.now()
-            fields.append("rating_started_at")
-        phase.save(update_fields=fields)
+        phase.save(update_fields=["stage"])
         if open_vote:
             open_question(run, question)
     return stage

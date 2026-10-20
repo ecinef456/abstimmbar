@@ -13,7 +13,12 @@ npx playwright test                        # all projects
 npx playwright test --project phone-chromium
 npx playwright test e2e/mobile-a11y.spec.ts --workers=2
 npx playwright test --ui                   # interactive runner
+npx playwright test --headed               # watch the browser
+npx playwright show-report                 # open the last HTML report
 ```
+
+On a fresh stack run `docker compose exec backend python manage.py migrate`
+once. Tests log in through Keycloak as the dev user `demo`/`demo`.
 
 Projects:
 
@@ -74,3 +79,41 @@ builds its response, update the helper's script to match.
 Tests create rooms whose titles start with "E2E" and delete them afterwards.
 A loaded Docker host (e.g. colima with little RAM) makes runs slow and can
 cause timeouts; use `--workers=2` or fewer.
+
+## Cleanup after tests
+
+Rooms a test creates (with their sets, by cascade) are deleted after **each
+test**, not once at the end of the run: if a test aborts midway (failed
+assertion, timeout, crash), a single end-of-run cleanup would never be
+reached and the leftovers would show up in later tests (e.g. in "My rooms").
+This is a Playwright fixture in `e2e/fixtures.ts`: `trackRoom(roomId)`
+remembers the id and the fixture calls `DELETE /api/rooms/<id>/` directly
+against the backend (faster than the UI and independent of its state). A
+non-2xx response throws instead of silently leaving orphans.
+
+```ts
+import { test, expect } from './fixtures'; // not '@playwright/test'
+
+test('...', async ({ page, trackRoom }) => {
+  // ... create a room through the UI ...
+  const roomId = page.url().match(/\/rooms\/(\d+)/)?.[1];
+  if (roomId) trackRoom(roomId);
+});
+```
+
+## Writing new tests
+
+Add `e2e/<name>.spec.ts`, one file per self-contained flow (not per single
+action). Import from `./fixtures` as soon as the test creates a room, so
+`trackRoom` is available.
+
+- **Selectors**: prefer `getByRole`, `getByLabel`, `getByText` (what screen
+  reader users see) over CSS classes. UI text is localized via i18next and
+  tests run in the default language; where a label varies, prefer stable ARIA
+  roles or `data-testid`.
+- **No manual waiting**: Playwright auto-waits for actionability and retries
+  `expect(...)`; `page.waitForTimeout(...)` is almost never needed.
+- **Finding selectors**: `npx playwright codegen http://localhost:5174`
+  records clicks and generates code to clean up afterwards.
+- **Isolation**: every test gets a fresh browser context. Do not depend on
+  other tests; make names unique (a timestamp in the room title).

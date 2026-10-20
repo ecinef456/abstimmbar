@@ -2646,19 +2646,14 @@ class SectionTests(ApiTestCase):
         question.refresh_from_db()
         self.assertIsNone(question.section_id)
 
-    def test_reorder_sections(self):
-        a = self.create_section("A").json()
-        b = self.create_section("B").json()
+    def test_reorder_sections_endpoint_removed(self):
+        # Superseded by reorder-outline (removed before 1.0).
         response = self.client.post(
             f"/api/question-sets/{self.qset.pk}/reorder-sections/",
-            {"section_ids": [b["id"], a["id"]]},
+            {"section_ids": []},
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 200)
-        from rooms.models import Section
-
-        self.assertEqual(Section.objects.get(pk=b["id"]).position, 0)
-        self.assertEqual(Section.objects.get(pk=a["id"]).position, 1)
+        self.assertEqual(response.status_code, 404)
 
     def test_non_owner_cannot_create_section(self):
         self.client.force_login(self.other)
@@ -4685,6 +4680,59 @@ class GenerationWorkerTests(TransactionTestCase):
         self.assertTrue(job.truncated)
         self.assertEqual(job.total_chunks, 2)  # capped
         self.assertIn("überschreit", job.notice.lower())
+
+    def test_unsuitable_reason_surfaces_when_no_questions(self):
+        from unittest import mock
+
+        from django.test import override_settings
+
+        from . import generation
+        from .views import _job_payload
+        job = self._job("Inhaltsverzeichnis")
+        reply = {"questions": [], "unsuitable_reason": "  Nur ein Inhaltsverzeichnis.  "}
+        with override_settings(**AI_ON), \
+             mock.patch("rooms.generation.ai.chat_json", return_value=reply):
+            generation.run_generation_job(job.id)
+        job.refresh_from_db()
+        self.assertEqual(job.status, self.GenerationJob.Status.DONE)
+        self.assertEqual(job.drafts, [])
+        self.assertEqual(job.unsuitable_reason, "Nur ein Inhaltsverzeichnis.")
+        self.assertEqual(
+            _job_payload(job)["unsuitable_reason"], "Nur ein Inhaltsverzeichnis."
+        )
+
+    def test_unsuitable_reason_is_dropped_when_questions_exist(self):
+        from unittest import mock
+
+        from django.test import override_settings
+
+        from . import generation
+        from .views import _job_payload
+        job = self._job("Stoff")
+        reply = {
+            "questions": [{"kind": "open_text", "text": "Frage 1"}],
+            "unsuitable_reason": "Teile sind unbrauchbar.",
+        }
+        with override_settings(**AI_ON), \
+             mock.patch("rooms.generation.ai.chat_json", return_value=reply):
+            generation.run_generation_job(job.id)
+        job.refresh_from_db()
+        self.assertEqual(len(job.drafts), 1)
+        self.assertEqual(job.unsuitable_reason, "")
+        self.assertEqual(_job_payload(job)["unsuitable_reason"], "")
+
+    def test_no_unsuitable_reason_when_the_model_gives_none(self):
+        from unittest import mock
+
+        from django.test import override_settings
+
+        from . import generation
+        job = self._job("Stoff")
+        with override_settings(**AI_ON), \
+             mock.patch("rooms.generation.ai.chat_json", return_value={"questions": []}):
+            generation.run_generation_job(job.id)
+        job.refresh_from_db()
+        self.assertEqual(job.unsuitable_reason, "")
 
     def test_chunk_error_is_skipped(self):
         from unittest import mock

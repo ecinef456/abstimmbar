@@ -424,6 +424,8 @@ export interface GenerationJob {
   truncated: boolean;
   source_chars: number;
   notice: string;
+  /** The model's reason for declining; only set when no questions came out. */
+  unsuitable_reason: string;
   error: string;
   pages: number;
   density: number;
@@ -1364,14 +1366,6 @@ export type MindmapLogEntry = { id: number; created_at: string } & (
   | { kind: "rename"; label: { old: MindmapLogTerm; new: MindmapLogTerm } }
   | { kind: "ai"; label: { count: number } }
 );
-
-export interface WordCloudWord {
-  text: string;
-  count: number;
-  variants: string[];
-  keys: string[];
-  merged: boolean;
-}
 
 /** Presenter-side moderation state for a word cloud (#Wortwolke): terms hidden
  *  from the live view and manual merges (grouping several keys under one

@@ -259,18 +259,43 @@ class ControlTests(LiveTestCase):
         ).json()
         self.assertEqual(again["run"], run_id)
 
-    def test_start_run_reset_deletes_votes(self):
+    def test_start_run_existing_delete_deletes_votes(self):
         token = self.join()
         self.open_question()
         self.vote(token, options=[self.correct.pk])
         self.login()
         self.client.post(
             f"/api/question-sets/{self.question_set.pk}/start-run/",
-            {"reset": True},
+            {"existing": "delete"},
             content_type="application/json",
         )
         self.assertEqual(Vote.objects.count(), 0)
         self.assertEqual(Run.objects.count(), 1)
+
+    def test_start_run_legacy_reset_is_ignored(self):
+        # The pre-1.0 ``reset`` flag was removed: it no longer deletes, and
+        # ``existing`` alone governs (here: continue -> votes are kept).
+        token = self.join()
+        self.open_question()
+        self.vote(token, options=[self.correct.pk])
+        self.login()
+        response = self.client.post(
+            f"/api/question-sets/{self.question_set.pk}/start-run/",
+            {"reset": True, "existing": "continue"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Vote.objects.count(), 1)
+        # Pro mode, so the request skips the easy-mode auto path and hits the
+        # plain fallback: a legacy ``reset`` without ``existing`` continues.
+        self.owner.easy_mode = False
+        self.owner.save(update_fields=["easy_mode"])
+        self.client.post(
+            f"/api/question-sets/{self.question_set.pk}/start-run/",
+            {"reset": True},
+            content_type="application/json",
+        )
+        self.assertEqual(Vote.objects.count(), 1)
 
     def test_continue_keeps_votes(self):
         token = self.join()
@@ -8176,7 +8201,7 @@ class MatrixServiceTests(MatrixTestCase):
         t2 = mxs.add_teacher_card(self.run, self.xq, "q2", "T2")
         self.assertTrue(t1.teacher and t1.token_id is None)
         self.assertEqual(mxs.contributor_count(self.run, self.xq), 1)
-        self.assertEqual(mxs.card_count(self.run, self.xq), 3)
+        self.assertEqual(MatrixCard.objects.filter(run=self.run, question=self.xq).count(), 3)
         participant = MatrixCard.objects.get(token=self.tok)
         self.assertRefused(404, mxs.delete_teacher_card, self.run, self.xq, participant.pk)
         mxs.delete_teacher_card(self.run, self.xq, t2.pk)
@@ -8187,7 +8212,11 @@ class MatrixServiceTests(MatrixTestCase):
     def test_mine_payload(self):
         mine = self.add(title="Mine")
         self.add(token=self.tok2, title="Theirs")
-        self.assertEqual(mxs.own_card_ids(self.run, self.xq, self.tok), [mine.pk])
+        self.assertEqual(
+            list(MatrixCard.objects.filter(run=self.run, question=self.xq, token=self.tok)
+                 .values_list("pk", flat=True)),
+            [mine.pk],
+        )
         self.assertEqual(
             mxs.mine_payload(self.run, self.xq, self.tok),
             [{"id": mine.pk, "title": "Mine", "description": "", "category": "", "zone": "q1"}],

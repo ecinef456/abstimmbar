@@ -407,20 +407,12 @@ def set_hidden(run, question, card_id, hidden):
         return card
 
 
-def own_card_ids(run, question, token):
-    return list(_cards(run, question).filter(token=token).values_list("pk", flat=True))
-
-
 def mine_payload(run, question, token):
     return [
         {"id": c.pk, "title": c.title, "description": c.description,
          "category": c.category, "zone": c.zone}
         for c in _cards(run, question).filter(token=token)
     ]
-
-
-def card_count(run, question):
-    return _cards(run, question).count()
 
 
 def participant_card_total(run):

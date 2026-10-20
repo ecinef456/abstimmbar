@@ -292,9 +292,13 @@ export default function AiReviewPanel({
         <div className="space-y-3">
           {truncationBanner()}
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {job.truncated
-              ? t("No questions generated.")
-              : job.notice || t("No questions generated.")}
+            {job.unsuitable_reason
+              ? t("The material is not suitable: {{reason}}", {
+                  reason: job.unsuitable_reason,
+                })
+              : job.truncated
+                ? t("No questions generated.")
+                : job.notice || t("No questions generated.")}
           </p>
           <Button variant="ghost" onClick={() => void discard()}>
             {t("Discard")}
