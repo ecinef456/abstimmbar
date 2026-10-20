@@ -14,6 +14,8 @@ test.use({ locale: 'en-US', viewport: { width: 1280, height: 800 } });
 let originalEasyMode: boolean | undefined;
 
 test.beforeEach(async ({ page }) => {
+  // Never let a failed setup leave the previous test's value behind.
+  originalEasyMode = undefined;
   // Start in Simple mode without the auto-starting tour, whatever the demo
   // user has stored.
   await page.route(/\/api\/whoami\/(\?.*)?$/, async (route) => {
