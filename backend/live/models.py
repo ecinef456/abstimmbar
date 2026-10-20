@@ -15,6 +15,9 @@ from django.db import models
 
 from common.models import TimeStampedModel
 
+# Whitespace controls kept in vote text (free-text answers may span lines);
+# every other Cc character (incl. U+001C–U+001F and NEL U+0085) is dropped.
+VOTE_KEPT_CONTROL_CHARS = frozenset("\t\n\r\v\f")
 # Invisible / bidi format characters (Cf) stripped from vote text: zero width
 # space, LRM/RLM, the bidi embeddings/overrides/isolates, word joiner and
 # invisible operators, BOM. Deliberately NOT all of Cf: U+200C/U+200D
@@ -29,13 +32,14 @@ VOTE_STRIPPED_FORMAT_CHARS = frozenset(
 def strip_control_chars(text):
     """``text`` without control characters (Cc — NUL must never reach
     Postgres) and without the invisible/bidi format characters in
-    ``VOTE_STRIPPED_FORMAT_CHARS``. Whitespace (incl. line breaks of
-    free-text answers) is kept; callers collapse/strip it as before.
+    ``VOTE_STRIPPED_FORMAT_CHARS``. Tab/newline/CR/VT/FF
+    (``VOTE_KEPT_CONTROL_CHARS``, line breaks of free-text answers) are kept;
+    callers collapse/strip whitespace as before.
     Deliberately no NFKC (unlike ``rooms.mindmap.normalize_text``): it would
     change ``Vote.text_key`` for existing votes."""
     return "".join(
         ch for ch in text
-        if ch.isspace() or (
+        if ch in VOTE_KEPT_CONTROL_CHARS or (
             unicodedata.category(ch) != "Cc"
             and ord(ch) not in VOTE_STRIPPED_FORMAT_CHARS
         )

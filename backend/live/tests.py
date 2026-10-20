@@ -10153,6 +10153,45 @@ class VoteControlCharTests(LiveTestCase):
         self.assertEqual(response.status_code, 201, response.content)
         self.assertEqual(Vote.objects.get(question=oq).text, "Wind ist gut")
 
+    def test_non_tab_newline_controls_are_stripped(self):
+        # Only tab/newline/CR (and VT/FF) count as whitespace to keep — the
+        # separator controls U+001C–U+001F and NEL (U+0085) are dropped.
+        from .models import strip_control_chars
+
+        self.assertEqual(
+            strip_control_chars("a\tb\nc\r\x1cd\x1fe\x85f"), "a\tb\nc\rdef"
+        )
+
+    def _retract(self, token, text):
+        return self.client.post(
+            f"/api/live/rooms/{self.room.code}/retract/",
+            {"token": token, "text": text}, content_type="application/json",
+        )
+
+    def test_retract_matches_stripped_term(self):
+        wq = self._text_question(Question.Kind.WORD_CLOUD, allow_multiple=True)
+        self.open_question(wq)
+        token = self.join()
+        self.assertEqual(self.vote(token, text="Wi\u200bnd").status_code, 201)
+        self.assertEqual(self.vote(token, text="Solar").status_code, 201)
+        response = self._retract(token, "Wi\u200bnd")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["deleted"], 1)
+        self.assertEqual(
+            list(Vote.objects.filter(question=wq).values_list("text", flat=True)),
+            ["Solar"],
+        )
+
+    def test_retract_with_nul_does_not_crash(self):
+        wq = self._text_question(Question.Kind.WORD_CLOUD, allow_multiple=True)
+        self.open_question(wq)
+        token = self.join()
+        self.assertEqual(self.vote(token, text="Wind").status_code, 201)
+        response = self._retract(token, "Wi\x00nd")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["deleted"], 1)
+        self.assertEqual(self._retract(token, "\x00").status_code, 400)
+
     def test_emoji_zwj_sequence_survives(self):
         oq = self._text_question(Question.Kind.OPEN_TEXT)
         self.open_question(oq)

@@ -6121,8 +6121,14 @@ class QuestionFieldListGuardTests(ApiTestCase):
         _question, values, _translated = self._full_question(
             QuestionSet.objects.create(room=self.room, title_de="Guard")
         )
-        # The fixture sets every content field (so the round trip checks all).
+        # The fixture sets every content field (so the round trip checks all)
+        # to a non-default value (so a lost field cannot pass as "default on
+        # both sides").
         self.assertEqual(set(values), set(QUESTION_CONTENT_FIELDS))
+        for name, value in values.items():
+            self.assertNotEqual(
+                value, Question._meta.get_field(name).get_default(), name
+            )
 
     def test_every_content_field_round_trips(self):
         from .transfer import (

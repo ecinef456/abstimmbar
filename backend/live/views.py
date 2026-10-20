@@ -517,7 +517,9 @@ def retract(request, code):
     question = run.active_question
     if question is None:
         return Response({"detail": "Voting is closed."}, status=status.HTTP_409_CONFLICT)
-    raw = str(request.data.get("text", "")).strip()
+    # Same cleaning as the vote path, so a stored (stripped) term matches the
+    # raw chip text and a NUL never reaches Postgres.
+    raw = strip_control_chars(str(request.data.get("text", ""))).strip()
     key = " ".join(raw.split())[:60].casefold()[:60]
     if not key:
         return Response({"detail": "Empty answer."}, status=400)
