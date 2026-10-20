@@ -20,7 +20,7 @@
  * resetting an entry from the drawer's list (`resetLog`) drops the matching
  * undo/redo entries, so a later Ctrl+Z doesn't try to undo it again. */
 import { useRef, useState } from "react";
-import { live } from "../api";
+import { errorDetail, live, requestBody } from "../api";
 import type { MindmapAiUndo } from "../api";
 
 type Entry =
@@ -34,23 +34,6 @@ type Entry =
 interface Stacks {
   undo: Entry[];
   redo: Entry[];
-}
-
-/** JSON body of a failed request (the API throws it as the message). */
-export function requestBody(err: unknown): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse((err as Error).message);
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-    /* not JSON */
-  }
-  return null;
-}
-
-/** `detail` of a failed request. */
-export function requestDetail(err: unknown): string {
-  const detail = requestBody(err)?.detail;
-  return typeof detail === "string" ? detail : String((err as Error)?.message ?? err);
 }
 
 function remap(entry: Entry, from: number, to: number): Entry {
@@ -120,7 +103,7 @@ export function useMindmapModeration(
         const body = requestBody(err);
         if (body?.hidden === true && typeof body.conflict === "number" && cbs.current.onHiddenConflict)
           cbs.current.onHiddenConflict(body.conflict);
-        else cbs.current.onError(requestDetail(err));
+        else cbs.current.onError(errorDetail(err));
       })
       .finally(() => setTick((n) => n + 1));
   };
@@ -266,7 +249,7 @@ export function useMindmapModeration(
           try {
             await live.mindmapLogReset(rid, qid, entryId);
           } catch (err) {
-            resolve(requestDetail(err));
+            resolve(errorDetail(err));
             return;
           }
           const keep = (e: Entry) => !("logId" in e) || e.logId !== entryId;

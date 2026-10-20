@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { Archive, ArchiveRestore, DoorOpen, Heart as HeartIcon, LogOut, Search, SearchX, Trash2, Users } from "lucide-react";
 import { useApp, useEasyMode } from "../App";
-import { api, type Room, type SearchResults } from "../api";
+import { api, requestError, type Room, type SearchResults } from "../api";
 import { SET_TYPES, CREATABLE_SET_TYPES, type SetType } from "../setTypes";
 import { localizedText, stripHtml } from "@basicbar/ui";
 import JoinByCode from "../components/JoinByCode";
@@ -309,13 +309,7 @@ export default function RoomsPage() {
       setNewRoom(null);
       navigate(`/rooms/${created.id}`);
     } catch (err) {
-      try {
-        const data = JSON.parse((err as Error).message);
-        const value = data.detail ?? Object.values(data)[0];
-        setCreateError(Array.isArray(value) ? value[0] : String(value));
-      } catch {
-        setCreateError(String(err));
-      }
+      setCreateError(t(requestError(err)));
     }
   }
 

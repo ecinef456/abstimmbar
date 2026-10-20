@@ -1845,6 +1845,7 @@ class AiEditorTests(ApiTestCase):
         with self.override_settings(AI_PROVIDER="none", AI_BASE_URL="", AI_API_KEY="", AI_MODEL=""):
             r = self.client.post(f"/api/questions/{self.question.pk}/ai-distractors/")
         self.assertEqual(r.status_code, 503)
+        self.assertEqual(r.json()["detail"], "AI is not configured.")
 
     def test_distractors_validates_and_dedupes(self):
         reply = {"distractors": ["4", "6", "6", "sieben", ""]}  # 4 exists, 6 dup, "" empty
@@ -2216,6 +2217,11 @@ class SharingTests(ApiTestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.json()["detail"],
+            "No person found with this username/e-mail (they must have signed "
+            "in at least once).",
+        )
 
     def test_co_owner_gets_full_access(self):
         self.room.owners.add(self.other)
@@ -2236,6 +2242,7 @@ class SharingTests(ApiTestCase):
             f"/api/rooms/{self.room.pk}/owners/{self.owner.pk}/"
         )
         self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["detail"], "The last owner cannot be removed.")
         self.assertIn(self.owner, self.room.owners.all())
 
     def test_non_owner_cannot_manage_owners(self):
@@ -3280,6 +3287,10 @@ class OwnershipTests(ApiTestCase):
         self.room.owners.add(self.other)
         response = self.client.post(f"/api/rooms/{self.room.pk}/leave/")
         self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["detail"],
+            "As the owner you cannot leave — transfer the room first or delete it.",
+        )
         self.assertIn(self.owner, self.room.owners.all())
 
     def test_besitzer_cannot_be_removed_before_transfer(self):
@@ -3294,6 +3305,10 @@ class OwnershipTests(ApiTestCase):
         self.client.force_login(self.other)
         response = self.client.delete(f"/api/rooms/{self.room.pk}/")
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json()["detail"],
+            "Only the owner can delete the room. You can leave the sharing instead.",
+        )
         self.assertTrue(Room.objects.filter(pk=self.room.pk).exists())
         # The Besitzer may delete for everyone.
         self.client.force_login(self.owner)

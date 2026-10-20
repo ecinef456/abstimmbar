@@ -8,6 +8,8 @@ import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleH
 import {
   api,
   live,
+  requestDetail,
+  requestError,
   results,
   selfCheck,
   type GenerationJob,
@@ -1013,13 +1015,7 @@ export default function SetPage() {
       const updated = await api.updateQuestionSet(set.id, patch);
       setSet(updated);
     } catch (err) {
-      try {
-        const data = JSON.parse((err as Error).message);
-        const value = data.detail ?? Object.values(data)[0];
-        setMetaError(Array.isArray(value) ? value[0] : String(value));
-      } catch {
-        setMetaError(String(err));
-      }
+      setMetaError(t(requestError(err)));
     }
   }
 
@@ -1050,13 +1046,7 @@ export default function SetPage() {
       setSet(updated);
       setEditingMeta(false);
     } catch (err) {
-      try {
-        const data = JSON.parse((err as Error).message);
-        const value = data.detail ?? Object.values(data)[0];
-        setMetaError(Array.isArray(value) ? value[0] : String(value));
-      } catch {
-        setMetaError(String(err));
-      }
+      setMetaError(t(requestError(err)));
     }
   }
 
@@ -1236,11 +1226,7 @@ export default function SetPage() {
       setXfer(null);
       await reloadQuestions();
     } catch (err) {
-      try {
-        setXferError(JSON.parse((err as Error).message).detail ?? String(err));
-      } catch {
-        setXferError(String(err));
-      }
+      setXferError(t(requestDetail(err) ?? String(err)));
     }
   }
 
@@ -1319,11 +1305,7 @@ export default function SetPage() {
       showToast(t("Copied"));
       await reloadQuestions();
     } catch (err) {
-      try {
-        setPullError(JSON.parse((err as Error).message).detail ?? String(err));
-      } catch {
-        setPullError(String(err));
-      }
+      setPullError(t(requestDetail(err) ?? String(err)));
     } finally {
       setPullBusy(false);
     }

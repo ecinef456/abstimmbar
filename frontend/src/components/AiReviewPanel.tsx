@@ -10,7 +10,7 @@
 import { Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, type GeneratedQuestion, type GenerationJob } from "../api";
+import { aiErrorText, api, type GeneratedQuestion, type GenerationJob } from "../api";
 import AiAssistPanel from "./AiAssistPanel";
 import { Button } from "./ui";
 
@@ -19,14 +19,6 @@ const KIND_LABEL: Record<string, string> = {
   multiple_choice: "Multiple Choice",
   open_text: "Free text",
 };
-
-function aiErrorText(err: unknown): string {
-  try {
-    return JSON.parse((err as Error).message).detail ?? String(err);
-  } catch {
-    return String(err);
-  }
-}
 
 function isActive(job: GenerationJob | null): boolean {
   return !!job && (job.status === "pending" || job.status === "running");
@@ -79,7 +71,7 @@ export default function AiReviewPanel({
           setJob(fresh);
           setPollError("");
         } catch (err) {
-          if (!stopped) setPollError(aiErrorText(err));
+          if (!stopped) setPollError(aiErrorText(err, t));
         }
       })();
     }, 1500);
@@ -124,7 +116,7 @@ export default function AiReviewPanel({
     try {
       await api.aiGenerateCancel(setId, job.id);
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
       return;
     }
     await markReviewed();
@@ -161,7 +153,7 @@ export default function AiReviewPanel({
       await onImported();
       onClose();
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
       setImporting(false);
     }
   }

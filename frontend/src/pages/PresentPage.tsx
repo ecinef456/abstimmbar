@@ -12,7 +12,10 @@ import { Trans, useTranslation } from "react-i18next";
 import { ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, Pencil, Redo2, Sparkles, ThumbsUp, Timer, Undo2, Unlink, Users, Vote, X } from "lucide-react";
 import {
   API_BASE_URL,
+  aiErrorText,
   api,
+  detailText,
+  errorDetail,
   live,
   results,
   type LiveState,
@@ -32,7 +35,7 @@ import OrderingResult from "../results/OrderingResult";
 import { useReducedMotion } from "../results/motion";
 import MindMap, { AI_MARK, hiddenMindmapNodes, mindmapBranchHues } from "../results/MindMap";
 import MindmapRanking, { rankMindmap } from "../results/MindmapRanking";
-import { requestDetail, useMindmapModeration } from "../results/mindmapModeration";
+import { useMindmapModeration } from "../results/mindmapModeration";
 import { MindmapAiDrawer, useMindmapAi } from "../results/mindmapAi";
 import MindmapModerationList from "../results/MindmapModerationList";
 import { Footer, FooterIconButton, buildViewSegments, type ViewSegment } from "./presenter/footer";
@@ -473,8 +476,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   };
   // A merge group's current label (for the rename/split inverses).
   const mergeLabel = (keys: string[]) => {
-    const norm = [...keys].sort().join(" ");
-    return (mod?.merges ?? []).find((m) => [...m.keys].sort().join(" ") === norm)?.label;
+    const norm = [...keys].sort().join("\u0000");
+    return (mod?.merges ?? []).find((m) => [...m.keys].sort().join("\u0000") === norm)?.label;
   };
   // Shared by raw / consolidated / grouped clouds; AI words carry the raw keys
   // they stand for. Keyless words never moderate (no empty-key calls).
@@ -693,7 +696,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     return () => window.clearTimeout(id);
   }, [mmToast]);
   const mmMod = useMindmapModeration(runId, activeKind === "mindmap" ? activeId : null, {
-    onError: (detail) => setMmToast((p) => ({ text: t(detail), n: (p?.n ?? 0) + 1 })),
+    onError: (detail) => setMmToast((p) => ({ text: detailText(detail, t), n: (p?.n ?? 0) + 1 })),
     onInfo: (msg) => setMmToast((p) => ({ text: t(msg), n: (p?.n ?? 0) + 1 })),
     onAction: () => {
       if (!mmHintSeen) dismissMmHint();
@@ -715,7 +718,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     try {
       await live.mindmapStage(runId, activeId, stage, true);
     } catch (err) {
-      setMmToast((p) => ({ text: t(requestDetail(err)), n: (p?.n ?? 0) + 1 }));
+      setMmToast((p) => ({ text: detailText(errorDetail(err), t), n: (p?.n ?? 0) + 1 }));
     } finally {
       setMmStageBusy(false);
     }
@@ -727,7 +730,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     try {
       await live.matrixStage(runId, activeId, stage, true);
     } catch (err) {
-      setMmToast((p) => ({ text: t(requestDetail(err)), n: (p?.n ?? 0) + 1 }));
+      setMmToast((p) => ({ text: detailText(errorDetail(err), t), n: (p?.n ?? 0) + 1 }));
     } finally {
       setMxStageBusy(false);
     }
@@ -852,7 +855,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     try {
       await live.wordcloudAiSettings(runId, activeId, { ai_enabled: on });
     } catch (e) {
-      setAiError(e instanceof Error ? e.message : String(e));
+      setAiError(aiErrorText(e, t));
     } finally {
       setAiBusy(null);
     }
@@ -880,7 +883,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     } catch (e) {
       regroupMark.current = null;
       setAiBusy(null);
-      setAiError(e instanceof Error ? e.message : String(e));
+      setAiError(aiErrorText(e, t));
     }
   };
   // "Merge again": save the merge switches and recompute once — forced when
@@ -908,7 +911,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     } catch (e) {
       regroupMark.current = null;
       setAiBusy(null);
-      setAiError(e instanceof Error ? e.message : String(e));
+      setAiError(aiErrorText(e, t));
     }
   };
 
@@ -2143,7 +2146,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                     count: mmRating.budget,
                   })}
               {!mmRating.scores && (
-                <span className="text-slate-400"> · {t("results follow at the end")}</span>
+                <span className="text-slate-500"> · {t("results follow at the end")}</span>
               )}
             </p>
           )}

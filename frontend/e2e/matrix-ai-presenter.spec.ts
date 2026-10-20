@@ -437,12 +437,19 @@ test('re-entering after ✕ without hidden ratings: "Frage" shows the bare quest
 test('AI error and too few cards', async ({ page, trackRoom }) => {
   await login(page);
   const s = await seed(page, trackRoom);
+  // The server sends English details; the German UI translates them.
+  const replies = [
+    { status: 503, json: { detail: 'AI is not configured.' } },
+    { status: 502, json: { detail: 'AI error: timeout' } },
+  ];
   await page.route(/\/api\/runs\/\d+\/matrix\/\d+\/ai-propose$/, (route) =>
-    route.fulfill({ status: 502, json: { detail: 'KI-Fehler: timeout' } }),
+    route.fulfill(replies.shift() ?? { status: 500, json: {} }),
   );
   await openPresenter(page, s.room.setId);
   await handle(page).click();
   await panel(page).getByRole('button', { name: 'Vorschlag holen' }).click();
+  await expect(panel(page).getByRole('alert')).toHaveText('KI ist nicht konfiguriert.');
+  await panel(page).getByRole('button', { name: 'Erneut versuchen' }).click();
   await expect(panel(page).getByRole('alert')).toHaveText('KI-Fehler: timeout');
   await expect(panel(page).getByRole('button', { name: 'Erneut versuchen' })).toBeVisible();
   // Fewer than 3 visible cards: the button explains why it is off.
@@ -451,6 +458,28 @@ test('AI error and too few cards', async ({ page, trackRoom }) => {
   }
   await expect(panel(page).getByRole('button', { name: /Vorschlag holen|Erneut versuchen/ })).toBeDisabled();
   await expect(panel(page)).toContainText('Dafür sind mindestens 3 Karten nötig.');
+});
+
+test.describe('English UI', () => {
+  test.use({ locale: 'en-US' });
+
+  test('AI errors keep the server\'s English detail', async ({ page, trackRoom }) => {
+    await login(page);
+    const s = await seed(page, trackRoom);
+    const replies = [
+      { status: 503, json: { detail: 'AI is not configured.' } },
+      { status: 502, json: { detail: 'AI error: timeout' } },
+    ];
+    await page.route(/\/api\/runs\/\d+\/matrix\/\d+\/ai-propose$/, (route) =>
+      route.fulfill(replies.shift() ?? { status: 500, json: {} }),
+    );
+    await openPresenter(page, s.room.setId);
+    await handle(page).click();
+    await panel(page).getByRole('button', { name: 'Get proposal' }).click();
+    await expect(panel(page).getByRole('alert')).toHaveText('AI is not configured.');
+    await panel(page).getByRole('button', { name: 'Try again' }).click();
+    await expect(panel(page).getByRole('alert')).toHaveText('AI error: timeout');
+  });
 });
 
 test('gating: easy mode, AI switch off, rating stage', async ({ page, trackRoom }) => {

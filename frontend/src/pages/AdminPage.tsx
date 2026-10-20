@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronUp, FileText, Lock, Radio, Trash2 } from "lucide-react";
-import { api, type AdminStats, type LtiPlatform, type LtiToolInfo, type ManagePage, type ManageSite } from "../api";
+import { api, requestError, type AdminStats, type LtiPlatform, type LtiToolInfo, type ManagePage, type ManageSite } from "../api";
 import { useApp } from "../App";
 import { localizedText, type LocalizedText, TranslationControlsSlot } from "@basicbar/ui";
 import Donut, { type DonutSegment } from "../components/Donut";
@@ -959,13 +959,7 @@ function LtiPlatformForm({
       else await api.createLtiPlatform(data);
       onSaved();
     } catch (err) {
-      try {
-        const parsed = JSON.parse((err as Error).message);
-        const value = parsed.detail ?? Object.values(parsed)[0];
-        setError(Array.isArray(value) ? value[0] : String(value));
-      } catch {
-        setError(String(err));
-      }
+      setError(t(requestError(err)));
     }
   }
 
@@ -1090,13 +1084,7 @@ function PageForm({
       else await api.createPage(data);
       onSaved();
     } catch (err) {
-      try {
-        const parsed = JSON.parse((err as Error).message);
-        const value = parsed.detail ?? Object.values(parsed)[0];
-        setError(Array.isArray(value) ? value[0] : String(value));
-      } catch {
-        setError(String(err));
-      }
+      setError(t(requestError(err)));
     }
   }
 

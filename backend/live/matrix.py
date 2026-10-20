@@ -757,7 +757,7 @@ def unsign_proposal(run, question, blob):
 
 UNDO_SALT = "matrix-ai-undo"
 UNDO_MAX_AGE = PROPOSAL_MAX_AGE
-UNDO_CHANGED = "Der Stapel wurde inzwischen verändert – Rückgängig ist nicht mehr möglich."
+UNDO_CHANGED = "The stack has changed since the proposal — undo is no longer possible."
 SKIP_LIMIT = "limit"  # card limit reached, no room for a summary card
 
 

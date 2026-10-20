@@ -9,7 +9,7 @@
 import { Star } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../api";
+import { aiErrorText, api } from "../api";
 import AiAssistPanel from "./AiAssistPanel";
 import FileDropzone from "./FileDropzone";
 import { Button, TextInput } from "./ui";
@@ -26,14 +26,6 @@ const LEVEL_OPTIONS = [
   { value: "basics", label: "Basic level" },
   { value: "deep", label: "Advanced level" },
 ];
-
-function aiErrorText(err: unknown): string {
-  try {
-    return JSON.parse((err as Error).message).detail ?? String(err);
-  } catch {
-    return String(err);
-  }
-}
 
 export default function AiGenerateForm({
   setId,
@@ -101,7 +93,7 @@ export default function AiGenerateForm({
       });
       onStarted();
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
     } finally {
       setStarting(false);
     }

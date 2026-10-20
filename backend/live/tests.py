@@ -2338,9 +2338,9 @@ class AiReportTests(LiveTestCase):
     def test_disabled_returns_503(self):
         run = self._run_with_votes()
         self.client.force_login(self.owner)
-        self.assertEqual(
-            self.client.post(f"/api/runs/{run.pk}/ai-summary/").status_code, 503
-        )
+        response = self.client.post(f"/api/runs/{run.pk}/ai-summary/")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "AI is not configured.")
 
     @override_settings(**AI_ON)
     def test_requires_owner(self):
@@ -9776,7 +9776,7 @@ class MatrixAiApplyTests(MatrixTestCase):
         self.assertEqual(cm.exception.status, 409)
         self.assertEqual(
             cm.exception.detail,
-            "Der Stapel wurde inzwischen verändert – Rückgängig ist nicht mehr möglich.",
+            "The stack has changed since the proposal — undo is no longer possible.",
         )
         self.assertEqual(self.snapshot(), before)
 
@@ -9925,12 +9925,18 @@ class MatrixAiApiTests(MatrixTestCase):
 
     def test_propose_gating(self):
         with override_settings(**AI_OFF), patch(self.CHAT) as chat:
-            self.assertEqual(self.post("ai-propose", {"level": "same"}).status_code, 503)
+            off = self.post("ai-propose", {"level": "same"})
+        self.assertEqual(off.status_code, 503)
+        self.assertEqual(off.json()["detail"], "AI is not configured.")
         chat.assert_not_called()
         self.assertEqual(self.propose(level="wild").status_code, 400)
         self.assertEqual(self.propose(level=None).status_code, 400)
         self.configure(wordcloud_ai_enabled=False)
-        self.assertEqual(self.propose().status_code, 400)
+        disabled = self.propose()
+        self.assertEqual(disabled.status_code, 400)
+        self.assertEqual(
+            disabled.json()["detail"], "AI features are not enabled for this question."
+        )
         self.configure(wordcloud_ai_enabled=True)
         self.stacked(self.a, self.b)  # with C hidden: 2 visible tops
         MatrixCard.objects.filter(pk=self.c.pk).update(hidden=True)

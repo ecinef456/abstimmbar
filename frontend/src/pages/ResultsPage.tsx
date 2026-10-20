@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { ChartColumnDecreasing, Download, Trash2 } from "lucide-react";
 import {
+  aiErrorText,
   api,
   results,
   type FreeTextEvaluation,
@@ -40,14 +41,6 @@ import {
   termColor,
 } from "../results/palette";
 
-function aiErrorText(err: unknown): string {
-  try {
-    return JSON.parse((err as Error).message).detail ?? String(err);
-  } catch {
-    return String(err);
-  }
-}
-
 /** Word-cloud result with an optional AI cleanup (merge spelling variants and
  * synonyms, group into thematic clusters). Non-destructive: the raw votes are
  * untouched, and the teacher can flip back to the original at any time. */
@@ -76,7 +69,7 @@ function WordCloudResult({
       setOptimized(data);
       setShowOptimized(true);
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -209,7 +202,7 @@ function FreeTextResult({
       setEvaluation(data);
       setShowEvaluation(true);
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -334,7 +327,7 @@ function RunReport({ runId, aiEnabled }: { runId: number; aiEnabled: boolean }) 
       const data = await results.summarize(runId);
       setReport(data.report);
     } catch (err) {
-      setError(aiErrorText(err));
+      setError(aiErrorText(err, t));
     } finally {
       setBusy(false);
     }

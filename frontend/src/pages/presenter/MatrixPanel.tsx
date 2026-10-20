@@ -37,13 +37,12 @@ import {
   X,
   ZoomIn,
 } from "lucide-react";
-import { live, type MatrixBoard, type MatrixCard, type MatrixRating, type MatrixSettingsPayload } from "../../api";
+import { detailText, errorDetail, live, type MatrixBoard, type MatrixCard, type MatrixRating, type MatrixSettingsPayload } from "../../api";
 import Matrix, { matrixStacks, matrixZoneName } from "../../results/Matrix";
 import MatrixRanking from "../../results/MatrixRanking";
 import { clampToZone, resolveZone } from "../../results/matrixGeometry";
 import { categoryLabel } from "../../matrixPalette";
 import { MatrixCategoryChips, MatrixZonePicker } from "../../results/MatrixZonePicker";
-import { requestDetail } from "../../results/mindmapModeration";
 import { MATRIX_AI_DRAWER_REM, MatrixAiDrawer, useMatrixAi } from "../../results/matrixAi";
 import { PRESENTER_HELP } from "./footer";
 import { useReducedMotion } from "../../results/motion";
@@ -185,7 +184,7 @@ export default function MatrixPanel({
         }
         return matrix;
       } catch (err) {
-        setToast((p) => ({ text: t(requestDetail(err)), n: (p?.n ?? 0) + 1 }));
+        setToast((p) => ({ text: detailText(errorDetail(err), t), n: (p?.n ?? 0) + 1 }));
         return null;
       } finally {
         if (optimisticId != null) {
@@ -1144,7 +1143,7 @@ function ModerateView({
   const [tick, setTick] = useState(0);
   // Pick the focus target before the action removes the clicked button.
   const pickTarget = (from: HTMLElement, group: string, heading: string) => {
-    const all = [...(panelRef.current?.querySelectorAll<HTMLElement>("[data-mod-key]") ?? [])];
+    const all = [...(panelRef.current?.querySelectorAll<HTMLElement>("[data-mod-key]:not(:disabled)") ?? [])];
     const at = all.indexOf(from);
     const others = (el: HTMLElement) => el !== from && (!group || el.dataset.modGroup !== group);
     const next = all.slice(at + 1).find(others) ?? all.slice(0, at).reverse().find(others);

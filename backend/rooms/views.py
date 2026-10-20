@@ -129,7 +129,7 @@ def _ai_distractors_response(request, fallback_question=None):
     stored ``fallback_question`` when the caller has one.
     """
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     text = _plain(request.data.get("text") or "")
     if not text and fallback_question is not None:
         text = _plain(fallback_question.text)
@@ -155,7 +155,7 @@ def _ai_distractors_response(request, fallback_question=None):
             ai_prompts.build_distractors_prompt(text, correct, existing, count),
         )
     except ai.AIError as exc:
-        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+        return Response({"detail": f"AI error: {exc}"}, status=502)
     # Re-validate: strings only, trimmed, deduped against existing + each
     # other (case-insensitive), capped in length and count.
     seen = {e.casefold() for e in existing}
@@ -175,18 +175,18 @@ def _ai_rephrase_response(request, fallback_question=None):
     stored ``fallback_question`` when the caller has one.
     """
     if not ai.is_enabled():
-        return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+        return Response({"detail": "AI is not configured."}, status=503)
     plain = _plain(request.data.get("text") or "")
     if not plain and fallback_question is not None:
         plain = _plain(fallback_question.text)
     if not plain:
-        return Response({"detail": "Die Frage hat noch keinen Text."}, status=400)
+        return Response({"detail": "The question has no text yet."}, status=400)
     try:
         data = ai.chat_json(
             ai_prompts.rephrase_system(), ai_prompts.build_rephrase_prompt(plain)
         )
     except ai.AIError as exc:
-        return Response({"detail": f"KI-Fehler: {exc}"}, status=502)
+        return Response({"detail": f"AI error: {exc}"}, status=502)
     variants = []
     for item in data.get("variants", []) if isinstance(data, dict) else []:
         text = str(item).strip()[:1000]
@@ -271,8 +271,8 @@ class RoomViewSet(viewsets.ModelViewSet):
             or instance.owner_id == user.pk
         ):
             raise PermissionDenied(
-                "Nur die besitzende Person kann den Raum löschen. Sie können "
-                "aus dem Teilen austreten."
+                "Only the owner can delete the room. You can leave the sharing "
+                "instead."
             )
         instance.delete()
 
@@ -314,7 +314,7 @@ class RoomViewSet(viewsets.ModelViewSet):
             query = str(request.data.get("user") or "").strip()
             if not query:
                 return Response(
-                    {"detail": "Nutzerkennung oder E-Mail-Adresse angeben."},
+                    {"detail": "Enter a username or e-mail address."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             user_model = get_user_model()
@@ -323,15 +323,15 @@ class RoomViewSet(viewsets.ModelViewSet):
                 matches = list(user_model.objects.filter(email__iexact=query)[:2])
                 if len(matches) > 1:
                     return Response(
-                        {"detail": "E-Mail-Adresse ist nicht eindeutig — bitte "
-                                   "die Nutzerkennung verwenden."},
+                        {"detail": "The e-mail address is not unique — please "
+                                   "use the username."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 user = matches[0] if matches else None
             if user is None:
                 return Response(
-                    {"detail": "Keine Person mit dieser Kennung/E-Mail gefunden "
-                               "(sie muss sich mindestens einmal angemeldet haben)."},
+                    {"detail": "No person found with this username/e-mail (they "
+                               "must have signed in at least once)."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
             room.owners.add(user)  # idempotent
@@ -370,13 +370,13 @@ class RoomViewSet(viewsets.ModelViewSet):
         room = self.get_object()
         if room.owners.count() <= 1:
             return Response(
-                {"detail": "Die letzte besitzende Person kann nicht entfernt werden."},
+                {"detail": "The last owner cannot be removed."},
                 status=status.HTTP_409_CONFLICT,
             )
         if str(room.owner_id) == str(user_id):
             return Response(
-                {"detail": "Bitte zuerst den Besitz an eine andere Person "
-                           "übertragen."},
+                {"detail": "Please transfer ownership to another person "
+                           "first."},
                 status=status.HTTP_409_CONFLICT,
             )
         room.owners.remove(user_id)
@@ -390,8 +390,8 @@ class RoomViewSet(viewsets.ModelViewSet):
         user = request.user
         if room.owner_id == user.pk:
             return Response(
-                {"detail": "Als besitzende Person können Sie nicht austreten — "
-                           "übertragen Sie den Raum zuerst oder löschen Sie ihn."},
+                {"detail": "As the owner you cannot leave — transfer the room "
+                           "first or delete it."},
                 status=status.HTTP_409_CONFLICT,
             )
         room.owners.remove(user)
@@ -406,18 +406,18 @@ class RoomViewSet(viewsets.ModelViewSet):
         user = request.user
         if not (user.is_staff or room.owner_id in (None, user.pk)):
             raise PermissionDenied(
-                "Nur die besitzende Person kann den Raum übertragen."
+                "Only the owner can transfer the room."
             )
         try:
             target_id = int(request.data.get("user"))
         except (TypeError, ValueError):
             return Response(
-                {"detail": "Zielperson angeben."},
+                {"detail": "Specify the target person."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not room.owners.filter(pk=target_id).exists():
             return Response(
-                {"detail": "Die Zielperson muss den Raum bereits mitbearbeiten."},
+                {"detail": "The target person must already be a co-editor of the room."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         room.owner_id = target_id
@@ -488,7 +488,7 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
                 user.is_staff or target.owners.filter(pk=user.pk).exists()
             ):
                 return Response(
-                    {"detail": "Zielraum nicht gefunden."},
+                    {"detail": "Target room not found."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         title = (request.data.get("title") or "").strip() or None
@@ -587,7 +587,7 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
         the teacher to review and pick (human in the loop)."""
         self.get_object()  # ownership check
         if not ai.is_enabled():
-            return Response({"detail": "KI ist nicht konfiguriert."}, status=503)
+            return Response({"detail": "AI is not configured."}, status=503)
         # This feature's own ceiling (independent of common.documents.MAX_CHARS):
         # enough material for AI_GEN_MAX_CHUNKS full chunks plus a bit of slack.
         max_chars = settings.AI_CHUNK_CHARS * (settings.AI_GEN_MAX_CHUNKS + 1)
@@ -603,7 +603,7 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
             pages = max(1, round(len(text) / 2000))
         if not text:
             return Response(
-                {"detail": "Kein Text – bitte eine Datei hochladen oder Text einfügen."},
+                {"detail": "No text — please upload a file or paste text."},
                 status=400,
             )
         raw_kinds = request.data.get("kinds") or ""
@@ -895,7 +895,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
             user.is_staff or target.room.owners.filter(pk=user.pk).exists()
         ):
             return Response(
-                {"detail": "Ziel-Fragenset nicht gefunden."},
+                {"detail": "Target question set not found."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if target == source:
@@ -917,8 +917,8 @@ class QuestionViewSet(viewsets.ModelViewSet):
             or MatrixCard.objects.filter(question=question).exists()
         ):
             return Response(
-                {"detail": "Zu dieser Frage liegen Ergebnisse vor. Bitte erst "
-                           "die Ergebnisse löschen oder das Set kopieren."},
+                {"detail": "This question has results. Please delete the "
+                           "results first or copy the set."},
                 status=status.HTTP_409_CONFLICT,
             )
         last = target.questions.order_by("-position").first()
@@ -949,19 +949,19 @@ class QuestionViewSet(viewsets.ModelViewSet):
         question = self.get_object()
         if question.kind not in Question.CHOICE_KINDS:
             return Response(
-                {"detail": "Nachher-Fragen gibt es nur für Auswahl- und "
-                           "Likert-Fragen."},
+                {"detail": "After-questions are only available for choice and "
+                           "Likert questions."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if question.before_question_id is not None:
             return Response(
-                {"detail": "Eine Nachher-Frage kann selbst keine Nachher-Frage "
-                           "erhalten."},
+                {"detail": "An after-question cannot itself get an "
+                           "after-question."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if Question.objects.filter(before_question=question).exists():
             return Response(
-                {"detail": "Zu dieser Frage gibt es bereits eine Nachher-Frage."},
+                {"detail": "This question already has an after-question."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         question_set = question.question_set
@@ -1067,7 +1067,7 @@ class SharedSetCopyView(APIView):
             user.is_staff or room.owners.filter(pk=user.pk).exists()
         ):
             return Response(
-                {"detail": "Zielraum nicht gefunden."},
+                {"detail": "Target room not found."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         clone = duplicate_set(question_set, room)

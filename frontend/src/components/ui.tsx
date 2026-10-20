@@ -50,6 +50,50 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
+/** Number input with a local string draft: clearing it with backspace leaves
+ *  it empty while typing (no snap to `min`); in-range values are committed as
+ *  typed, and on blur the draft is clamped to `min`–`max` (empty → `min`). */
+export function ClampedNumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  className = "w-20",
+  onBlur,
+  ...rest
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min: number;
+  max?: number;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange" | "min" | "max">) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const upper = max ?? Number.POSITIVE_INFINITY;
+  return (
+    <input
+      {...rest}
+      type="number"
+      min={min}
+      max={max}
+      value={draft}
+      onChange={(event) => {
+        setDraft(event.target.value);
+        const n = Number(event.target.value);
+        if (event.target.value !== "" && n >= min && n <= upper) onChange(Math.round(n));
+      }}
+      onBlur={(event) => {
+        const n = Math.round(Number(draft));
+        const next = draft.trim() === "" || !Number.isFinite(n) ? min : Math.min(upper, Math.max(min, n));
+        setDraft(String(next));
+        onChange(next);
+        onBlur?.(event);
+      }}
+      className={`rounded-lg border border-field bg-white px-2 py-1 dark:bg-slate-900 dark:text-slate-100 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 focus:outline-none ${className}`}
+    />
+  );
+}
+
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
