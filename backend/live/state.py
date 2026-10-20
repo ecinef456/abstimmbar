@@ -25,6 +25,7 @@ from . import (
 )
 from .hub import hub
 from .models import Run, WordCloudModeration
+from .progress import progress_payload
 from .results import (
     freetext_evaluation,
     likert_summary,
@@ -235,6 +236,8 @@ def build_payloads(room):
             field = f"wordcloud_merge_{flag}"
             presenter["question"][field] = getattr(question, field)
         presenter["votes"] = run.votes.filter(question=question).count()
+        # Beamer progress pill: answered participants, items vs. capacity.
+        presenter["progress"] = progress_payload(run, question)
         if is_mindmap:
             # Every node incl. hidden ones (flagged) for the restore drawer.
             presenter["mindmap"] = mindmap.build_tree(run, question, presenter=True)

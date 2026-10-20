@@ -22,7 +22,7 @@ from django.utils import timezone
 
 from rooms.mindmap import RATING_POINTS, RATING_UPDOWN
 
-from .matrix import ZONES, MatrixError, _lock_run, is_rating
+from .matrix import ZONES, MatrixError, _lock_run, contributor_tokens, is_rating
 from .models import MatrixCard, MatrixPhase, MatrixRating, Run
 
 STAGES = (MatrixPhase.Stage.COLLECT, MatrixPhase.Stage.RATE)
@@ -176,6 +176,34 @@ def aggregate(run, question, visible=None):
             entry = scores.setdefault(key, {"points": 0})
             entry["points"] += max(value, 0)
     return scores, len({token for _card, token, _value in rows})
+
+
+def rater_tokens(run, question, visible=None):
+    """Ids of the distinct participant tokens with a rating on a visible
+    top card (the ``raters`` of :func:`aggregate`)."""
+    if visible is None:
+        visible = _visible_ids(run, question)
+    return {
+        token
+        for item_id, token in MatrixRating.objects.filter(
+            card__run=run, card__question=question
+        ).values_list("card_id", "token_id")
+        if item_id in visible
+    }
+
+
+def answered_count(run, question, visible=None):
+    """Distinct participants who contributed OR rated (the union — unlike
+    :func:`votes`, which takes the larger of both counts)."""
+    return len(contributor_tokens(run, question) | rater_tokens(run, question, visible))
+
+
+def given_count(question, scores):
+    """Rating "items" from :func:`aggregate` scores: points given (points
+    mode) or ratings with a non-zero value (plus/minus mode)."""
+    if question.matrix_rating_mode == RATING_UPDOWN:
+        return sum(s["up"] + s["down"] for s in scores.values())
+    return sum(s["points"] for s in scores.values())
 
 
 def _settings(question):

@@ -41,6 +41,7 @@ from .mindmap import (
     _load_tree,
     _lock_run,
     contributor_count,
+    contributor_tokens,
     is_rating,
 )
 from .models import MindmapPhase, MindmapRating, Run
@@ -198,6 +199,34 @@ def votes(run, question):
     rated (a seeded tree that was only rated must not show 0) — like
     ``matrix_rating.votes``."""
     return max(contributor_count(run, question), aggregate(run, question)[1])
+
+
+def rater_tokens(run, question, visible=None):
+    """Ids of the distinct participant tokens with a rating on a visible
+    entry (the ``raters`` of :func:`aggregate`)."""
+    if visible is None:
+        visible = _visible_ids(run, question)
+    return {
+        token
+        for item_id, token in MindmapRating.objects.filter(
+            node__run=run, node__question=question
+        ).values_list("node_id", "token_id")
+        if item_id in visible
+    }
+
+
+def answered_count(run, question, visible=None):
+    """Distinct participants who contributed OR rated (the union — unlike
+    :func:`votes`, which takes the larger of both counts)."""
+    return len(contributor_tokens(run, question) | rater_tokens(run, question, visible))
+
+
+def given_count(question, scores):
+    """Rating "items" from :func:`aggregate` scores: points given (points
+    mode) or ratings with a non-zero value (plus/minus mode)."""
+    if question.mindmap_rating_mode == RATING_UPDOWN:
+        return sum(s["up"] + s["down"] for s in scores.values())
+    return sum(s["points"] for s in scores.values())
 
 
 def _settings(question):

@@ -351,6 +351,33 @@ def contributor_count(run, question):
     )
 
 
+def contributor_tokens(run, question):
+    """Ids of the distinct participant tokens that contributed a term (hidden
+    ones included, like :func:`contributor_count`)."""
+    return set(
+        MindmapContribution.objects.filter(node__run=run, node__question=question)
+        .values_list("token_id", flat=True)
+        .distinct()
+    )
+
+
+def participant_contribution_count(run, question):
+    """Participants' contributions to visible terms (nothing below a hidden
+    term) — the quota used, i.e. the "items" of the beamer's progress pill
+    while collecting. Two people adding the same term count twice, and a
+    contribution to a seeded/presenter term counts like any other, exactly
+    as ``mindmap_max_per_person`` charges them."""
+    tree = _load_tree(run, question)
+    visible = {node_id for node_id in tree if not _effectively_hidden(tree, node_id)}
+    return sum(
+        1
+        for node_id in MindmapContribution.objects.filter(
+            node__run=run, node__question=question
+        ).values_list("node_id", flat=True)
+        if node_id in visible
+    )
+
+
 def own_node_ids(run, question, token):
     return list(
         MindmapContribution.objects.filter(
