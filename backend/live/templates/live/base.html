@@ -1,3 +1,4 @@
+{% load static %}
 {# SPDX-License-Identifier: Apache-2.0 — Copyright 2026 Universität Osnabrück (virtUOS) #}
 {# Ultra-light participant shell (ADR-0001): no framework, one inline stylesheet. #}
 <!doctype html>
@@ -15,6 +16,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token }}">
 <title>{% block title %}Abstimmbar{% endblock %}</title>
+{# Icons are copies of website/assets/logo.svg (see website/README.md). #}
+<link rel="icon" type="image/svg+xml" href="{% static 'common/favicon.svg' %}">
+<link rel="icon" type="image/png" sizes="32x32" href="{% static 'common/favicon-32.png' %}">
+<link rel="icon" type="image/png" sizes="192x192" href="{% static 'common/favicon-192.png' %}">
+<link rel="apple-touch-icon" href="{% static 'common/apple-touch-icon.png' %}">
+<meta name="theme-color" content="#2f7346">
 <style>
   :root {
     --ink: #26292b; --ink-soft: #6b7176; --line: #e4e7e9;
