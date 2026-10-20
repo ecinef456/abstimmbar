@@ -319,3 +319,32 @@ test('while dragging every term shows its "attach here" tab; a parent\'s tab att
   await page.mouse.up();
   await expect.poll(s.parents).toMatchObject({ Papier: 'Energie', Wind: 'Energie', Solar: null });
 });
+
+test('a drop straight onto a leaf\'s tab (without crossing its body) attaches below it', async ({ page, trackRoom }) => {
+  const s = await seed(page, trackRoom);
+  const energie = await s.add('Energie');
+  await s.add('Wind', energie);
+  const solar = await s.add('Solar');
+  const papier = await s.add('Papier');
+  await openPresenter(page, s.room.setId);
+  const map = page.getByTestId('mindmap');
+  const node = (id: number) => map.locator(`[data-mm-node="${id}"]`);
+  await expect(node(solar)).toBeVisible();
+  await page.waitForTimeout(700); // fit / layout transition settles
+  const bb = (await node(solar).boundingBox())!;
+  const from = { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 6, from.y + 6, { steps: 2 });
+  const tab = map.locator(`[data-mm-tab="${papier}"]`);
+  await expect(tab).toBeVisible();
+  const tb = (await tab.boundingBox())!;
+  const vw = page.viewportSize()!.width;
+  // Centre of the tab's on-screen part, reached in one jump.
+  const x = (Math.max(tb.x, 0) + Math.min(tb.x + tb.width, vw - 1)) / 2;
+  await page.mouse.move(x, tb.y + tb.height / 2, { steps: 1 });
+  await expect(tab).toHaveAttribute('data-active', '');
+  await expect(map.getByRole('status')).toContainText('Unter „Papier“ einhängen');
+  await page.mouse.up();
+  await expect.poll(s.parents).toMatchObject({ Solar: 'Papier', Papier: null, Wind: 'Energie' });
+});

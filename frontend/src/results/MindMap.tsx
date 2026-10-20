@@ -1130,7 +1130,7 @@ export default function MindMap({
     active: number | null,
   ): { active: number | null; target: Target | null } => {
     const act = active !== null ? placedById.get(active) : undefined;
-    if (act && inside(tabRect(act), x, y))
+    if (act && !isAncestor(dragId, act.id) && inside(tabRect(act), x, y))
       return { active, target: { kind: "move", id: active, problem: moveProblem(dragId, active) } };
     for (let i = layout.nodes.length - 1; i >= 0; i--) {
       const p = layout.nodes[i];
@@ -1591,15 +1591,20 @@ export default function MindMap({
           </div>
           {/* Beside a parent the tab is icon-only (the gap before the
               children): the hovered one gets its label below it (the
-              bubble sits above), never over the children. While the tab
-              itself is hovered the bubble names the action instead. */}
+              bubble sits above), its outer edge flush with the tab's outer
+              edge so it reaches back under the parent's own body, not into
+              the children's column. While the tab itself is hovered the
+              bubble names the action instead. */}
           {tr.narrow && active && !on && (
             <div
               aria-hidden
               data-mm-tab-label={p.id}
               className="pointer-events-none absolute left-0 top-0 whitespace-nowrap rounded-md border border-slate-400 bg-white px-1.5 py-0.5 text-xs font-semibold shadow-sm"
               style={{
-                transform: `translate(${tr.x + tr.w / 2}px, ${tr.y + tr.h + 4}px) translate(-50%, 0)`,
+                transform:
+                  p.side === 1
+                    ? `translate(${tr.x + tr.w}px, ${tr.y + tr.h + 4}px) translate(-100%, 0)`
+                    : `translate(${tr.x}px, ${tr.y + tr.h + 4}px)`,
                 color: "#475569",
               }}
             >

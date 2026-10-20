@@ -239,7 +239,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     }
   };
   // Mindmap counterpart of the moderation hint (+, drag, double-click, ×,
-  // undo). "_v2": shown again once for the stage-2 gestures.
+  // undo). "_v3": shown again once so presenters learn the "Attach here"
+  // tab (merge vs. attach was not discoverable; "_v2" was the stage-2 gestures).
   const [mmHintSeen, setMmHintSeen] = useState(() => {
     try {
       return localStorage.getItem("abstimmbar_mm_moderation_hint_v3") === "1";
