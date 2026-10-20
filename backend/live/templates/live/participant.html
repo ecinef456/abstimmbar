@@ -162,6 +162,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   #mx-rate-list{--t1:#ebf6ee;--t2:#fcf5de;--t3:#fbebec;--t4:#edf0f5;--s1:#3a9a5b;--s2:#b07f0a;--s3:#c9566a;--s4:#6b7a90;--mx-ico:#2b3035;--mx-cell:#fff;--mx-grid:#8a9198}
   #mx-rate-list .mx-rgroup{--ink-soft:#545a5f}
   :root[data-theme="dark"] #mx-rate-list .mx-rgroup{--ink-soft:#a9b1b7}
+  /* Dark field tints are deliberately a bit stronger than on the results board (results/Matrix.tsx): phone in dim surroundings vs. beamer. */
   :root[data-theme="dark"] #mx-rate-list{--t1:rgba(52,211,153,.09);--t2:rgba(252,211,77,.08);--t3:rgba(251,113,133,.09);--t4:rgba(148,163,184,.1);--s1:#4fbf7a;--s2:#e0b13c;--s3:#e5788a;--s4:#94a3b8;--mx-ico:#e5e9ec;--mx-cell:rgba(255,255,255,.07);--mx-grid:#7d858c}
   .mx-rgroup{margin:14px 0 0;padding:4px 12px 6px;border-radius:12px;border:1px solid var(--line)}
   .mx-rgroup[data-zone="q1"]{background:var(--t1)}
@@ -187,7 +188,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   .mx-rmine{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand-strong);font-size:12px;font-weight:700;vertical-align:middle}
   .mx-rctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
   .mx-rbtn{flex:none;width:auto;min-width:44px;height:44px;min-height:44px;margin:0;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--brand-strong);font-size:18px;font-weight:700;line-height:1}
-  .mx-rbtn:disabled{opacity:.4}
+  .mx-rbtn[aria-disabled="true"]{opacity:.4;cursor:help}
   .mx-rval{min-width:28px;text-align:center;font-weight:700;font-size:16px}
   .mx-thumb{font-size:20px;font-weight:400;filter:grayscale(1);opacity:.75}
   .mx-thumb[aria-pressed="true"]{filter:none;opacity:1;border-width:2px}
@@ -3928,28 +3929,32 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
         const ctl = document.createElement("div");
         ctl.className = "mx-rctl";
         if (canRate && points) {
+          // Blocked controls use aria-disabled (not disabled) like the mind
+          // map: they stay focusable, say why, and a tap shows the note.
           const minus = btn("", "minus",
             I18N.mmTakePoint + " (" + I18N.mmYourPoints.replace("{n}", String(value)) + ") — " + card.title, "−");
-          minus.disabled = value <= 0;
+          minus.setAttribute("aria-disabled", String(value <= 0));
           const val = document.createElement("span");
-          val.className = "mx-rval"; val.textContent = String(value);
-          val.textContent = "";
+          val.className = "mx-rval";
           const vv = document.createElement("span");
           vv.setAttribute("aria-hidden", "true"); vv.textContent = String(value);
           const vs = document.createElement("span");
           vs.className = "mx-sr"; vs.textContent = I18N.mmYourPoints.replace("{n}", String(value));
           val.append(vv, vs);
-          const plus = btn("", "plus", I18N.mmGivePoint + " — " + card.title, "+");
-          plus.disabled = left <= 0 || (!r.multi && value >= 1);
+          const why = !r.multi && value >= 1 ? I18N.mxOnePoint : (left <= 0 ? I18N.mmPointsNone : "");
+          const plus = btn("", "plus", I18N.mmGivePoint + " — " + card.title + (why ? " — " + why : ""), "+");
+          plus.setAttribute("aria-disabled", String(!!why));
+          plus.title = why || I18N.mmGivePoint;
           ctl.append(minus, val, plus);
         } else if (canRate) {
           for (const [act, v, label, icon, cls] of [["up", 1, I18N.mmLike, "👍", "mx-up"], ["down", -1, I18N.mmDislike, "👎", "mx-down"]]) {
             const pressed = value === v;
-            const hint = pressed ? I18N.mmUndoRating : "";
+            const blocked = !pressed && value === 0 && left <= 0;
+            const hint = pressed ? I18N.mmUndoRating : (blocked ? I18N.mmRatingsNone : "");
             const b = btn("mx-thumb " + cls, act, label + " — " + card.title + (hint ? " — " + hint : ""), icon);
             b.setAttribute("aria-pressed", String(pressed));
-            if (hint) b.title = hint;
-            b.disabled = !pressed && value === 0 && left <= 0;
+            b.setAttribute("aria-disabled", String(blocked));
+            b.title = hint ? label + " — " + hint : label;
             ctl.append(b);
           }
         } else if (value !== 0) {
@@ -3975,11 +3980,12 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       group.append(h, ul);
       list.append(group);
     }
-    // Keep keyboard focus on the pressed control (or its enabled sibling).
+    // Keep keyboard focus on the pressed control (blocked ones stay focusable:
+    // aria-disabled), or else the first control of the row.
     if (focus && focus.card) {
       const row = list.querySelector(`li[data-card="${focus.card}"]`);
-      const target = row && (row.querySelector(`button[data-act="${focus.act}"]:not(:disabled)`) ||
-        row.querySelector("button:not(:disabled)"));
+      const target = row && (row.querySelector(`button[data-act="${focus.act}"]`) ||
+        row.querySelector("button"));
       if (target) target.focus({ preventScroll: true });
     }
     mxUpdateScores(r);

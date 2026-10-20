@@ -2205,7 +2205,8 @@ class AiWordCloudTests(LiveTestCase):
     def setUp(self):
         super().setUp()
         self.cloud = Question.objects.create(
-            question_set=self.question_set, kind=Question.Kind.WORD_CLOUD, position=5
+            question_set=self.question_set, kind=Question.Kind.WORD_CLOUD, position=5,
+            wordcloud_ai_enabled=True,
         )
         self.run = self.open_question(self.cloud)
         for raw in ["Klima", "Klima", "Klima", "Klimawandel", "Wasser", "Wasser", "Boden"]:
@@ -2279,6 +2280,19 @@ class AiWordCloudTests(LiveTestCase):
         self.assertEqual(self.client.post(self.url).status_code, 503)
 
     @override_settings(**AI_ON)
+    def test_question_switch_off_returns_400(self):
+        self.cloud.wordcloud_ai_enabled = False
+        self.cloud.save()
+        with patch("basicbar_integrations.ai.chat_json") as chat:
+            self.client.force_login(self.owner)
+            response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"], "AI features are not enabled for this question."
+        )
+        chat.assert_not_called()
+
+    @override_settings(**AI_ON)
     def test_requires_owner(self):
         with patch("basicbar_integrations.ai.chat_json", return_value={"groups": []}):
             self.client.force_login(User.objects.create_user(username="eve"))
@@ -2295,7 +2309,8 @@ class AiWordCloudTests(LiveTestCase):
     @override_settings(**AI_ON)
     def test_empty_wordcloud_skips_model(self):
         empty_cloud = Question.objects.create(
-            question_set=self.question_set, kind=Question.Kind.WORD_CLOUD, position=6
+            question_set=self.question_set, kind=Question.Kind.WORD_CLOUD, position=6,
+            wordcloud_ai_enabled=True,
         )
         url = f"/api/runs/{self.run.pk}/questions/{empty_cloud.pk}/ai-wordcloud/"
         with patch("basicbar_integrations.ai.chat_json") as chat:
@@ -2378,6 +2393,7 @@ class AiFreeTextTests(LiveTestCase):
         self.q = Question.objects.create(
             question_set=self.question_set, kind=Question.Kind.OPEN_TEXT,
             text="<p>Hauptstadt von Frankreich?</p>", position=5,
+            wordcloud_ai_enabled=True,
         )
         self.run = self.open_question(self.q)
         for raw in ["Paris", "paris", "Berlin", "vielleicht Paris", "keine Ahnung"]:
@@ -2424,6 +2440,19 @@ class AiFreeTextTests(LiveTestCase):
     def test_disabled_returns_503(self):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.post(self.url).status_code, 503)
+
+    @override_settings(**AI_ON)
+    def test_question_switch_off_returns_400(self):
+        self.q.wordcloud_ai_enabled = False
+        self.q.save()
+        with patch("basicbar_integrations.ai.chat_json") as chat:
+            self.client.force_login(self.owner)
+            response = self.client.post(self.url)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["detail"], "AI features are not enabled for this question."
+        )
+        chat.assert_not_called()
 
     @override_settings(**AI_ON)
     def test_requires_owner(self):
@@ -9009,8 +9038,9 @@ class MatrixRatingPayloadTests(MatrixTestCase):
             (rating["stage"], rating["mode"], rating["budget"], rating["multi"]),
             ("rate", "points", 3, True),
         )
-        # q1 before q2; inside a zone y desc (C was moved up), then x asc.
-        self.assertEqual([c["title"] for c in rating["cards"]], ["C", "B", "A"])
+        # Reading order q2 before q1; inside a zone y desc (C was moved up),
+        # then x asc.
+        self.assertEqual([c["title"] for c in rating["cards"]], ["A", "C", "B"])
         for card in rating["cards"]:
             self.assertEqual(
                 set(card), {"id", "title", "description", "category", "zone", "summary"}
@@ -9020,6 +9050,21 @@ class MatrixRatingPayloadTests(MatrixTestCase):
         self.assertNotIn("Member", text)
         self.assertNotIn('"x"', text)
         self.assertNotIn("scores", rating)
+
+    def test_participant_cards_in_reading_order_like_the_zone_picker(self):
+        # The participant zone picker (participant.html mxBuild), the beamer
+        # picker and the results list: q2, q1, q3, q4, then the edges.
+        self.configure(matrix_edges=True, matrix_max_per_person=20)
+        for zone in ("e_left", "q4", "e_bottom", "q3", "e_right", "q1", "e_top"):
+            self.add(title=zone, zone=zone)
+        self.rate_stage()
+        zones = []
+        for card in self.part()["cards"]:
+            if card["zone"] not in zones:
+                zones.append(card["zone"])
+        self.assertEqual(
+            zones, ["q2", "q1", "q3", "q4", "e_top", "e_right", "e_bottom", "e_left"]
+        )
 
     def test_participant_no_foreign_ratings_unless_revealed(self):
         self.rate_stage()

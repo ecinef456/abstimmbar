@@ -71,11 +71,18 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(list.getByText('Verstecktes')).toHaveCount(0);
         const heads = await list.locator('h3').allTextContents();
         expect(heads).toEqual([
-          'nützlich & modern',
           'nicht nützlich & modern',
+          'nützlich & modern',
           'nützlich & altbacken',
           'zwischen nützlich & modern und nützlich & altbacken',
         ]);
+        // Same reading order as the zone picker of the card form.
+        const picker = await page.locator('#mx-zones [data-zone]').evaluateAll(
+          (els) => els.map((el) => (el as HTMLElement).dataset.zone));
+        const groups = await list.locator('.mx-rgroup').evaluateAll(
+          (els) => els.map((el) => (el as HTMLElement).dataset.zone));
+        expect(picker).toHaveLength(8);
+        expect(groups).toEqual(picker.filter((z) => groups.includes(z)));
         // Each field group is a tinted block with a decorative icon.
         const tints = scheme === 'light'
           ? { q1: 'rgb(235, 246, 238)', q2: 'rgb(252, 245, 222)', q4: 'rgb(237, 240, 245)' }
@@ -98,7 +105,8 @@ for (const scheme of ['light', 'dark'] as const) {
 
         const plus = (t: string) => row(page, t).getByRole('button', { name: /Punkt vergeben/ });
         const minus = (t: string) => row(page, t).getByRole('button', { name: /Punkt zurücknehmen/ });
-        await expect(minus('Chatbot')).toBeDisabled();
+        // Blocked controls stay focusable and say why (like the mind map).
+        await expect(minus('Chatbot')).toHaveAttribute('aria-disabled', 'true');
         await plus('Chatbot').click();
         await expect(status).toHaveText('Noch 2 Punkte');
         await expect(row(page, 'Chatbot').locator('.mx-rval [aria-hidden]')).toHaveText('1');
@@ -106,11 +114,23 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(row(page, 'Chatbot').locator('.mx-rval [aria-hidden]')).toHaveText('2');
         await plus('Feedback-Tool').click();
         await expect(status).toHaveText('Keine Punkte mehr übrig');
-        await expect(plus('Randfall')).toBeDisabled();
-        await expect(plus('Chatbot')).toBeDisabled();
+        for (const t of ['Randfall', 'Chatbot']) {
+          await expect(plus(t)).toHaveAttribute('aria-disabled', 'true');
+          await expect(plus(t)).not.toHaveAttribute('disabled');
+          await expect(plus(t)).toHaveAccessibleName(/Keine Punkte mehr übrig$/);
+          await expect(plus(t)).toHaveAttribute('title', 'Keine Punkte mehr übrig');
+        }
+        // Tapping a blocked button explains instead of doing nothing
+        // (force: Playwright treats aria-disabled as not actionable).
+        const note = page.locator('#mx-rate-note');
+        await plus('Randfall').click({ force: true });
+        await expect(note).toBeVisible();
+        await expect(note).toHaveText('Randfall: Keine Punkte mehr übrig');
+        await expect(status).toHaveText('Keine Punkte mehr übrig');
         await minus('Chatbot').click();
         await expect(status).toHaveText('Noch 1 Punkt');
-        await expect(plus('Randfall')).toBeEnabled();
+        await expect(plus('Randfall')).toHaveAttribute('aria-disabled', 'false');
+        await expect(plus('Randfall')).toHaveAccessibleName(/^Punkt vergeben — Randfall$/);
 
         // Touch targets and layout.
         for (const b of await list.locator('button').all()) {
@@ -198,8 +218,13 @@ for (const scheme of ['light', 'dark'] as const) {
         await seed(page, demoApi, created, {
           matrix_rating_mode: 'points', matrix_rating_budget: 3, matrix_rating_multi: false,
         });
-        await row(page, 'Chatbot').getByRole('button', { name: /Punkt vergeben/ }).click();
-        await expect(row(page, 'Chatbot').getByRole('button', { name: /Punkt vergeben/ })).toBeDisabled();
+        const plus = row(page, 'Chatbot').getByRole('button', { name: /Punkt vergeben/ });
+        await plus.click();
+        await expect(plus).toHaveAttribute('aria-disabled', 'true');
+        await expect(plus).toHaveAccessibleName(/Nur ein Punkt pro Karte\.$/);
+        await expect(page.locator('#mx-rate-status')).toHaveText('Noch 2 Punkte');
+        await plus.click({ force: true }); // aria-disabled: not actionable for Playwright
+        await expect(page.locator('#mx-rate-note')).toHaveText('Chatbot für die Lehre: Nur ein Punkt pro Karte.');
         await expect(page.locator('#mx-rate-status')).toHaveText('Noch 2 Punkte');
       } finally {
         await page.close();
@@ -291,8 +316,13 @@ for (const scheme of ['light', 'dark'] as const) {
         await expect(status).toHaveText('Noch 1 Bewertung');
         await down('Feedback-Tool').click();
         await expect(status).toHaveText('Keine Bewertungen mehr übrig');
-        await expect(up('Randfall')).toBeDisabled();
-        await expect(down('Randfall')).toBeDisabled();
+        for (const b of [up('Randfall'), down('Randfall')]) {
+          await expect(b).toHaveAttribute('aria-disabled', 'true');
+          await expect(b).toHaveAccessibleName(/— Keine Bewertungen mehr übrig$/);
+        }
+        await up('Randfall').click({ force: true }); // aria-disabled: not actionable for Playwright
+        await expect(page.locator('#mx-rate-note')).toHaveText('Randfall: Keine Bewertungen mehr übrig');
+        await expect(up('Randfall')).toHaveAttribute('aria-pressed', 'false');
         // Switching an already rated card is still possible.
         await down('Chatbot').click();
         await expect(down('Chatbot')).toHaveAttribute('aria-pressed', 'true');

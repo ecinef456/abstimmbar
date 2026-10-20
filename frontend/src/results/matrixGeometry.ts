@@ -12,6 +12,11 @@ export type Zone = "q1" | "q2" | "q3" | "q4" | "e_top" | "e_right" | "e_bottom" 
 export const ZONES: readonly Zone[] = ["q1", "q2", "q3", "q4", "e_top", "e_right", "e_bottom", "e_left"];
 const QUADRANTS = ZONES.slice(0, 4) as Zone[];
 const EDGES = ZONES.slice(4) as Zone[];
+/** Reading order of the fields (top row q2, q1; bottom row q3, q4; then the
+ *  edges) — the order of the zone pickers (participant page, beamer) and of
+ *  every field-grouped list (participant rating list in
+ *  live/matrix_rating.py READING_ORDER, results list). */
+export const READING_ZONES: readonly Zone[] = ["q2", "q1", "q3", "q4", "e_top", "e_right", "e_bottom", "e_left"];
 
 export const EDGE_BAND = 0.12;
 export const HYSTERESIS = 0.12;

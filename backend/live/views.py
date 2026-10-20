@@ -2615,6 +2615,10 @@ def optimize_wordcloud(request, run_id, question_id):
     )
     if question.kind != Question.Kind.WORD_CLOUD:
         return Response({"detail": "Only available for word clouds."}, status=400)
+    if not question.wordcloud_ai_enabled:
+        return Response(
+            {"detail": "AI features are not enabled for this question."}, status=400
+        )
     words = words_with_counts(run, question, limit=200)
     if not words:
         return Response({"clusters": [], "merged": []})
@@ -2817,6 +2821,10 @@ def evaluate_freetext(request, run_id, question_id):
     )
     if question.kind != Question.Kind.OPEN_TEXT:
         return Response({"detail": "Only available for free-text questions."}, status=400)
+    if not question.wordcloud_ai_enabled:
+        return Response(
+            {"detail": "AI features are not enabled for this question."}, status=400
+        )
     categories = question.evaluation_categories
     answers = words_with_counts(run, question, limit=200)
     if not answers:
