@@ -524,26 +524,25 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
 
   const phase = state?.phase ?? "lobby";
 
-  // Re-entering a running presentation (same session) on a matrix / mind
-  // map that was left via ✕ — which closes the vote: the first snapshot is
-  // "closed", where the beamer would show only the question. Show the board
-  // / map instead, like a closed rating, WITHOUT changing the phase (the
-  // results phase would reveal hidden rating scores). Ends with any phase or
-  // question change; "Question" shows the bare question as usual.
-  const [resumeBoard, setResumeBoard] = useState<number | null>(null);
-  const firstSnapshot = useRef(true);
+  // Matrix / mind map on a closed vote (Stop, the timer, ✕ and re-entering
+  // the presentation): the board / map stays on the beamer, like a closed
+  // rating, WITHOUT changing the phase (the results phase would reveal hidden
+  // rating scores). Only an explicit "Question" (footer segment, A, or E back
+  // from the results) shows the bare question: `questionOnly` remembers that
+  // choice for the active question until it is opened again, previewed or
+  // left (it is set while still in "results", so that phase keeps it).
+  const [questionOnly, setQuestionOnly] = useState<number | null>(null);
   useEffect(() => {
-    if (!state || !firstSnapshot.current) return;
-    firstSnapshot.current = false;
-    const kind = state.question?.kind;
-    if (state.phase === "closed" && (kind === "matrix" || kind === "mindmap")) {
-      setResumeBoard(state.question!.id);
-    }
-  }, [state]);
-  const resumeShown = resumeBoard != null && resumeBoard === activeId && phase === "closed";
-  useEffect(() => {
-    if (resumeBoard != null && !resumeShown) setResumeBoard(null);
-  }, [resumeBoard, resumeShown]);
+    if (
+      questionOnly != null &&
+      (questionOnly !== activeId || (phase !== "closed" && phase !== "results"))
+    )
+      setQuestionOnly(null);
+  }, [questionOnly, activeId, phase]);
+  const closedBoard =
+    phase === "closed" &&
+    (activeKind === "matrix" || activeKind === "mindmap") &&
+    questionOnly !== activeId;
 
   // --- AI panel (#Wortwolke-KI): switch AI on (expert), pick view, regroup. ---
   // Settings are saved permanently on the question; the AI views themselves
@@ -614,8 +613,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     !(isOpenText && isAiView) &&
     (wcHasWords || wcHasMod);
   const showAiButton = expert && wcCloudShown && whoAi.ai;
-  // Mindmap: the map grows live while open and stays on "Ergebnis"; on
-  // "Frage" (closed/preview) only the question text is shown.
+  // Mindmap: the map grows live while open and stays after Stop and on
+  // "Ergebnis"; only an explicit "Frage" (and the preview) shows the question
+  // text alone.
   const mindmap = activeKind === "mindmap" ? state?.mindmap : undefined;
   // Rating phase (optional, per question): while rating only hiding is
   // possible on the beamer — add/merge/move/rename would change what people
@@ -634,10 +634,10 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const mmStopCloses = activeKind === "mindmap" && mmScoresHidden;
   const mmShown =
     !!mindmap &&
-    (phase === "open" || phase === "results" || (phase === "closed" && (mmScoresHidden || resumeShown)));
-  // Matrix: the board is live while open and stays on "Matrix" (results);
-  // "Frage" (closed) shows the question alone. Arranging and moderating are
-  // for every presenter (not expert-only).
+    (phase === "open" || phase === "results" || (phase === "closed" && (mmScoresHidden || closedBoard)));
+  // Matrix: the board is live while open and stays after Stop and on
+  // "Matrix" (results); only an explicit "Frage" shows the question alone.
+  // Arranging and moderating are for every presenter (not expert-only).
   const matrixBoard = activeKind === "matrix" ? state?.matrix : undefined;
   const matrixSettings = activeKind === "matrix" ? state?.matrix_settings : undefined;
   // Matrix rating: mirrors the mind map's (Stop with hidden scores only
@@ -649,7 +649,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const mxShown =
     !!matrixBoard &&
     !!matrixSettings &&
-    (phase === "open" || phase === "results" || (phase === "closed" && (mxScoresHidden || resumeShown)));
+    (phase === "open" || phase === "results" || (phase === "closed" && (mxScoresHidden || closedBoard)));
   // Matrix AI grouping (✦ handle): expert mode, AI configured, the
   // question's AI switch on (like the mind map's).
   const showMxAi = expert && mxShown && whoAi.ai && state?.question?.wordcloud_ai_enabled === true;
@@ -1278,9 +1278,10 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       : phase === "results" || liveShown
         ? resultSegment(wcView)
         : undefined) ?? viewSegments[0];
-  // The resumed board (not a closed rating): "Question" stays available —
-  // it just drops the board again (the phase is "closed" already).
-  const resumeOnly = resumeShown && !mmScoresHidden && !mxScoresHidden;
+  // The board on a closed vote (not a closed rating with hidden scores):
+  // "Question" stays available — it just drops the board (the phase is
+  // "closed" already).
+  const resumeOnly = closedBoard && !mmScoresHidden && !mxScoresHidden;
   const disabledViews = useMemo(
     () => new Set(liveShown && !resumeOnly ? ["view.question"] : []),
     [liveShown, resumeOnly],
@@ -1288,8 +1289,11 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   const applyView = useCallback(
     (seg: ViewSegment<WcView>) => {
       if (seg.level === "question") {
-        if (resumeOnly) setResumeBoard(null);
-        else if (!liveShown) void showQuestion();
+        if (resumeOnly) setQuestionOnly(activeId ?? null);
+        else if (!liveShown) {
+          setQuestionOnly(activeId ?? null);
+          void showQuestion();
+        }
         return;
       }
       if (seg.level === "solution") {
@@ -1305,7 +1309,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         void showResults();
       }
     },
-    [liveShown, resumeOnly, phase, revealed, showQuestion, showResults, showSolution],
+    [liveShown, resumeOnly, activeId, phase, revealed, showQuestion, showResults, showSolution],
   );
   // A click on the segment already shown does nothing (e.g. a closed rating
   // with hidden scores must not reveal them).
@@ -1356,11 +1360,12 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       if (firstResults.view) setWcView(firstResults.view);
       void showResults();
     } else if (activeSegment.id === firstResults.id && !revealed) {
+      setQuestionOnly(activeId ?? null);
       void showQuestion();
     } else {
       applyView(firstResults);
     }
-  }, [firstResults, phase, activeSegment.id, revealed, showResults, showQuestion, applyView]);
+  }, [firstResults, phase, activeSegment.id, revealed, activeId, showResults, showQuestion, applyView]);
   // L: the solution, and back to the results.
   const toggleSolution = useCallback(() => {
     if (!hasSolution) return;

@@ -245,7 +245,8 @@ Rangliste und im CSV-Export.
 ![Vier-Felder-Matrix am Beamer: Karten in drei benannten Kategorien, ein Stapel „×2“ und eine KI-Sammelkarte „Zusammenfassung ×3“](../bilder/beamer-matrix.png)
 
 Die Karten erscheinen live auf dem Koordinatenkreuz; der Beamer zeigt das
-Brett, solange die Abstimmung läuft und in der Ergebnisansicht. Die Fußleiste
+Brett, solange die Abstimmung läuft, nach dem Stoppen und in der
+Ergebnisansicht – nur die Ansicht **Frage** zeigt die Frage allein. Die Fußleiste
 schaltet zwischen **Frage** und **Matrix** um (++a++ wechselt die Ansicht,
 ++e++ führt zur Matrix); Stoppen (++s++) oder ++e++ lässt das Brett stehen.
 Sie moderieren direkt am Beamer:

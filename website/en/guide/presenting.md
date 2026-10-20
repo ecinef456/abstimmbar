@@ -236,7 +236,8 @@ term tree, as a ranking and in the CSV export.
 ![Four-field matrix on the projector: cards in three named categories, a “×2” stack and an AI summary card “Summary ×3”](../bilder/beamer-matrix.png)
 
 Cards appear live on the axes; the projector shows the board while voting is
-open and in the results view. The footer bar switches between **Question**
+open, after stopping and in the results view – only the **Question** view
+shows the question alone. The footer bar switches between **Question**
 and **Matrix** (++a++ changes the view, ++e++ goes to the matrix); stopping
 (++s++) or ++e++ leaves the board on screen. You moderate right on the
 projector:

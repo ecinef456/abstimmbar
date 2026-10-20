@@ -323,6 +323,50 @@ test('mind map: Mind map · Ranking after a rating, rating action as icon', asyn
   await expect(footer(page).locator('select')).toHaveCount(0);
 });
 
+test('mind map: a closed vote keeps the map on the beamer; Question hides it, E shows the results', async ({
+  page,
+  trackRoom,
+}) => {
+  const seed = await seedSet(page, ['mindmap'], 'MM', trackRoom);
+  const api = apiClient(page.request);
+  const q = seed.questions[0];
+  const runId = await startRun(api, seed.setId);
+  await control(api, runId, 'open', q.id);
+  const [participant] = await joinParticipants(page.request, seed.code, 1);
+  const token = await csrfToken(page.request);
+  const added = await page.request.post(`${API_BASE_URL}/api/live/rooms/${seed.code}/mindmap/add/`, {
+    data: { token: participant, question: q.id, parent: null, text: 'Alpha' },
+    headers: token ? { 'X-CSRFToken': token } : undefined,
+  });
+  expect(added.ok(), await added.text()).toBeTruthy();
+  const phase = async () =>
+    (await api.get(`/api/question-sets/${seed.setId}/live-status/`)).active_run_phase as string;
+
+  await page.goto(`/sets/${seed.setId}/present?resume=continue`);
+  await expectActive(page, 'view.mm.raw');
+  await expect(page.getByText('Alpha')).toBeVisible();
+  // Stopped (e.g. by the timer): the map stays, "Question" is selectable.
+  await control(api, runId, 'closed');
+  await expect.poll(phase).toBe('closed');
+  await expect(page.getByText('Alpha')).toBeVisible();
+  await expectActive(page, 'view.mm.raw');
+  await expect(seg(page, 'view.question')).not.toHaveAttribute('aria-disabled', 'true');
+  // "Question" shows the question alone (the phase stays closed).
+  await seg(page, 'view.question').click();
+  await expectActive(page, 'view.question');
+  await expect(page.getByText('Alpha')).toHaveCount(0);
+  expect(await phase()).toBe('closed');
+  // E: the results as before; E again back to the question alone.
+  await page.keyboard.press('e');
+  await expect.poll(phase).toBe('results');
+  await expectActive(page, 'view.mm.raw');
+  await expect(page.getByText('Alpha')).toBeVisible();
+  await page.keyboard.press('e');
+  await expect.poll(phase).toBe('closed');
+  await expectActive(page, 'view.question');
+  await expect(page.getByText('Alpha')).toHaveCount(0);
+});
+
 test('mind map, hidden rating then back to collecting: S only closes, A skips the ranking, E reveals', async ({
   page,
   trackRoom,
@@ -359,6 +403,7 @@ test('mind map, hidden rating then back to collecting: S only closes, A skips th
   // The map stays on screen (closed, like a closed rating), no scores.
   await expectActive(page, 'view.mm.raw');
   await expect(page.getByText('Alpha')).toBeVisible();
+  await expect(page.locator('[data-mm-score]')).toHaveCount(0);
   await expect(seg(page, 'view.mm.ranking')).toHaveCount(0);
   await page.keyboard.press('a');
   await page.waitForTimeout(1000);
@@ -367,4 +412,6 @@ test('mind map, hidden rating then back to collecting: S only closes, A skips th
   await page.keyboard.press('e');
   await expect.poll(phase).toBe('results');
   await expect(seg(page, 'view.mm.ranking')).toBeVisible();
+  // Positive counterpart of the count-0 check above: revealing shows scores.
+  await expect(page.locator('[data-mm-score]').first()).toBeVisible();
 });
