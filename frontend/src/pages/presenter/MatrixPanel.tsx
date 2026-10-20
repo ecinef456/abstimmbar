@@ -1229,7 +1229,8 @@ function ModerateView({
                       data-mod-key={`show-${c.id}`}
                       className={BTN}
                       onClick={(e) => void act(e, "", "matrix-mod-hidden", () => onRestore(c.id))}
-                      aria-label={t("Show {{title}} on the beamer again", { title: c.title })}
+                      title={t("Show this entry on the beamer again")}
+                      aria-label={t("Show card again: {{title}}", { title: c.title })}
                     >
                       {t("Show card again")}
                     </button>

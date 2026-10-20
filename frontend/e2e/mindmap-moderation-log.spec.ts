@@ -133,6 +133,10 @@ test('lists merges, moves, renames and AI changes; resets one in the middle', as
 
   await openDrawer(page);
   await expect(section(page, 'Ausgeblendet')).toContainText('Papier');
+  // Label in name (WCAG 2.5.3): the accessible name starts with the visible text.
+  await expect(section(page, 'Ausgeblendet').getByRole('button', { name: /Papier/ })).toHaveAccessibleName(
+    /^Wieder einblenden/,
+  );
   await expect(section(page, 'Zusammengeführt')).toContainText('„Windkraft“ in „Windenergie“ zusammengeführt');
   await expect(section(page, 'Verschoben')).toContainText('„Rotor“ verschoben: Technik → Windenergie');
   await expect(section(page, 'Umbenannt')).toContainText('„Wnd“ → „Wind“ umbenannt');

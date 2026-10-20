@@ -3772,7 +3772,7 @@ function ModerationPanel({
                 className="ml-2 shrink-0 text-brand-700 hover:underline"
                 onClick={() => onRestore(h.key)}
                 title={t("Show this entry on the beamer again")}
-                aria-label={t("Show {{word}} on the beamer again", { word: h.key })}
+                aria-label={t("Show again: {{word}}", { word: h.key })}
               >
                 {t("Show again")}
               </button>
