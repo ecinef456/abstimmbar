@@ -295,7 +295,7 @@ sudo docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 … or pull a published release image (no local build needed, faster; set
-`ABSTIMMBAR_VERSION`, e.g. `1.2.0` (no leading "v" – that is the image tag; the git tag is `v1.2.0`), in the `.env`, otherwise `latest` is
+`ABSTIMMBAR_VERSION` to the release tag name, e.g. `v1.2.0` (the images also exist under the same name without the leading "v"), in the `.env`, otherwise `latest` is
 used):
 
 ```bash
@@ -475,9 +475,15 @@ Or use a published release image (no local build). Run `git pull` here as
 well, because `docker-compose.prod.yml` and `Caddyfile` come from the
 repository. The image tag `latest` only moves when a new release has been
 published; if you pinned `ABSTIMMBAR_VERSION` in the `.env` (e.g.
-`1.3.0`), set the new version there and, instead of `git pull`, check out
+`v1.3.0`), set the new version there and, instead of `git pull`, check out
 the matching tag (`sudo git fetch --tags && sudo git checkout v1.3.0`) so
 that `docker-compose.prod.yml`, `Caddyfile` and the image match:
+
+What changed in a release and what to watch out for when updating is in the
+[CHANGELOG](https://github.com/virtUOS/abstimmbar/blob/main/CHANGELOG.md)
+(German) and the [release notes](https://github.com/virtUOS/abstimmbar/releases)
+– read the operator notes in particular before you update. The running
+version is shown in the application footer and in the admin area.
 
 ```bash
 cd /opt/abstimmbar

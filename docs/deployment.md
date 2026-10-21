@@ -281,7 +281,7 @@ sudo docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 … oder ein veröffentlichtes Release-Image laden (kein lokaler Build nötig,
-schneller; `ABSTIMMBAR_VERSION` z. B. `1.2.0` (ohne führendes „v“ – so heißt das Image-Tag, das Git-Tag heißt `v1.2.0`) in der `.env` setzen, sonst
+schneller; `ABSTIMMBAR_VERSION` auf den Namen des Release-Tags setzen, z. B. `v1.2.0` (die Images gibt es gleichlautend auch ohne führendes „v“), sonst
 wird `latest` verwendet):
 
 ```bash
@@ -461,10 +461,17 @@ Oder ein veröffentlichtes Release-Image nutzen (kein lokaler Build). Auch
 hier zuerst `git pull`, weil `docker-compose.prod.yml` und `Caddyfile` aus
 dem Repository kommen. Das Image-Tag `latest` bewegt sich nur, wenn ein
 neues Release veröffentlicht wurde; wer `ABSTIMMBAR_VERSION` in der `.env`
-fest eingetragen hat (z. B. `1.3.0`), setzt dort die neue Version und
+fest eingetragen hat (z. B. `v1.3.0`), setzt dort die neue Version und
 checkt statt `git pull` das passende Tag aus (`sudo git fetch --tags &&
 sudo git checkout v1.3.0`), damit `docker-compose.prod.yml`, `Caddyfile`
 und Image zueinander passen:
+
+Was sich in einer Version geändert hat und was beim Update zu beachten ist,
+steht im [CHANGELOG](https://github.com/virtUOS/abstimmbar/blob/main/CHANGELOG.md)
+und in den [Release Notes](https://github.com/virtUOS/abstimmbar/releases) –
+lesen Sie vor allem die „Hinweise für den Betrieb“, bevor Sie aktualisieren.
+Die laufende Version sehen Sie in der Fußzeile der Anwendung und im
+Admin-Bereich.
 
 ```bash
 cd /opt/abstimmbar
