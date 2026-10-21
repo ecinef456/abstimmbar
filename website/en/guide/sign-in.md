@@ -23,7 +23,9 @@ anonymously via a QR code or the room code (see
 The first time you use it, the interface starts in **simple mode** with the
 most important features. Use the mode switch at the top right (“Simple” /
 “Expert”) to switch to **expert mode** with all settings at any time. Your
-choice is saved.
+choice is saved. After switching, a short notice at the bottom confirms the
+new mode; when you switch to expert mode, the controls that just appeared are
+briefly highlighted.
 
 Among other things, only expert mode shows you:
 

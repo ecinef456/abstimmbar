@@ -369,6 +369,8 @@ export function EmptyState({
 export interface SegOption<T extends string> {
   value: T;
   label: ReactNode;
+  /** Tooltip; defaults to a string label (see the truncation note below). */
+  title?: string;
 }
 
 /** Equal-width segmented control with an animated sliding thumb. Supports
@@ -487,7 +489,7 @@ export function SegmentedControl<T extends string>({
           }}
           // Too narrow (phones, #179): the label is cut with an ellipsis
           // instead of breaking mid-word; the full text stays in the title.
-          title={typeof o.label === "string" ? o.label : undefined}
+          title={o.title ?? (typeof o.label === "string" ? o.label : undefined)}
           className={`relative z-10 inline-flex min-w-0 items-center justify-center gap-1.5 rounded-full px-1.5 py-1 text-center transition-colors sm:px-2.5 ${o.value === value ? "text-brand-800 dark:text-brand-200" : "text-slate-500 dark:text-slate-400"}`}
         >
           {/* Tailwind's preflight makes <svg> display:block, so an icon inside a
@@ -550,5 +552,19 @@ export function ToggleSwitch({
       {Icon && <Icon aria-hidden className="h-4 w-4 flex-none" />}
       <span className="text-left">{label}</span>
     </button>
+  );
+}
+
+/** Expert-mode-only block (#52, #77): renders its children only outside
+ *  Simple mode, inside a `display: contents` box (layout unchanged) marked
+ *  `data-pro-only`, so the controls that appear on switching to Expert can
+ *  be highlighted briefly (`.pro-just-enabled`, index.css). Use it for gates
+ *  that hide a whole block; gates that only change a value stay inline. */
+export function ProOnly({ easyMode, children }: { easyMode: boolean; children: ReactNode }) {
+  if (easyMode) return null;
+  return (
+    <div data-pro-only className="contents">
+      {children}
+    </div>
   );
 }

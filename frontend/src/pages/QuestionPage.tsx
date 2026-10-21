@@ -45,7 +45,7 @@ import HomeCrumb from "../components/HomeCrumb";
 import MatrixSettings, { matrixProblem, type MatrixSettingsValue, type MatrixUpdate } from "../components/MatrixSettings";
 import SortableList from "../components/SortableList";
 import TranslatableField from "../components/TranslatableField";
-import { Button, ClampedNumberInput, EmptyState, Field, InfoHint, MenuItem, MoreMenu, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
+import { Button, ClampedNumberInput, EmptyState, Field, InfoHint, MenuItem, MoreMenu, ProOnly, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
 import { KIND_LABEL, REVEAL_LABEL } from "./SetPage";
 
 /** Which languages of a translatable field look outdated, computed live in
@@ -1805,7 +1805,8 @@ export default function QuestionPage() {
               />
               <span className="text-slate-400">{t("(0 = no limit, 1 = a single answer)")}</span>
             </label>
-            {!easyMode && wordcloudMaxAnswers !== 1 && (
+            {wordcloudMaxAnswers !== 1 && (
+              <ProOnly easyMode={easyMode}>
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
@@ -1816,6 +1817,7 @@ export default function QuestionPage() {
                 {t("Collect answers and submit them together")}
                 <span className="text-slate-400">{t("(up to 5 fields at a time)")}</span>
               </label>
+              </ProOnly>
             )}
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <input

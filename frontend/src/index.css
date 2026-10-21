@@ -43,3 +43,20 @@
 }
 .ab-fill-flash { animation: ab-fill-flash 1100ms ease-out; }
 .ab-chip-in { animation: ab-chip-in 500ms cubic-bezier(.2, 1.4, .4, 1) both; }
+
+/* Mode switch (#77): right after switching to Expert mode the controls that
+   just appeared (wrapped in <ProOnly>, a `display: contents` box) pulse twice
+   with a brand-coloured ring. Decorative only; off under reduced motion. */
+@keyframes ab-pro-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.78 0.13 146 / 0); }
+  40% { box-shadow: 0 0 0 4px oklch(0.78 0.13 146 / 0.75); }
+}
+.pro-just-enabled [data-pro-only] > * {
+  animation: ab-pro-pulse 800ms ease-in-out 2;
+}
+/* Soft corners for unrounded blocks (summary lines, labels); zero
+   specificity, so any `rounded-*` utility keeps its own radius. */
+:where(.pro-just-enabled [data-pro-only] > *) { border-radius: 0.375rem; }
+@media (prefers-reduced-motion: reduce) {
+  .pro-just-enabled [data-pro-only] > * { animation: none; }
+}

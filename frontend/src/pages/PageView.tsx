@@ -15,6 +15,15 @@ import { localizedText, RichText } from "@basicbar/ui";
 
 const PRIVACY_SLUG = "datenschutz";
 
+/** Authored tables can be wider than a phone: wrap each in a keyboard-
+ * focusable horizontal scroller so it scrolls in its own box instead of
+ * widening the page (#65). */
+function scrollableTables(html: string): string {
+  return html
+    .replace(/<table\b/gi, '<div class="overflow-x-auto" tabindex="0"><table')
+    .replace(/<\/table>/gi, "</table></div>");
+}
+
 export default function PageView() {
   const { t } = useTranslation();
   const { slug } = useParams();
@@ -44,7 +53,7 @@ export default function PageView() {
   return (
     <article className="mx-auto max-w-3xl">
       <h1 className="mb-6 text-3xl font-bold">{localizedText(page.title)}</h1>
-      <RichText html={localizedText(page.body)} />
+      <RichText html={scrollableTables(localizedText(page.body))} />
 
       {slug === PRIVACY_SLUG && data && (
         <section className="mt-8">

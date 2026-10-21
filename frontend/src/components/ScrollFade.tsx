@@ -54,7 +54,13 @@ export default function ScrollFade({
   const fade = `pointer-events-none absolute inset-y-px w-8 to-transparent transition-opacity ${fadeFromClassName}`;
   return (
     <div className={`relative ${className}`}>
-      <div ref={ref} onScroll={update} className={`overflow-x-auto ${scrollerClassName}`}>
+      <div
+        ref={ref}
+        onScroll={update}
+        // Keyboard users must be able to scroll it (axe scrollable-region-focusable).
+        tabIndex={scrollable ? 0 : undefined}
+        className={`overflow-x-auto ${scrollerClassName}`}
+      >
         {children}
       </div>
       <span
