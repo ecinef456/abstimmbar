@@ -14,10 +14,12 @@ as a sibling project to
 sharing its design language and stack. Released under the
 **Apache License 2.0**.
 
-> **Status: usable.** The full MVP loop (M0–M3), **LTI 1.3** integration
-> (M4) and a broad set of v2 features are implemented and load-tested at
-> 1000 concurrent participants. Pending: manual acceptance against a
-> production LMS. Reviewable background documents:
+> **Status: 1.0 — stable.** Version 1.0.0 contains the full live loop,
+> **LTI 1.3** integration and the v2 feature set (set types, ten question
+> types incl. mindmap and four-field matrix, bilingual DE/EN, optional AI),
+> load-tested at 1000 concurrent participants. What changed in each
+> release: [`CHANGELOG.md`](CHANGELOG.md) (German). Pending: manual
+> acceptance against a production LMS. Reviewable background documents:
 >
 > - [`docs/concept.md`](docs/concept.md) — Funktionsumfang & fachliches Konzept
 > - [`docs/roadmap.md`](docs/roadmap.md) — Meilensteine (MVP → v2 → Ausblick)
@@ -50,9 +52,10 @@ sharing its design language and stack. Released under the
   an ultra-lightweight, framework-free participant page that loads instantly
   on phones in a packed lecture hall. No account, no IP logging on votes.
 - 🧩 **Question formats** — single & multiple choice (with images as
-  options), word clouds, Likert scales, open text, priorities and
-  ordering/ranking. Optional per-question countdown timer; optional
-  section slides to structure a set.
+  options), true/false, word clouds, Likert scales, open text, priorities,
+  ordering/ranking, a collaborative mindmap and a four-field matrix (both
+  with an optional rating phase). Optional per-question countdown timer;
+  optional section slides to structure a set.
 - 🔗 **LMS integration via LTI 1.3** — resource-link launch and deep linking
   (Stud.IP, Moodle, ILIAS, …), embeddable in an LMS iframe; no LTI 1.1
   legacy. Grade passback (AGS/NRPS) planned for assessed use later.

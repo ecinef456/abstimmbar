@@ -9,14 +9,19 @@ universities: live quizzes/polls in lectures, anonymous participation via
 QR/short URL, LTI 1.3 integration into LMS, OIDC login for staff. Successor
 to the Stud.IP plugin Cliqr; feature scope oriented at ARSnova/Particify.
 
-**Status: M0–M3 done = MVP** — management UI (rooms, question sets, TipTap
-editor), full live loop (runs, anonymous votes, SSE, presenter view,
-participant pages; load-tested at 1000 participants), results view with
-run deletion and CSV export, set duplication across rooms, JSON
-export/import (sanitized on import), full-text search — plus **M4: LTI 1.3**
-(pylti1p3; platform registration via Django admin, context↔room links,
-deep linking; see docs/lti.md and ADR-0005). Pending: manual acceptance
-against real Moodle/Stud.IP. Next: v2 features.
+**Status: 1.0.0 released (October 2026)** — MVP loop M0–M3 (management UI
+with rooms, question sets, TipTap editor; live runs with anonymous votes,
+SSE, presenter view, participant pages, load-tested at 1000 participants;
+results, CSV export, set duplication, sanitized JSON export/import,
+full-text search), **M4: LTI 1.3** (pylti1p3; platform registration via
+Django admin, context↔room links, deep linking; see docs/lti.md and
+ADR-0005) and the v2 feature set: set types (live poll, quiz block,
+self-check), ten question types incl. priorities, mindmap and four-field
+matrix with rating phase, sections, timer, sharing, bilingual DE/EN UI and
+content, optional AI helpers, admin statistics/Prometheus, guided tour.
+Release history in `CHANGELOG.md`; versions are tagged `vX.Y.Z` and the
+running version is shown in the footer. Pending: manual acceptance against
+real Moodle/Stud.IP. Next: post-1.0 backlog.
 Authoritative documents:
 
 - `docs/concept.md` — Funktionsumfang & Domänenmodell (German)
