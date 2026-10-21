@@ -155,18 +155,51 @@ Let's Encrypt checks.
 
 ```bash
 sudo mkdir -p /opt && cd /opt
-sudo git clone git@gitlab.uni-osnabrueck.de:virtuos/digitale-dienste/abstimmbar.git
+sudo git clone https://github.com/virtUOS/abstimmbar.git
 cd abstimmbar
 ```
 
-(For the internal repository the server needs an SSH key with read access,
-or you use the HTTPS URL with credentials.)
+(The repository is public — no SSH key or credentials needed.)
 
 ### Step 7 — Create the configuration file
 
 ```bash
 sudo cp .env.prod.example .env
+```
+
+#### Generate the secret key (mandatory)
+
+Django uses it to sign sessions and tokens. Every installation needs its
+**own random** key — the placeholder from `.env.prod.example`
+(`change-me-to-a-long-random-string`) is publicly known, and anyone who
+knows it could forge sessions. Generate a key:
+
+```bash
 openssl rand -base64 48              # copy the output — this becomes the secret key
+```
+
+Abstimmbar **refuses to start** with the placeholder. The app log then
+shows (see
+[Updating an existing installation](#updating-an-existing-installation)):
+
+```
+django.core.exceptions.ImproperlyConfigured: DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=0 (the dev default and the .env.prod.example placeholder are refused)
+```
+
+If the key is missing or empty, Docker Compose already aborts before
+starting anything:
+
+```
+required variable DJANGO_SECRET_KEY is missing a value: set DJANGO_SECRET_KEY
+```
+
+**Changing** the key later is harmless but has two effects: everyone who
+is signed in gets signed out, and pending "undo" tokens of the AI features
+(valid for 24 hours) expire. No data is lost.
+
+#### Enter the values
+
+```bash
 sudo nano .env
 ```
 
@@ -174,9 +207,13 @@ In `nano`, set at least these values (replace every `...` and the example
 domain; paste in the secret key you just generated):
 
 ```dotenv
-# Public address of the instance (the same value twice)
+# Public address of the instance (the same value twice). Scheme + host
+# only — no path, no trailing slash. Also Caddy's site address (step 8).
 PUBLIC_BASE_URL=https://abstimmbar.example.org
 CSRF_TRUSTED_ORIGINS=https://abstimmbar.example.org
+
+# Contact e-mail for Let's Encrypt (certificate expiry notices)
+ACME_EMAIL=admin@example.org
 
 # Django
 DJANGO_SECRET_KEY=PASTE-THE-GENERATED-SECRET-KEY-HERE
@@ -205,26 +242,35 @@ automatically when the stack starts (step 10). It is defined in
 and stores its certificates in the `caddy_data` volume.
 
 **Where the configuration lives:** in the file `Caddyfile` in the project
-folder, i.e. `/opt/abstimmbar/Caddyfile`. The Compose file mounts it
-**read-only into the container** — you edit it on the host, nothing needs
-to be copied.
+folder (`/opt/abstimmbar/Caddyfile`), which the Compose file mounts
+**read-only into the container**. It belongs to the repository and is
+**not edited** — everything specific to your installation comes from the
+`.env` (step 7), which `docker-compose.prod.yml` passes to the Caddy
+container:
 
-Change two things: the domain in the line `abstimmbar.example.org {` and
-the `email` address at the top (Let's Encrypt sends expiry notices there):
-
-```bash
-cd /opt/abstimmbar
-sudo nano Caddyfile
-```
+| Variable | Meaning |
+|---|---|
+| `PUBLIC_BASE_URL` | Site address Caddy obtains the certificate for — the same value as for the app, **scheme + host only** (`https://abstimmbar.example.org`, no path, no trailing `/`). `https://` makes the site HTTPS-only; Caddy redirects HTTP. |
+| `ACME_EMAIL` | Contact address for Let's Encrypt (expiry notices). Required. |
+| `ABSTIMMBAR_FRAME_ANCESTORS` | Optional, only for LTI in an iframe: LMS origins allowed to embed the interface, space-separated, e.g. `"https://moodle.example.org https://studip.example.org"`. Empty (default) = no external embedding. |
 
 You do **not** set up certificates by hand — Caddy obtains and renews the
 Let's Encrypt certificate automatically as soon as the domain and ports are
-right. Apply later changes to the Caddyfile with
-`sudo docker compose -f docker-compose.prod.yml restart caddy`.
+right. Apply changed values in the `.env` with
+`sudo docker compose -f docker-compose.prod.yml up -d` (recreates Caddy; a
+plain `restart` does not re-read the `.env`).
+
+Because the `Caddyfile` stays unchanged, a later `git pull` goes through
+without conflicts (see
+[Updating an existing installation](#updating-an-existing-installation)).
+The intended exceptions: the `tls` line for your institution's own
+certificates or a purely internal host (see
+[HTTPS certificates](#https-certificates-caddy-in-plain-terms)) and,
+optionally, the IP restriction for `/metrics` (see [monitoring.md](https://github.com/virtUOS/abstimmbar/blob/main/docs/monitoring.md)).
 
 The paths passed on to Django are `/api/`, `/admin/`, `/oidc/`, `/lti/`,
 `/p/`, `/r/`, `/c/`, `/question-preview/` and `/metrics`; `/static/` and
-`/media/` are served by Caddy directly from the `static` and `media` volumes;
+`/media/` are served by Caddy directly from the `static_data` and `media_data` volumes;
 everything else is served as the web interface. If you use your own reverse
 proxy, it must handle both the same way.
 
@@ -249,7 +295,7 @@ sudo docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 … or pull a published release image (no local build needed, faster; set
-`ABSTIMMBAR_VERSION`, e.g. `v1.2.0`, in the `.env`, otherwise `latest` is
+`ABSTIMMBAR_VERSION` to the release tag name, e.g. `v1.2.0` (the images also exist under the same name without the leading "v"), in the `.env`, otherwise `latest` is
 used):
 
 ```bash
@@ -326,7 +372,9 @@ different endpoints can be set explicitly via `OIDC_OP_*`.
 Register the LMS platforms as described in [lti.md](lti.md); the tool
 endpoints are under `https://<domain>/lti/…`. Launching in a **new
 window** is recommended. Only for iframe operation, set
-`SESSION_COOKIE_SAMESITE=None` in `.env` (this enforces secure cookies).
+`SESSION_COOKIE_SAMESITE=None` in `.env` (this enforces secure cookies) and
+set `ABSTIMMBAR_FRAME_ANCESTORS` to the LMS origin(s) (see step 8), then
+`sudo docker compose -f docker-compose.prod.yml up -d`.
 
 ## Monitoring (Prometheus/Grafana)
 
@@ -402,25 +450,92 @@ There is one periodic job: the optional retention of the mode statistics
 (see the section [Retention of the mode statistics](#retention-of-the-mode-statistics)).
 Apart from that, Abstimmbar needs no scheduled maintenance tasks.
 
-## Applying updates
+## Updating an existing installation
 
-Build from source:
+**Before you start:** read the release notes since your version at
+<https://github.com/virtUOS/abstimmbar/releases> (from 1.0 on, also the
+`CHANGELOG.md` in the repository) — especially the operator notes
+("Operations"/"Breaking", e.g. new required variables in the `.env`).
+
+**What is yours, what comes from git:** your `.env` and, if any, your
+certificates (`/etc/abstimmbar/certs/`) stay untouched. Everything else —
+including `Caddyfile` and `docker-compose.prod.yml` — comes from git and is
+not changed locally (apart from the intended exceptions from step 8).
+
+**1. Get the new version.** Build from source:
 
 ```bash
 cd /opt/abstimmbar
 sudo git pull
-sudo docker compose -f docker-compose.prod.yml up -d --build    # build + migrations + restart automatically
+sudo docker compose -f docker-compose.prod.yml build
+sudo docker compose -f docker-compose.prod.yml up -d
 ```
 
-Or apply a published release image (no local build; set
-`ABSTIMMBAR_VERSION` in the `.env` to the desired version, e.g.
-`v1.3.0`):
+Or use a published release image (no local build). Run `git pull` here as
+well, because `docker-compose.prod.yml` and `Caddyfile` come from the
+repository. The image tag `latest` only moves when a new release has been
+published; if you pinned `ABSTIMMBAR_VERSION` in the `.env` (e.g.
+`v1.3.0`), set the new version there and, instead of `git pull`, check out
+the matching tag (`sudo git fetch --tags && sudo git checkout v1.3.0`) so
+that `docker-compose.prod.yml`, `Caddyfile` and the image match:
+
+What changed in a release and what to watch out for when updating is in the
+[CHANGELOG](https://github.com/virtUOS/abstimmbar/blob/main/CHANGELOG.md)
+(German) and the [release notes](https://github.com/virtUOS/abstimmbar/releases)
+– read the operator notes in particular before you update. The running
+version is shown in the application footer and in the admin area.
 
 ```bash
 cd /opt/abstimmbar
+sudo git pull
 sudo docker compose -f docker-compose.prod.yml pull
-sudo docker compose -f docker-compose.prod.yml up -d             # migrations + restart automatically
+sudo docker compose -f docker-compose.prod.yml up -d
 ```
+
+Database migrations and `collectstatic` run automatically on startup — do
+not run any of this by hand.
+
+**`git pull` stops because of local changes?** This happens when files
+from the repository were edited on the server (formerly typical: domain
+and e-mail in the `Caddyfile` — now variables in the `.env`, see step 8).
+Move old changes of that kind into the `.env` and reset the file
+(`sudo git checkout -- Caddyfile`). Only the intended exceptions (`tls`
+line plus certificate mount, see
+[HTTPS certificates](#https-certificates-caddy-in-plain-terms); optionally
+the `/metrics` IP restriction) are carried across the update:
+
+```bash
+sudo git stash && sudo git pull && sudo git stash pop
+```
+
+If `git stash pop` reports a conflict, check the affected file (usually
+the `Caddyfile`), keep the new version from git, re-insert your `tls` line
+and then discard the stash with `sudo git stash drop`.
+
+**2. Check that the application is running:**
+
+```bash
+sudo docker compose -f docker-compose.prod.yml logs app --tail 60
+```
+
+It is ready as soon as `Application startup complete` appears. The two
+typical start refusals:
+
+- **Secret key is still the placeholder:** in the app log
+  `ImproperlyConfigured: DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=0 …`
+  — generate and enter your own key (see
+  [Generate the secret key](#generate-the-secret-key-mandatory)), then run
+  `up -d` again.
+- **Required variable missing from the `.env` (e.g. `DJANGO_SECRET_KEY`
+  or `ACME_EMAIL`):** Docker Compose aborts before starting anything, e.g.
+  `required variable DJANGO_SECRET_KEY is missing a value: set DJANGO_SECRET_KEY`
+  — add the named variable to the `.env` (template in
+  `.env.prod.example`), then run `up -d` again.
+
+**3. Reload the browser.** Tabs that are already open keep the old
+interface until the page is hard-reloaded (**Ctrl+Shift+R**, on a Mac
+**Cmd+Shift+R**). Let teachers know if they had the app open during the
+update.
 
 ### New configuration variable? Update it in three places
 
@@ -431,9 +546,10 @@ the container. So if an update brings a new setting, add it in three
 places:
 
 1. **`docker-compose.prod.yml`** → `environment:` of the `app` service
-   (the place that is easy to forget),
+   (or `caddy` for proxy settings; the place that is easy to forget),
 2. **`.env.prod.example`** (documentation),
-3. the real **`.env`** on the server, then `up -d app`.
+3. the real **`.env`** on the server, then `up -d` (recreates whatever
+   changed).
 
 **`VITE_API_BASE_URL`** is a special case and normally **not needed**: by
 default the SPA uses relative URLs (same origin as the API, behind Caddy).
@@ -462,15 +578,23 @@ sudo docker compose -f docker-compose.prod.yml exec app env \
 ## HTTPS certificates (Caddy), in plain terms
 
 - Caddy obtains and **automatically renews** a free Let's Encrypt
-  certificate for the domain in the `Caddyfile`. Nothing to do by hand.
+  certificate for the host in `PUBLIC_BASE_URL`. Nothing to do by hand.
   Requirements: ports **80 and 443** reachable from the internet, correct
-  **DNS** (step 5) and a valid `email` in the `Caddyfile`.
+  **DNS** (step 5) and a valid `ACME_EMAIL` in the `.env`.
 - The certificates live in the Docker volume `caddy_data` — **include it
   in backups** so they survive a rebuild (otherwise Caddy simply issues
   new ones, but that is subject to Let's Encrypt's rate limits).
-- No public domain (purely internal host)? Add the line `tls internal`
-  inside the site block in the `Caddyfile` — Caddy then uses its own local
-  CA instead of Let's Encrypt.
+- No public domain (purely internal host)? Set `PUBLIC_BASE_URL` to the
+  internal name (e.g. `https://abstimmbar.intern`, as always without a path
+  and without a trailing `/`) and add the line `tls internal` inside the
+  site block in the `Caddyfile` — Caddy then uses its own local CA instead
+  of Let's Encrypt.
+- **A local `tls` line is the deliberate exception.** The `Caddyfile` is
+  otherwise never edited. The intended exceptions are a `tls` line (here or
+  for your own certificates, see below) and, optionally, the IP restriction
+  for `/metrics` (see [monitoring.md](https://github.com/virtUOS/abstimmbar/blob/main/docs/monitoring.md)); carry them across updates
+  with `sudo git stash && sudo git pull && sudo git stash pop` (see
+  [Updating an existing installation](#updating-an-existing-installation)).
 
 ### Your own certificate (e.g. HARICA) instead of Let's Encrypt
 
@@ -489,9 +613,12 @@ point Caddy at the files instead of using automatic HTTPS:
    ```yaml
    - /etc/abstimmbar/certs:/etc/caddy/certs:ro
    ```
-3. In the `Caddyfile` site block, replace the automatic behaviour with a
-   `tls` line using the **container** paths (certificate first, then the
-   key):
+3. In the `Caddyfile`, inside the site block (`{$PUBLIC_BASE_URL} {`),
+   add a `tls` line using the **container** paths (certificate first, then
+   the key). The host in `PUBLIC_BASE_URL` must match the certificate. This
+   line and the uncommented mount line from point 2 are intended local
+   changes — carry them across updates with `git stash`/`git stash pop`
+   (see above):
    ```
    tls /etc/caddy/certs/abstimmbar.pem /etc/caddy/certs/abstimmbar.key
    ```
@@ -501,8 +628,8 @@ point Caddy at the files instead of using automatic HTTPS:
    ```
 5. Apply with `sudo docker compose -f docker-compose.prod.yml up -d`
    (or `restart caddy`). In this mode renewal is **manual**: replace the
-   files before they expire, then `restart caddy`. The global `email` is
-   not used in this case.
+   files before they expire, then `restart caddy`. `ACME_EMAIL` is not used
+   in this case but must still be set (required variable).
 
 ## Backup
 
@@ -623,9 +750,11 @@ nowhere.
 ## Security checklist
 
 - [ ] `DJANGO_DEBUG` is hard-wired to `0` in the production Compose file;
-      strong `DJANGO_SECRET_KEY`; real `DJANGO_ALLOWED_HOSTS`.
+      your own randomly generated `DJANGO_SECRET_KEY` (not the placeholder,
+      see [Generate the secret key](#generate-the-secret-key-mandatory));
+      real `DJANGO_ALLOWED_HOSTS`.
 - [ ] `PUBLIC_BASE_URL` and `CSRF_TRUSTED_ORIGINS` point to the real
-      `https://` domain (`VITE_API_BASE_URL` only for a deliberately
+      `https://` domain (no path, no trailing `/`) (`VITE_API_BASE_URL` only for a deliberately
       different setup, see
       [New configuration variable?](#new-configuration-variable-update-it-in-three-places)).
 - [ ] Strong `POSTGRES_PASSWORD`; all secrets only in `.env` (never

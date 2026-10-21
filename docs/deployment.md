@@ -139,18 +139,52 @@ prüft genau das.
 
 ```bash
 sudo mkdir -p /opt && cd /opt
-sudo git clone git@gitlab.uni-osnabrueck.de:virtuos/digitale-dienste/abstimmbar.git
+sudo git clone https://github.com/virtUOS/abstimmbar.git
 cd abstimmbar
 ```
 
-(Für das interne Repo braucht der Server einen SSH-Key mit Lesezugriff
-oder Sie nutzen die HTTPS-URL mit Zugangsdaten.)
+(Das Repository ist öffentlich — weder SSH-Key noch Zugangsdaten nötig.)
 
 ### Schritt 7 — Konfigurationsdatei anlegen
 
 ```bash
 sudo cp .env.prod.example .env
+```
+
+#### Secret Key erzeugen (Pflicht)
+
+Django signiert damit Sitzungen und Tokens. Jede Installation braucht einen
+**eigenen, zufälligen** Schlüssel — der Platzhalter aus `.env.prod.example`
+(`change-me-to-a-long-random-string`) ist öffentlich bekannt, wer ihn kennt,
+könnte Sitzungen fälschen. Erzeugen Sie einen Schlüssel:
+
+```bash
 openssl rand -base64 48              # Ausgabe kopieren — das wird der Secret Key
+```
+
+Abstimmbar **verweigert den Start** mit dem Platzhalter. Im Log der App
+steht dann (siehe
+[Bestehende Installation aktualisieren](#bestehende-installation-aktualisieren)):
+
+```
+django.core.exceptions.ImproperlyConfigured: DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=0 (the dev default and the .env.prod.example placeholder are refused)
+```
+
+Fehlt der Schlüssel ganz oder ist er leer, bricht schon Docker Compose vor
+dem Start ab:
+
+```
+required variable DJANGO_SECRET_KEY is missing a value: set DJANGO_SECRET_KEY
+```
+
+Den Schlüssel später zu **ändern** ist unkritisch, hat aber zwei Folgen:
+Alle Angemeldeten werden abgemeldet, und offene „Rückgängig"-Tokens der
+KI-Funktionen (24 Stunden gültig) verfallen. Daten gehen dabei nicht
+verloren.
+
+#### Werte eintragen
+
+```bash
 sudo nano .env
 ```
 
@@ -158,9 +192,14 @@ In `nano` mindestens diese Werte setzen (jedes `...` und die
 Beispiel-Domain ersetzen; den eben erzeugten Secret Key einfügen):
 
 ```dotenv
-# Öffentliche Adresse der Instanz (zweimal derselbe Wert)
+# Öffentliche Adresse der Instanz (zweimal derselbe Wert). Nur Schema +
+# Host — kein Pfad, kein abschließender Schrägstrich. Zugleich die
+# Site-Adresse für Caddy (Schritt 8).
 PUBLIC_BASE_URL=https://abstimmbar.example.org
 CSRF_TRUSTED_ORIGINS=https://abstimmbar.example.org
+
+# Kontakt-E-Mail für Let's Encrypt (Ablauf-Hinweise zum Zertifikat)
+ACME_EMAIL=admin@example.org
 
 # Django
 DJANGO_SECRET_KEY=HIER-DEN-ERZEUGTEN-SECRET-KEY-EINFUEGEN
@@ -188,28 +227,36 @@ Start des Stacks (Schritt 10) automatisch lädt. Definiert ist es in
 `docker-compose.prod.yml` (Service `caddy`); dort öffnet es die Ports
 80/443 und legt seine Zertifikate im Volume `caddy_data` ab.
 
-**Wo die Konfiguration liegt:** in der Datei `Caddyfile` im Projektordner,
-also `/opt/abstimmbar/Caddyfile`. Das Compose-File hängt sie **read-only in
-den Container** — Sie bearbeiten sie auf dem Host, nichts muss kopiert
-werden.
+**Wo die Konfiguration liegt:** in der Datei `Caddyfile` im Projektordner
+(`/opt/abstimmbar/Caddyfile`), die das Compose-File **read-only in den
+Container** hängt. Sie gehört zum Repository und wird **nicht bearbeitet** —
+alles Installationsspezifische kommt aus der `.env` (Schritt 7), die
+`docker-compose.prod.yml` an den Caddy-Container durchreicht:
 
-Zwei Dinge ändern: die Domain in der Zeile `abstimmbar.example.org {` und
-die `email`-Adresse oben (Let's Encrypt schickt dorthin Ablauf-Hinweise):
-
-```bash
-cd /opt/abstimmbar
-sudo nano Caddyfile
-```
+| Variable | Bedeutung |
+|---|---|
+| `PUBLIC_BASE_URL` | Site-Adresse, für die Caddy das Zertifikat holt — derselbe Wert wie für die App, **nur Schema + Host** (`https://abstimmbar.example.org`, kein Pfad, kein abschließender `/`). `https://` macht die Seite HTTPS-only; HTTP leitet Caddy um. |
+| `ACME_EMAIL` | Kontaktadresse für Let's Encrypt (Ablauf-Hinweise). Pflicht. |
+| `ABSTIMMBAR_FRAME_ANCESTORS` | Optional, nur für LTI im iframe: LMS-Origins, die die Oberfläche einbetten dürfen, durch Leerzeichen getrennt, z. B. `"https://moodle.example.org https://studip.example.org"`. Leer (Standard) = keine fremde Einbettung. |
 
 Zertifikate richten Sie **nicht** von Hand ein — Caddy besorgt und
 erneuert das Let's-Encrypt-Zertifikat automatisch, sobald Domain und Ports
-stimmen. Spätere Änderungen am Caddyfile übernehmen Sie mit
-`sudo docker compose -f docker-compose.prod.yml restart caddy`.
+stimmen. Geänderte Werte in der `.env` übernehmen Sie mit
+`sudo docker compose -f docker-compose.prod.yml up -d` (erstellt Caddy neu;
+ein bloßes `restart` liest die `.env` nicht neu ein).
+
+Weil das `Caddyfile` unverändert bleibt, läuft ein späteres `git pull`
+ohne Konflikte durch (siehe
+[Bestehende Installation aktualisieren](#bestehende-installation-aktualisieren)).
+Die vorgesehenen Ausnahmen: die `tls`-Zeile für eigene Zertifikate der
+Hochschule bzw. einen rein internen Host (siehe
+[HTTPS-Zertifikate](#https-zertifikate-caddy-im-klartext)) und optional die
+IP-Einschränkung für `/metrics` (siehe [monitoring.md](monitoring.md)).
 
 An Django weitergereicht werden die Pfade `/api/`, `/admin/`, `/oidc/`,
 `/lti/`, `/p/`, `/r/`, `/c/`, `/question-preview/` und `/metrics`;
-`/static/` und `/media/` liefert Caddy direkt aus den Volumes `static` und
-`media` aus; alles andere liefert die Oberfläche aus. Setzen Sie einen eigenen
+`/static/` und `/media/` liefert Caddy direkt aus den Volumes `static_data` und
+`media_data` aus; alles andere liefert die Oberfläche aus. Setzen Sie einen eigenen
 Reverse-Proxy ein, muss er beides genauso handhaben.
 
 ### Schritt 9 — Dateien für SELinux freigeben
@@ -234,7 +281,7 @@ sudo docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 … oder ein veröffentlichtes Release-Image laden (kein lokaler Build nötig,
-schneller; `ABSTIMMBAR_VERSION` z. B. `v1.2.0` in der `.env` setzen, sonst
+schneller; `ABSTIMMBAR_VERSION` auf den Namen des Release-Tags setzen, z. B. `v1.2.0` (die Images gibt es gleichlautend auch ohne führendes „v“), sonst
 wird `latest` verwendet):
 
 ```bash
@@ -311,7 +358,9 @@ abweichende Endpunkte lassen sich per `OIDC_OP_*` explizit setzen.
 Registrierung der LMS-Plattformen wie in [lti.md](lti.md) beschrieben; die
 Tool-Endpunkte liegen unter `https://<domain>/lti/…`. Empfohlen ist der
 Start im **neuen Fenster**. Nur für iframe-Betrieb in `.env`
-`SESSION_COOKIE_SAMESITE=None` setzen (erzwingt Secure-Cookies).
+`SESSION_COOKIE_SAMESITE=None` setzen (erzwingt Secure-Cookies) und
+`ABSTIMMBAR_FRAME_ANCESTORS` auf die LMS-Origin(s) setzen (siehe Schritt 8),
+dann `sudo docker compose -f docker-compose.prod.yml up -d`.
 
 ## Monitoring (Prometheus/Grafana)
 
@@ -387,25 +436,93 @@ Einen periodischen Job gibt es: die optionale Retention der
 Modus-Statistik (siehe Abschnitt „Retention der Modus-Statistik“). Sonst
 braucht Abstimmbar keine geplanten Wartungsaufgaben.
 
-## Updates einspielen
+## Bestehende Installation aktualisieren
 
-Aus dem Quellcode bauen:
+**Vorher:** Die Release-Hinweise seit Ihrer Version lesen, auf
+<https://github.com/virtUOS/abstimmbar/releases> (ab 1.0 zusätzlich die
+`CHANGELOG.md` im Repository) — besonders die Hinweise für den Betrieb
+(„Betrieb"/„Breaking", z. B. neue Pflicht-Variablen in der `.env`).
+
+**Was Ihnen gehört, was aus git kommt:** Ihre `.env` und ggf. Ihre
+Zertifikate (`/etc/abstimmbar/certs/`) bleiben unberührt. Alles andere —
+auch `Caddyfile` und `docker-compose.prod.yml` — kommt aus git und wird
+nicht lokal geändert (bis auf die vorgesehenen Ausnahmen aus Schritt 8).
+
+**1. Neuen Stand holen.** Aus dem Quellcode bauen:
 
 ```bash
 cd /opt/abstimmbar
 sudo git pull
-sudo docker compose -f docker-compose.prod.yml up -d --build    # Build + Migrationen + Neustart automatisch
+sudo docker compose -f docker-compose.prod.yml build
+sudo docker compose -f docker-compose.prod.yml up -d
 ```
 
-Oder ein veröffentlichtes Release-Image einspielen (kein lokaler Build,
-`ABSTIMMBAR_VERSION` in der `.env` auf die gewünschte Version setzen, z. B.
-`v1.3.0`):
+Oder ein veröffentlichtes Release-Image nutzen (kein lokaler Build). Auch
+hier zuerst `git pull`, weil `docker-compose.prod.yml` und `Caddyfile` aus
+dem Repository kommen. Das Image-Tag `latest` bewegt sich nur, wenn ein
+neues Release veröffentlicht wurde; wer `ABSTIMMBAR_VERSION` in der `.env`
+fest eingetragen hat (z. B. `v1.3.0`), setzt dort die neue Version und
+checkt statt `git pull` das passende Tag aus (`sudo git fetch --tags &&
+sudo git checkout v1.3.0`), damit `docker-compose.prod.yml`, `Caddyfile`
+und Image zueinander passen:
+
+Was sich in einer Version geändert hat und was beim Update zu beachten ist,
+steht im [CHANGELOG](https://github.com/virtUOS/abstimmbar/blob/main/CHANGELOG.md)
+und in den [Release Notes](https://github.com/virtUOS/abstimmbar/releases) –
+lesen Sie vor allem die „Hinweise für den Betrieb“, bevor Sie aktualisieren.
+Die laufende Version sehen Sie in der Fußzeile der Anwendung und im
+Admin-Bereich.
 
 ```bash
 cd /opt/abstimmbar
+sudo git pull
 sudo docker compose -f docker-compose.prod.yml pull
-sudo docker compose -f docker-compose.prod.yml up -d             # Migrationen + Neustart automatisch
+sudo docker compose -f docker-compose.prod.yml up -d
 ```
+
+Datenbank-Migrationen und `collectstatic` laufen beim Start automatisch —
+nichts davon von Hand ausführen.
+
+**`git pull` bricht ab wegen lokaler Änderungen?** Das passiert, wenn
+Dateien aus dem Repository auf dem Server bearbeitet wurden (früher
+typisch: Domain und E-Mail im `Caddyfile` — heute Variablen in der `.env`,
+siehe Schritt 8). Alte Anpassungen dieser Art in die `.env` übertragen und
+die Datei zurücksetzen (`sudo git checkout -- Caddyfile`). Nur die
+vorgesehenen Ausnahmen (`tls`-Zeile samt Zertifikats-Mount, siehe
+[HTTPS-Zertifikate](#https-zertifikate-caddy-im-klartext); optional die
+`/metrics`-IP-Einschränkung) tragen Sie über das Update:
+
+```bash
+sudo git stash && sudo git pull && sudo git stash pop
+```
+
+Meldet `git stash pop` einen Konflikt, die betroffene Datei (meist das
+`Caddyfile`) prüfen, die neue Fassung aus git behalten, Ihre `tls`-Zeile
+wieder einfügen und den Stash danach mit `sudo git stash drop` verwerfen.
+
+**2. Prüfen, ob die Anwendung läuft:**
+
+```bash
+sudo docker compose -f docker-compose.prod.yml logs app --tail 60
+```
+
+Bereit ist sie, sobald `Application startup complete` erscheint. Die zwei
+typischen Startverweigerungen:
+
+- **Secret Key ist der Platzhalter:** im App-Log
+  `ImproperlyConfigured: DJANGO_SECRET_KEY must be set when DJANGO_DEBUG=0 …`
+  — einen eigenen Schlüssel erzeugen und eintragen (siehe
+  [Secret Key erzeugen](#secret-key-erzeugen-pflicht)), dann erneut `up -d`.
+- **Pflicht-Variable fehlt in der `.env` (z. B. `DJANGO_SECRET_KEY` oder
+  `ACME_EMAIL`):** Docker Compose bricht schon vor dem Start ab, z. B.
+  `required variable DJANGO_SECRET_KEY is missing a value: set DJANGO_SECRET_KEY`
+  — die genannte Variable in der `.env` ergänzen (Muster in
+  `.env.prod.example`), dann erneut `up -d`.
+
+**3. Browser neu laden.** Bereits geöffnete Tabs behalten die alte
+Oberfläche, bis die Seite hart neu geladen wird (**Strg+Umschalt+R**, am
+Mac **Cmd+Umschalt+R**). Teilen Sie das ggf. Lehrenden mit, die die App
+während des Updates offen hatten.
 
 ### Neue Konfigurations-Variable? An drei Stellen nachziehen
 
@@ -416,9 +533,10 @@ Container nie. Bringt ein Update also eine neue Einstellung mit, an drei
 Stellen ergänzen:
 
 1. **`docker-compose.prod.yml`** → `environment:` des `app`-Service
-   (die leicht vergessene Stelle),
+   (bzw. `caddy` für Proxy-Einstellungen; die leicht vergessene Stelle),
 2. **`.env.prod.example`** (Doku),
-3. die echte **`.env`** auf dem Server, dann `up -d app`.
+3. die echte **`.env`** auf dem Server, dann `up -d` (erstellt neu, was
+   sich geändert hat).
 
 **`VITE_API_BASE_URL`** ist ein Sonderfall und im Normalfall **nicht
 nötig**: die SPA nutzt standardmäßig relative URLs (gleicher Origin wie die
@@ -446,16 +564,25 @@ sudo docker compose -f docker-compose.prod.yml exec app env \
 ## HTTPS-Zertifikate (Caddy), im Klartext
 
 - Caddy besorgt und **erneuert automatisch** ein kostenloses
-  Let's-Encrypt-Zertifikat für die Domain im `Caddyfile`. Nichts von Hand
-  zu tun. Voraussetzungen: Ports **80 und 443** aus dem Internet
-  erreichbar, korrektes **DNS** (Schritt 5) und eine gültige `email` im
-  `Caddyfile`.
+  Let's-Encrypt-Zertifikat für den Host aus `PUBLIC_BASE_URL`. Nichts von
+  Hand zu tun. Voraussetzungen: Ports **80 und 443** aus dem Internet
+  erreichbar, korrektes **DNS** (Schritt 5) und eine gültige `ACME_EMAIL`
+  in der `.env`.
 - Die Zertifikate liegen im Docker-Volume `caddy_data` — **mitsichern**,
   damit sie einen Neuaufbau überleben (sonst stellt Caddy sie einfach neu
   aus, was aber den Let's-Encrypt-Rate-Limits unterliegt).
-- Keine öffentliche Domain (rein interner Host)? Im `Caddyfile` innerhalb
-  des Site-Blocks die Zeile `tls internal` ergänzen — Caddy nutzt dann
-  seine eigene lokale CA statt Let's Encrypt.
+- Keine öffentliche Domain (rein interner Host)? `PUBLIC_BASE_URL` auf den
+  internen Namen setzen (z. B. `https://abstimmbar.intern`, wie immer ohne
+  Pfad und ohne abschließenden `/`) und im `Caddyfile` innerhalb des
+  Site-Blocks die Zeile `tls internal` ergänzen — Caddy nutzt dann seine
+  eigene lokale CA statt Let's Encrypt.
+- **Lokale `tls`-Zeile = bewusste Ausnahme.** Das `Caddyfile` wird sonst nie
+  bearbeitet. Vorgesehene Ausnahmen sind die `tls`-Zeile (hier oder für
+  eigene Zertifikate, siehe unten) und optional die IP-Einschränkung für
+  `/metrics` (siehe [monitoring.md](monitoring.md)); bei Updates tragen
+  Sie sie mit `sudo git stash && sudo git pull && sudo git stash pop`
+  hinüber (siehe
+  [Bestehende Installation aktualisieren](#bestehende-installation-aktualisieren)).
 
 ### Eigenes Zertifikat (z. B. HARICA) statt Let's Encrypt
 
@@ -474,9 +601,12 @@ zeigt Caddy auf die Dateien statt auf automatisches HTTPS:
    ```yaml
    - /etc/abstimmbar/certs:/etc/caddy/certs:ro
    ```
-3. Im `Caddyfile`-Site-Block das automatische Verhalten durch eine
-   `tls`-Zeile mit den **Container**-Pfaden ersetzen (Zertifikat zuerst,
-   dann Schlüssel):
+3. Im `Caddyfile` innerhalb des Site-Blocks (`{$PUBLIC_BASE_URL} {`)
+   eine `tls`-Zeile mit den **Container**-Pfaden ergänzen (Zertifikat
+   zuerst, dann Schlüssel). Der Host in `PUBLIC_BASE_URL` muss zum
+   Zertifikat passen. Diese Zeile und die einkommentierte Mount-Zeile aus
+   Punkt 2 sind vorgesehene lokale Änderungen — bei Updates mit
+   `git stash`/`git stash pop` mitnehmen (siehe oben):
    ```
    tls /etc/caddy/certs/abstimmbar.pem /etc/caddy/certs/abstimmbar.key
    ```
@@ -487,8 +617,8 @@ zeigt Caddy auf die Dateien statt auf automatisches HTTPS:
    ```
 5. Übernehmen mit `sudo docker compose -f docker-compose.prod.yml up -d`
    (oder `restart caddy`). Die Erneuerung ist in diesem Modus **manuell**:
-   Dateien vor Ablauf ersetzen, dann `restart caddy`. Die globale `email`
-   wird dabei nicht genutzt.
+   Dateien vor Ablauf ersetzen, dann `restart caddy`. `ACME_EMAIL` wird
+   dabei nicht genutzt, muss aber trotzdem gesetzt sein (Pflicht-Variable).
 
 ## Backup
 
@@ -601,15 +731,18 @@ von außerhalb des Uni-Netzes (z. B. Handy im Mobilfunknetz) läuft ins Leere.
 > noch dicht sind. Bei `rateLimited` ~1 Stunde warten.
 >
 > Kann der Dienst gar nicht öffentlich erreichbar sein, ist statt Let's
-> Encrypt ein **HARICA-Zertifikat** der Weg (siehe unten) — es braucht
+> Encrypt ein **HARICA-Zertifikat** der Weg (siehe oben,
+> [Eigenes Zertifikat](#eigenes-zertifikat-z-b-harica-statt-lets-encrypt)) — es braucht
 > keinen eingehenden Internet-Zugriff.
 
 ## Sicherheits-Checkliste
 
-- [ ] `DJANGO_DEBUG` ist im Prod-Compose fest auf `0`; starker
-      `DJANGO_SECRET_KEY`; echtes `DJANGO_ALLOWED_HOSTS`.
+- [ ] `DJANGO_DEBUG` ist im Prod-Compose fest auf `0`; eigener, zufällig
+      erzeugter `DJANGO_SECRET_KEY` (nicht der Platzhalter, siehe
+      [Secret Key erzeugen](#secret-key-erzeugen-pflicht)); echtes
+      `DJANGO_ALLOWED_HOSTS`.
 - [ ] `PUBLIC_BASE_URL` und `CSRF_TRUSTED_ORIGINS` zeigen auf die echte
-      `https://`-Domain (`VITE_API_BASE_URL` nur bei bewusst abweichendem
+      `https://`-Domain (ohne Pfad, ohne abschließenden `/`) (`VITE_API_BASE_URL` nur bei bewusst abweichendem
       Aufbau, siehe „Neue Konfigurations-Variable?").
 - [ ] Starkes `POSTGRES_PASSWORD`; alle Geheimnisse nur in `.env` (wird
       nie committet).

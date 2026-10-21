@@ -161,12 +161,16 @@ standardmäßig gar nicht eingebettet werden. Zwei Betriebsvarianten:
      ausgelieferten Seiten (Teilnehmer-Seite `/p/...` und `/lti/...`). Die
      SPA (Verwaltung/Presenter) wird von **Caddy** ausgeliefert, das die im
      Web-Admin registrierten Plattformen nicht kennt; dafür muss die
-     LMS-Origin **einmalig im Caddyfile** eingetragen werden, in der
-     `frame-ancestors`-Zeile im SPA-`handle`-Block:
+     LMS-Origin **einmalig in der `.env`** über die Variable
+     `ABSTIMMBAR_FRAME_ANCESTORS` eingetragen werden (mehrere Origins
+     durch Leerzeichen getrennt; das versionierte Caddyfile bleibt
+     unverändert):
      ```
-     header Content-Security-Policy "frame-ancestors 'self' https://moodle.example.org"
+     ABSTIMMBAR_FRAME_ANCESTORS=https://moodle.example.org
      ```
-     Ohne registrierte Plattform (Django-Seiten) bzw. ohne Caddyfile-Eintrag
+     Anschließend `docker compose -f docker-compose.prod.yml up -d`
+     ausführen (Caddy wird mit der neuen Variable neu erstellt).
+     Ohne registrierte Plattform (Django-Seiten) bzw. ohne diese Variable
      (SPA) bleibt Framen blockiert (`frame-ancestors 'self'`). Browser mit
      blockierten Third-Party-Cookies können trotz beider Einstellungen noch
      Probleme machen.

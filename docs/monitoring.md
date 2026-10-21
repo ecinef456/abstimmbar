@@ -63,8 +63,10 @@ beschreibt [`deployment.md`](deployment.md).
    }
    ```
 
-   Wer ein eigenes, älteres `Caddyfile` betreibt, ergänzt diesen Block vor dem
-   abschließenden `handle { … }` (SPA-Fallback) und lädt Caddy neu:
+   Ist der Checkout auf dem Server älter, holt `git pull` den Block (siehe
+   [`deployment.md`](deployment.md), „Bestehende Installation
+   aktualisieren“); bei einem eigenen Reverse-Proxy ergänzen Sie die
+   Weiterleitung dort. Danach Caddy neu laden:
 
    ```bash
    sudo docker compose -f docker-compose.prod.yml restart caddy
@@ -90,7 +92,9 @@ beschreibt [`deployment.md`](deployment.md).
 
 Das Token schützt den Endpoint bereits. Wer ihn zusätzlich nur für die
 IP-Adresse des Prometheus-Servers öffnen möchte, ersetzt den Block im
-`Caddyfile` durch:
+`Caddyfile` durch (eine bewusste lokale Änderung — bei Updates mit
+`git stash && git pull && git stash pop` mitnehmen, siehe
+[`deployment.md`](deployment.md)):
 
 ```caddy
 handle /metrics {

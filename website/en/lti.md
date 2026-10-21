@@ -160,13 +160,16 @@ default. There are two ways to operate:
       (participant page `/p/...` and `/lti/...`). The SPA (management
       UI/presenter) is served by **Caddy**, which does not know about the
       platforms registered in the web admin. For it, the LMS origin must be
-      added **once in the Caddyfile**, in the `frame-ancestors` line of the
-      SPA `handle` block:
+      set **once in `.env`** via the `ABSTIMMBAR_FRAME_ANCESTORS` variable
+      (several origins separated by spaces; the versioned Caddyfile stays
+      unchanged):
       ```
-      header Content-Security-Policy "frame-ancestors 'self' https://moodle.example.org"
+      ABSTIMMBAR_FRAME_ANCESTORS=https://moodle.example.org
       ```
-      Without a registered platform (Django pages) or without the Caddyfile
-      entry (SPA), framing remains blocked (`frame-ancestors 'self'`).
+      Then run `docker compose -f docker-compose.prod.yml up -d` (this
+      recreates Caddy with the new variable).
+      Without a registered platform (Django pages) or without this variable
+      (SPA), framing remains blocked (`frame-ancestors 'self'`).
       Browsers that block third-party cookies may still cause problems
       despite both settings.
 
