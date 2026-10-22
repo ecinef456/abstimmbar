@@ -112,6 +112,17 @@ self-paced quiz mode students can work through on their own.
   <em>Live word cloud — terms sized by frequency (case and spelling variants merged).</em>
 </p>
 
+**Work together on the big screen** — a collaborative mind map and a
+four-field matrix, where AI can propose summary cards for similar ideas
+(you decide what to apply).
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/mindmap.png" alt="Collaborative mind map on the beamer: participants' ideas grouped around a central topic"></td>
+    <td width="50%"><img src="docs/screenshots/matrix.png" alt="Four-field matrix on the beamer: ideas placed by participants, with an AI summary card"></td>
+  </tr>
+</table>
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/results.png" alt="Results page with bar charts, a multiple-choice question and a word cloud"></td>
@@ -121,9 +132,6 @@ self-paced quiz mode students can work through on their own.
 
 The whole interface is theme-aware (light / dark) and bilingual DE/EN.
 
-<p align="center">
-  <img src="docs/screenshots/results-dark.png" alt="The same results page in dark mode" width="820">
-</p>
 
 ## ✨ AI features (optional, off by default)
 
