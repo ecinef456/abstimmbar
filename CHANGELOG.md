@@ -6,7 +6,7 @@ Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/).
 Die Zahlen in Klammern verweisen auf Pull Requests im
 [GitHub-Repository](https://github.com/virtUOS/abstimmbar/pulls?q=is%3Apr).
 
-## [1.0.0] – 2026-10-DD
+## [1.0.0] – 2026-10-22
 
 Die erste stabile Version. Abstimmbar ist damit für den regulären Einsatz in
 der Lehre freigegeben.
