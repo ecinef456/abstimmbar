@@ -47,9 +47,23 @@ export function hasMath(text: string | null | undefined): boolean {
   return !!text && MATH_HINT.test(text);
 }
 
+// Typst escapes like `\/` (an inline slash instead of a fraction) or `\*`
+// are not understood by tex2typst, so they travel through the conversion as
+// marker strings and are put back as the literal character afterwards.
+const ESCAPED = /\\([^\sA-Za-z0-9])/g;
+const MARKER = /\\text\{zqesc(\d+)zq\}/g;
+const LATEX_LITERAL: Record<string, string> = {
+  "\\": "\\backslash ", "{": "\\{", "}": "\\}", "_": "\\_", "$": "\\$",
+  "#": "\\#", "%": "\\%", "&": "\\&", "^": "\\hat{}", "~": "\\sim ",
+};
+
 function typstToLatex(body: string): string | null {
+  const marked = body.replace(ESCAPED, (_, ch: string) => ` "zqesc${ch.codePointAt(0)}zq" `);
   try {
-    return typst2tex(body);
+    return typst2tex(marked).replace(MARKER, (_, code: string) => {
+      const ch = String.fromCodePoint(Number(code));
+      return LATEX_LITERAL[ch] ?? ch;
+    });
   } catch {
     return null;
   }
