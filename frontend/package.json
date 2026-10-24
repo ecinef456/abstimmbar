@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:participant-math",
     "preview": "vite preview",
     "e2e": "playwright test",
     "e2e:mobile": "playwright test --project=phone-chromium --project=phone-firefox",
-    "docs:shots": "DOCS_SHOTS=1 playwright test --project=docs-shots"
+    "docs:shots": "DOCS_SHOTS=1 playwright test --project=docs-shots",
+    "build:participant-math": "esbuild src/participantMath.ts --bundle --minify --format=iife --target=es2019 --outfile=dist-participant/abstimmbar-math.js"
   },
   "dependencies": {
     "@basicbar/ui": "https://github.com/virtUOS/basicbar/releases/download/ui/v0.9.1/basicbar-ui-0.9.1.tgz",
@@ -20,11 +21,13 @@
     "driver.js": "^1.8.0",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
+    "katex": "0.19.0",
     "lucide-react": "^1.23.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-i18next": "^17.0.8",
-    "react-router": "^7.18.4"
+    "react-router": "^7.18.4",
+    "tex2typst": "0.6.2"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -33,6 +36,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "esbuild": "0.25.12",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.6.3",

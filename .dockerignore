@@ -10,6 +10,7 @@ venv/
 # Node
 **/node_modules/
 frontend/dist/
+frontend/dist-participant/
 **/*.tsbuildinfo
 
 # Environment / secrets

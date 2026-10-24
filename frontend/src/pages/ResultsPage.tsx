@@ -21,6 +21,7 @@ import {
 } from "../api";
 import { useApp, useEasyMode } from "../App";
 import { localizedText, RichText, stripHtml } from "@basicbar/ui";
+import { MathText } from "../math";
 import AiAssistPanel from "../components/AiAssistPanel";
 import HomeCrumb from "../components/HomeCrumb";
 import { Button, ConfirmInline, EmptyState, TextInput } from "../components/ui";
@@ -586,7 +587,7 @@ export default function ResultsPage() {
                                   <div key={option.id}>
                                     <ResultBar
                                       index={i}
-                                      label={localizedText(option.text)}
+                                      label={<MathText text={localizedText(option.text)} />}
                                       count={count}
                                       pct={percent}
                                       state={hasCorrect ? (option.is_correct ? "correct" : "wrong") : "neutral"}
@@ -609,7 +610,7 @@ export default function ResultsPage() {
                                 <PriorityBar
                                   key={opt.id}
                                   index={i}
-                                  label={localizedText(opt.text)}
+                                  label={<MathText text={localizedText(opt.text)} />}
                                   avg={opt.avg}
                                   min={opt.min}
                                   max={opt.max}
@@ -642,7 +643,7 @@ export default function ResultsPage() {
                                           style={{ gridRow: 2 * i + 1 }}
                                         >
                                           <span className="tabular-nums text-slate-400">{it.correct_position}.</span>
-                                          <span className="truncate">{localizedText(it.text)}</span>
+                                          <span className="truncate"><MathText text={localizedText(it.text)} /></span>
                                         </div>,
                                       ];
                                       if (link) {
@@ -850,7 +851,7 @@ function BeforeAfterChoice({ before, after }: { before: ResultQuestion; after: R
           <ResultBar
             key={option.id}
             index={index}
-            label={localizedText(option.text)}
+            label={<MathText text={localizedText(option.text)} />}
             count={count}
             pct={pctOf(count, after.votes)}
             before={{ count: beforeCount, pct: pctOf(beforeCount, before.votes) }}

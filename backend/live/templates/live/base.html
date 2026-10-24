@@ -102,7 +102,8 @@
   /* Same surface as text inputs (dark mode would otherwise use the UA grey). */
   textarea { background: var(--surface); color: var(--ink); border: 1px solid var(--field-line); }
   .question-text { margin: 10px 0 6px; font-size: 18px; line-height: 1.45; }
-  .question-text img { max-width: 100%; border-radius: 10px; }
+  /* Images in question texts sit centred on their own line. */
+  .question-text img { display: block; max-width: 100%; margin: 12px auto; border-radius: 10px; }
   .question-text ul, .question-text ol { padding-left: 22px; }
   [hidden] { display: none !important; }
 </style>

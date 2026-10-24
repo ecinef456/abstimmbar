@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { localizedText } from "@basicbar/ui";
 import type { OrderingResults } from "../api";
 import { useCountUp, useReducedMotion } from "./motion";
+import { MathText } from "../math";
 
 export default function OrderingResult({
   ordering,
@@ -38,7 +39,7 @@ export default function OrderingResult({
               style={{ gridRow: 2 * i + 1 }}
             >
               <span className="tabular-nums text-slate-400">{it.correct_position}.</span>
-              <span>{localizedText(it.text)}</span>
+              <span><MathText text={localizedText(it.text)} /></span>
             </div>,
           ];
           if (link) {

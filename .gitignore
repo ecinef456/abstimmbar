@@ -8,6 +8,7 @@ venv/
 # Node
 node_modules/
 dist/
+dist-participant/
 *.tsbuildinfo
 
 # Playwright

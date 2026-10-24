@@ -33,6 +33,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
 COPY --from=frontend-build /frontend/dist /app/frontend_dist
+# Math (Typst/LaTeX via KaTeX) for the participant page, lazy-loaded from
+# /static/katex/: KaTeX's stylesheet + fonts and our standalone bundle.
+COPY --from=frontend-build /frontend/node_modules/katex/dist /app/live/static/katex
+COPY --from=frontend-build /frontend/dist-participant/abstimmbar-math.js /app/live/static/katex/abstimmbar-math.js
 
 EXPOSE 8000
 

@@ -1,6 +1,6 @@
 {# SPDX-License-Identifier: Apache-2.0 — Copyright 2026 Universität Osnabrück (virtUOS) #}
 {% extends "live/base.html" %}
-{% load i18n %}
+{% load i18n static %}
 {% block title %}{{ room.title }} — Abstimmbar{% endblock %}
 {% block content %}
 {% comment %}
@@ -4988,6 +4988,48 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   } else {
     start();
   }
+})();
+</script>
+<script>
+// Math in question texts and answer options: Typst by default ($…$; with
+// spaces inside both dollars it is displayed), LaTeX via \(…\), \[…\], $$…$$
+// or $…$ with backslash commands. Syntax and rendering live in the SPA's
+// mathCore.ts, bundled as /static/katex/abstimmbar-math.js; it (and KaTeX's
+// CSS) is only fetched once a delimiter appears, so pages without math stay
+// ultra-light. Re-renders after every DOM update of <main> (rAF-batched);
+// rendered output is skipped, so re-runs are no-ops.
+(() => {
+  const BASE = "{% static 'katex/' %}";
+  const HINT = /\$|\\\(|\\\[/;
+  let phase = "idle";  // idle → loading → ready | failed
+  let queued = false;
+  function load() {
+    phase = "loading";
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = BASE + "katex.min.css";
+    document.head.appendChild(css);
+    const s = document.createElement("script");
+    s.src = BASE + "abstimmbar-math.js";
+    s.onload = () => { phase = "ready"; schedule(); };
+    s.onerror = () => { phase = "failed"; };
+    document.head.appendChild(s);
+  }
+  function render() {
+    queued = false;
+    const main = document.querySelector("main");
+    if (!main || !HINT.test(main.textContent)) return;
+    if (phase === "idle") { load(); return; }
+    if (phase !== "ready") return;
+    try { window.abstimmbarMath.render(main); } catch (e) { /* keep raw text */ }
+  }
+  function schedule() {
+    if (!queued) { queued = true; requestAnimationFrame(render); }
+  }
+  new MutationObserver(schedule).observe(document.body, {
+    childList: true, subtree: true, characterData: true,
+  });
+  schedule();
 })();
 </script>
 {% endblock %}

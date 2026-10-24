@@ -27,6 +27,7 @@ import {
   type WordCloudModeration,
 } from "../api";
 import { localizedText, RichText, stripHtml } from "@basicbar/ui";
+import { mathHtml, MathText } from "../math";
 import LikertResult from "../components/LikertResult";
 import { useTourSignal } from "../tour/signals";
 import ResultBar, { type BarState } from "../results/ResultBar";
@@ -1675,8 +1676,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       >
         <div key={item.id} className="ab-fade-in mx-auto flex min-h-full max-w-4xl flex-col justify-center">
           <RichText
-            className="text-xl font-semibold leading-snug sm:text-2xl md:text-3xl [&_img]:my-4 [&_img]:max-h-64 [&_ul]:list-disc [&_ul]:pl-8"
-            html={localizedText(item.text)}
+            className="text-xl font-semibold leading-snug sm:text-2xl md:text-3xl [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-64 [&_ul]:list-disc [&_ul]:pl-8"
+            html={mathHtml(localizedText(item.text))}
           />
           <WalkthroughResultBody
             item={item}
@@ -2092,13 +2093,13 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
             <div className="mx-auto w-full" style={mmClear(56)}>
               <RichText
                 className="line-clamp-2 text-center text-lg font-semibold leading-snug md:text-xl [&_img]:hidden"
-                html={localizedText(question.text)}
+                html={mathHtml(localizedText(question.text))}
               />
             </div>
           ) : (
             <RichText
-              className="text-xl font-semibold leading-snug sm:text-2xl md:text-3xl [&_img]:my-4 [&_img]:max-h-64 [&_ul]:list-disc [&_ul]:pl-8"
-              html={localizedText(question.text)}
+              className="text-xl font-semibold leading-snug sm:text-2xl md:text-3xl [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-64 [&_ul]:list-disc [&_ul]:pl-8"
+              html={mathHtml(localizedText(question.text))}
             />
           )}
 
@@ -2265,7 +2266,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                       className="max-h-28 rounded-xl"
                     />
                   )}
-                  {localizedText(option.text)}
+                  <MathText text={localizedText(option.text)} />
                 </li>
               ))}
             </ol>
@@ -2286,7 +2287,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                       className="flex flex-1 items-center justify-center border-l border-slate-200 py-6 text-2xl first:border-l-0 sm:text-3xl dark:border-slate-700"
                     >
                       {perStep ? (
-                        localizedText(o.text)
+                        <MathText text={localizedText(o.text)} />
                       ) : (
                         <span className="inline-block h-5 w-5 rounded-full border-2 border-slate-400" />
                       )}
@@ -2335,7 +2336,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
           {question.kind === "priorities" && state.priorities && phase === "results" && (
             <div className="mt-8 space-y-4">
               {state.priorities.map((opt, i) => (
-                <PriorityBar key={opt.id} index={i} label={localizedText(opt.text)} avg={opt.avg} min={opt.min} max={opt.max} animate />
+                <PriorityBar key={opt.id} index={i} label={<MathText text={localizedText(opt.text)} />} avg={opt.avg} min={opt.min} max={opt.max} animate />
               ))}
             </div>
           )}
@@ -2366,7 +2367,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   <ResultBar
                     key={option.id}
                     index={i}
-                    label={localizedText(option.text)}
+                    label={<MathText text={localizedText(option.text)} />}
                     image={option.image}
                     count={count}
                     pct={percent}
@@ -2998,7 +2999,7 @@ function WalkthroughResultBody({
     return (
       <div className="mt-8 space-y-4">
         {item.priorities.map((opt, i) => (
-          <PriorityBar key={opt.id} index={i} label={localizedText(opt.text)} avg={opt.avg} min={opt.min} max={opt.max} animate />
+          <PriorityBar key={opt.id} index={i} label={<MathText text={localizedText(opt.text)} />} avg={opt.avg} min={opt.min} max={opt.max} animate />
         ))}
       </div>
     );
@@ -3085,7 +3086,7 @@ function WalkthroughResultBody({
           <ResultBar
             key={option.id}
             index={i}
-            label={localizedText(option.text)}
+            label={<MathText text={localizedText(option.text)} />}
             image={option.image}
             count={count}
             pct={percent}
@@ -3217,7 +3218,7 @@ function SectionInterstitial({ title, description }: SectionSlide) {
         {hasDescription && (
           <RichText
             className="section-description mx-auto mt-8 max-w-4xl text-2xl leading-relaxed text-slate-700 md:text-3xl [&_a]:text-brand-700 [&_a]:underline [&_img]:mx-auto [&_img]:my-4 [&_img]:max-h-80 [&_ol]:list-decimal [&_ol]:pl-8 [&_ol]:text-left [&_ul]:list-disc [&_ul]:pl-8 [&_ul]:text-left [&_p]:my-2"
-            html={description}
+            html={mathHtml(description)}
           />
         )}
       </div>
