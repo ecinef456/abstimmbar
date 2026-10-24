@@ -1,5 +1,7 @@
 # Abstimmbar — open-source audience response system for universities
 
+> **This is a fork** of [virtUOS/abstimmbar](https://github.com/virtUOS/abstimmbar) with **Typst/LaTeX math** in questions and answers and **centred question images**. See [FORK.md](FORK.md) for details; the changes live on the `custom` branch.
+
 **Abstimmbar** is an open-source audience response system (ARS): lecturers
 run live quizzes and polls in class, students answer anonymously on their
 own devices via QR code or short URL — no login, no app. It integrates into
