@@ -159,7 +159,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 function sortSets(list: QuestionSet[], key: SortKey): QuestionSet[] {
   return [...list].sort((a, b) => {
     if (key === "title") {
-      return localizedText(a.title).localeCompare(localizedText(b.title), "de");
+      return localizedText(a.title).localeCompare(localizedText(b.title), "de", { numeric: true });
     }
     if (key === "created") return b.created_at.localeCompare(a.created_at);
     if (key === "questions") return b.question_count - a.question_count;
@@ -508,7 +508,7 @@ export default function RoomPage() {
   const [sets, setSets] = useState<QuestionSet[] | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<number | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("updated");
+  const [sortKey, setSortKey] = useState<SortKey>("title");
   // #75: filter the room's sets by type (like the archive filter on the rooms list).
   const [typeFilter, setTypeFilter] = useState<"all" | SetType>("all");
   const [search, setSearch] = useState("");

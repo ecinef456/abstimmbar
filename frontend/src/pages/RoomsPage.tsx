@@ -27,7 +27,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 function sortRooms(list: Room[], key: SortKey): Room[] {
   return [...list].sort((a, b) => {
     if (key === "title") {
-      return localizedText(a.title).localeCompare(localizedText(b.title), "de");
+      return localizedText(a.title).localeCompare(localizedText(b.title), "de", { numeric: true });
     }
     if (key === "created") return b.created_at.localeCompare(a.created_at);
     // last_used: most recent run first, rooms never used go last.
@@ -263,7 +263,7 @@ export default function RoomsPage() {
   const [confirmLeave, setConfirmLeave] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("last_used");
+  const [sortKey, setSortKey] = useState<SortKey>("title");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [showAll, setShowAll] = useState(false);
