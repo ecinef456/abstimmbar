@@ -1,0 +1,21 @@
+# Test instance of this fork: a second, private copy of the production stack
+# (own containers, own database and volumes, own image) on 127.0.0.1:8090,
+# published only inside the tailnet by `tailscale serve` on port 8443 (never
+# Funnel). Used via fork/test-up.sh; see FORK.md "Operating this fork".
+services:
+  db:
+    container_name: abstimmbar_test_db
+  app:
+    image: abstimmbar-test:latest
+    container_name: abstimmbar_test_app
+  caddy:
+    container_name: abstimmbar_test_caddy
+    ports: !override
+      - "127.0.0.1:8090:80"
+    environment:
+      # Plain HTTP on :80; Tailscale terminates HTTPS in front of it.
+      PUBLIC_BASE_URL: ":80"
+    volumes:
+      # Same Caddyfile variant as production behind Funnel (reports https to
+      # Django); copied into the worktree by fork/test-setup.sh.
+      - ./Caddyfile.funnel:/etc/caddy/Caddyfile:ro
