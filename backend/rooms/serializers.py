@@ -17,6 +17,7 @@ from rest_framework import serializers
 
 from common.i18n_fields import LANGS, TranslatedMapMixin
 from common.serializers import TranslationSyncMixin
+from quizbar import justifications as quizbar_justifications
 
 from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Room, Section, UploadedImage
@@ -380,10 +381,20 @@ class AnswerOptionSerializer(TranslatedMapMixin, serializers.ModelSerializer):
 
     # Explicit id lets the client reference existing options in nested updates.
     id = serializers.IntegerField(required=False)
+    # quizbar (fork): why this answer is right/wrong; stored in quizbar's own
+    # table, written by QuestionSerializer._write_options.
+    justification = serializers.CharField(
+        required=False, allow_blank=True, max_length=quizbar_justifications.MAX_LENGTH
+    )
 
     class Meta:
         model = AnswerOption
-        fields: ClassVar = ["id", "text", "image", "is_correct", "is_abstention"]
+        fields: ClassVar = ["id", "text", "image", "is_correct", "is_abstention", "justification"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["justification"] = quizbar_justifications.text_for(instance)
+        return data
 
     def validate_image(self, value):
         # Only our own media storage; foreign URLs are silently dropped.
@@ -691,6 +702,7 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
         existing = {option.pk: option for option in question.options.all()}
         for index, data in enumerate(options_data):
             option_id = data.pop("id", None)
+            justification = data.pop("justification", None)
             data["position"] = index
             if option_id and option_id in existing:
                 option = existing[option_id]
@@ -699,6 +711,8 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                 option.save()
             else:
                 option = AnswerOption.objects.create(question=question, **data)
+            if justification is not None:
+                quizbar_justifications.set_text(option, justification)
             keep.append(option.pk)
         question.options.exclude(pk__in=keep).delete()
 

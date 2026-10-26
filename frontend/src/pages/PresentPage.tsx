@@ -17,6 +17,7 @@ import {
   detailText,
   errorDetail,
   live,
+  quizbar,
   results,
   type LiveCounter,
   type LiveState,
@@ -1376,6 +1377,18 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     else void showSolution();
   }, [hasSolution, phase, revealed, showResults, showSolution]);
 
+  // quizbar (fork), key J: show/hide why each answer is right or wrong. The
+  // server also switches to the results and reveals the correct answers.
+  const justificationShown = !!state?.justification_shown;
+  const hasJustification =
+    (activeKind === "single_choice" || activeKind === "multiple_choice") &&
+    !!activeQuestion?.options.some((o) => (o.justification ?? "").trim());
+  const toggleJustification = useCallback(() => {
+    if (!runId || !hasJustification) return;
+    if (phase === "lobby" || phase === "finished") return;
+    void quizbar.justification(runId, !justificationShown);
+  }, [runId, hasJustification, phase, justificationShown]);
+
   // Memoized so the keydown effect (which lists it as a dependency) doesn't
   // re-register the window listener on every render — including the live
   // path's frequent SSE-driven re-renders (#75). Declared before onKey, which
@@ -1514,11 +1527,13 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         cycleView();
       } else if (key === "l") {
         toggleSolution();
+      } else if (key === "j") {
+        toggleJustification();
       } else if (key === "escape") {
         void leave();
       }
     },
-    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave],
+    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, toggleJustification, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave],
   );
 
   useEffect(() => {
@@ -2364,23 +2379,37 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                   ? Math.round((beforeCount / beforeTotal) * 100)
                   : 0;
                 return (
-                  <ResultBar
-                    key={option.id}
-                    index={i}
-                    label={<MathText text={localizedText(option.text)} />}
-                    image={option.image}
-                    count={count}
-                    pct={percent}
-                    state={barState}
-                    animate
-                    before={before ? { count: beforeCount, pct: beforePercent } : null}
-                  />
+                  <div key={option.id}>
+                    <ResultBar
+                      index={i}
+                      label={<MathText text={localizedText(option.text)} />}
+                      image={option.image}
+                      count={count}
+                      pct={percent}
+                      state={barState}
+                      animate
+                      before={before ? { count: beforeCount, pct: beforePercent } : null}
+                    />
+                    {/* quizbar (fork): J — why this answer is right/wrong. */}
+                    {justificationShown && option.justification && (
+                      <p className="ab-fade-in mt-1.5 whitespace-pre-line pl-10 text-lg leading-snug text-slate-600">
+                        <MathText text={option.justification} />
+                      </p>
+                    )}
+                  </div>
                 );
               })}
               {hasSolution && !revealed && (
                 <p className="pt-2 text-sm text-slate-400">
                   <Trans i18nKey="present_reveal_hint_l">
                     Reveal correct answer with <Kbd>L</Kbd>
+                  </Trans>
+                </p>
+              )}
+              {hasJustification && !justificationShown && (
+                <p className="pt-2 text-sm text-slate-400">
+                  <Trans i18nKey="quizbar_justification_hint_j">
+                    Explain the answers with <Kbd>J</Kbd>
                   </Trans>
                 </p>
               )}

@@ -1280,25 +1280,41 @@ export default function QuestionPage() {
                         className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 accent-brand-600"
                       />
                     )}
-                    <TranslatableField
-                      value={item.text}
-                      placeholder={t("Answer text")}
-                      ariaLabel={t("Answer text")}
-                      onChange={(text) => updateOption(item.id, { text })}
-                      // Phones (#179): the input takes a full row of its
-                      // own below the handle/checkbox/image/delete row.
-                      className="min-w-0 flex-1 max-sm:order-last max-sm:basis-full"
-                      stale={liveStaleLangs(
-                        optionBaseline[item.id] ?? "",
-                        item.text,
-                        [],
-                        false,
+                    {/* Phones (#179): the input takes a full row of its own
+                        below the handle/checkbox/image/delete row. */}
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5 max-sm:order-last max-sm:basis-full">
+                      <TranslatableField
+                        value={item.text}
+                        placeholder={t("Answer text")}
+                        ariaLabel={t("Answer text")}
+                        onChange={(text) => updateOption(item.id, { text })}
+                        className="min-w-0"
+                        stale={liveStaleLangs(
+                          optionBaseline[item.id] ?? "",
+                          item.text,
+                          [],
+                          false,
+                        )}
+                        onTranslated={(lang, value) =>
+                          setOptionSynced(item.id, setLocalizedLang(item.text, lang, value))
+                        }
+                        onMarkSynced={() => setOptionSynced(item.id, item.text)}
+                      />
+                      {/* quizbar (fork): why this answer is right or wrong —
+                          shown with J on the beamer and in quiz feedback. */}
+                      {hasCorrect && (
+                        <textarea
+                          rows={2}
+                          value={item.justification ?? ""}
+                          placeholder={t("Justification (why right or wrong)")}
+                          aria-label={t("Justification (why right or wrong)")}
+                          onChange={(event) =>
+                            updateOption(item.id, { justification: event.target.value })
+                          }
+                          className="w-full resize-y rounded-lg border border-field bg-white px-3 py-1.5 text-sm text-slate-600 placeholder:text-slate-400 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 dark:bg-slate-900 dark:text-slate-300"
+                        />
                       )}
-                      onTranslated={(lang, value) =>
-                        setOptionSynced(item.id, setLocalizedLang(item.text, lang, value))
-                      }
-                      onMarkSynced={() => setOptionSynced(item.id, item.text)}
-                    />
+                    </div>
                     {/* Phones: pushes image/delete to the row's right end. */}
                     <span aria-hidden className="flex-1 sm:hidden" />
                     {!isLikert && (

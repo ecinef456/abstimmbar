@@ -75,6 +75,8 @@ INSTALLED_APPS = [
     "live",
     "basicbar_lti",
     "lti",
+    # This fork's own features (own tables; see quizbar/apps.py).
+    "quizbar",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

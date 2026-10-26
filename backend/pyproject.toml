@@ -9,4 +9,4 @@ extend-exclude = ["*/migrations/*"]
 extend-select = ["I"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["accounts", "common", "config", "live", "rooms"]
+known-first-party = ["accounts", "common", "config", "live", "quizbar", "rooms"]

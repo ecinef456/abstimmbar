@@ -285,6 +285,8 @@ export interface AnswerOption {
   image?: string;
   is_correct: boolean;
   is_abstention?: boolean;
+  /** quizbar (fork): why this answer is right/wrong (plain text + math). */
+  justification?: string;
 }
 
 export interface Question {
@@ -1157,6 +1159,9 @@ export interface LiveOption {
   /** Recording mode (#53): the on-site vs recording-viewer split. */
   onsite?: number;
   recording?: number;
+  /** quizbar (fork): why this answer is right/wrong (presenter: always;
+   *  participants: once the presenter pressed J). */
+  justification?: string;
 }
 
 /** `presenter.counter` of a live run (absent without an active question). */
@@ -1188,6 +1193,8 @@ export interface LiveState {
   votes_total?: number;
   reveal_answers?: RevealAnswers;
   revealed?: boolean;
+  /** quizbar (fork): J pressed — the beamer shows the justifications. */
+  justification_shown?: boolean;
   ends_at?: string;
   participants?: number;
   /** Recording mode (#53): the run's deep-link token (present when recording
@@ -1836,3 +1843,13 @@ export const loginUrl = `${API_BASE_URL}/oidc/authenticate/`;
  * already has a session, otherwise bounces back to "/?sso=failed" (#19). */
 export const silentLoginUrl = `${API_BASE_URL}/oidc/silent/`;
 export const logoutUrl = `${API_BASE_URL}/oidc/logout-redirect/`;
+
+/** quizbar (fork): this fork's own endpoints (backend app `quizbar`). */
+export const quizbar = {
+  /** Presenter key J: show/hide the active question's justifications. */
+  justification: (runId: number, show: boolean) =>
+    request<{ status: string; shown: boolean }>(`/api/quizbar/runs/${runId}/justification/`, {
+      method: "POST",
+      body: JSON.stringify({ show }),
+    }),
+};

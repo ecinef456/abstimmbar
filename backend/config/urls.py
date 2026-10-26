@@ -36,6 +36,7 @@ urlpatterns = [
     path("api/", include("rooms.urls")),
     path("api/", include("common.urls")),
     path("api/lti/", include((lti_api, "lti-api"))),
+    path("api/quizbar/", include("quizbar.urls")),
     path("", include("lti.urls")),
     *live_pages,
 ]

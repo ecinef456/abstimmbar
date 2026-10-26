@@ -26,6 +26,7 @@ from django.conf import settings
 from rest_framework import serializers
 
 from common.i18n_fields import LANGS, translated_map
+from quizbar import justifications as quizbar_justifications
 
 from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Section
@@ -129,7 +130,8 @@ def _copy_options(source, target):
     the source may carry a stale prefetch cache (e.g. right after the
     before-question's options were rewritten in the same request, #54).
     """
-    AnswerOption.objects.bulk_create(
+    sources = list(AnswerOption.objects.filter(question=source))
+    copies = AnswerOption.objects.bulk_create(
         AnswerOption(
             question=target,
             **_lang_columns(option, "text"),
@@ -138,8 +140,11 @@ def _copy_options(source, target):
             is_abstention=option.is_abstention,
             position=option.position,
         )
-        for option in AnswerOption.objects.filter(question=source)
+        for option in sources
     )
+    # quizbar (fork): justifications travel with copies.
+    for option, copied in zip(sources, copies, strict=True):
+        quizbar_justifications.copy(option, copied)
 
 
 def duplicate_question(question, *, question_set, section, position):
@@ -322,6 +327,8 @@ def export_set(question_set):
                         "image": option.image,
                         "is_correct": option.is_correct,
                         "is_abstention": option.is_abstention,
+                        # quizbar (fork); ignored by upstream importers.
+                        "justification": quizbar_justifications.text_for(option),
                     }
                     for option in question.options.all()
                 ],
@@ -564,8 +571,8 @@ def import_set(room, data):
         )
         if item["kind"] in Question.OPTIONLESS_KINDS:
             continue
-        options = item.get("options") or []
-        AnswerOption.objects.bulk_create(
+        options = [option for option in (item.get("options") or []) if isinstance(option, dict)]
+        created_options = AnswerOption.objects.bulk_create(
             AnswerOption(
                 question=question,
                 **{
@@ -579,6 +586,8 @@ def import_set(room, data):
                 position=position_option,
             )
             for position_option, option in enumerate(options)
-            if isinstance(option, dict)
         )
+        # quizbar (fork): per-option justification, if the file has one.
+        for option, created in zip(options, created_options, strict=True):
+            quizbar_justifications.set_text(created, str(option.get("justification") or ""))
     return question_set

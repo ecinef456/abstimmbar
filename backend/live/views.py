@@ -32,6 +32,7 @@ from common.csv_safe import csv_safe
 from common.i18n_fields import resolve_translated_text, translated_map
 from common.markdown import render_markdown
 from common.models import SiteConfig
+from quizbar import justifications as quizbar_justifications
 from rooms.models import AnswerOption, Question, QuestionSet, Room
 
 from . import (
@@ -543,7 +544,11 @@ def _self_paced_feedback(run, question, chosen_ids):
     )
     if not correct_ids:
         return None
-    return {"correct": sorted(correct_ids), "is_correct": chosen_ids == correct_ids}
+    feedback = {"correct": sorted(correct_ids), "is_correct": chosen_ids == correct_ids}
+    # quizbar (fork): why each answer is right/wrong, with the feedback.
+    if texts := quizbar_justifications.for_question(question):
+        feedback["justifications"] = texts
+    return feedback
 
 
 @api_view(["GET"])
@@ -595,6 +600,9 @@ def quiz(request, code):
                         entry["correct"] = sorted(correct_ids)
                         chosen_ids = {o.pk for o in vote_obj.options.all()}
                         entry["is_correct"] = chosen_ids == correct_ids
+                        # quizbar (fork): justifications survive a reload.
+                        if texts := quizbar_justifications.for_question(vote_obj.question):
+                            entry["justifications"] = texts
             elif kind in Question.TEXT_KINDS:
                 entry["chosen"] = {"text": vote_obj.text or ""}
             elif kind == Question.Kind.PRIORITIES:
@@ -1641,11 +1649,16 @@ def _self_check_solution(question):
         correct_order = [
             o.pk for o in sorted(question.options.all(), key=lambda o: o.position)
         ]
-    return {
+    solution = {
         "correct": correct,
         "model_solution": model_solution,
         "correct_order": correct_order,
     }
+    # quizbar (fork): per-option justifications, shown with the feedback.
+    if question.kind in Question.CHOICE_KINDS:
+        if texts := quizbar_justifications.for_question(question):
+            solution["justifications"] = texts
+    return solution
 
 
 @api_view(["GET"])

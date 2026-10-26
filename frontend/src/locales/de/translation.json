@@ -594,6 +594,8 @@
   "Next (→)": "Weiter (→)",
   "present_lobby_hint": "verbunden · Erste Frage mit <1>S</1> oder <3>→</3>",
   "present_reveal_hint_l": "Richtige Antwort mit <1>L</1> einblenden",
+  "quizbar_justification_hint_j": "Antworten mit <1>J</1> begründen",
+  "Justification (why right or wrong)": "Begründung (warum richtig oder falsch)",
   "Connected participants": "Verbundene Teilnehmende",
   "Participants who have answered": "Teilnehmende, die geantwortet haben",
   "Terms created of possible": "Erstellte Begriffe von insgesamt möglichen",

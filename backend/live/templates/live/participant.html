@@ -366,6 +366,8 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   .rbar { height: 100%; border-radius: 10px; width: 0;
           transition: width .6s cubic-bezier(.2,.8,.2,1); }
   .rtrack { position: relative; height: 20px; border-radius: 10px; background: var(--line); }
+  /* quizbar (fork): why an answer is right/wrong, under the option/bar. */
+  .qb-why { margin: 4px 0 10px 14px; font-size: 14px; line-height: 1.4; color: var(--ink-soft); white-space: pre-line; overflow-wrap: anywhere; }
   /* Result row head (#179): the label wraps, the count column never does. */
   .rhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
            font-size: 14px; margin-bottom: 3px; }
@@ -872,6 +874,24 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   }
 
   // Option label with an optional image (v2, relative /media/ URL).
+  // quizbar (fork): a justification line ("why right/wrong") for an answer.
+  function qbWhy(text) {
+    const el = document.createElement("div");
+    el.className = "qb-why";
+    el.textContent = text;
+    return el;
+  }
+  // After feedback: put each option's justification right under its button.
+  function qbAddWhys(box, justifications) {
+    if (!justifications) return;
+    for (const button of [...box.children]) {
+      const text = button.dataset && justifications[button.dataset.id];
+      if (text && !(button.nextElementSibling && button.nextElementSibling.classList.contains("qb-why"))) {
+        button.after(qbWhy(text));
+      }
+    }
+  }
+
   function fillOptionButton(button, option) {
     if (option.image) {
       const img = document.createElement("img");
@@ -1097,6 +1117,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       growLater(bar, (b) => { b.style.width = percent + "%"; });
       track.appendChild(bar);
       item.append(label, track);
+      if (row.justification) item.appendChild(qbWhy(row.justification));
       list.appendChild(item);
     });
     for (const word of data.words || []) {
@@ -2039,6 +2060,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
         else if (chosen.includes(option.id)) button.classList.add("selected");
         optionsBox.appendChild(button);
       }
+      if (ans.correct) qbAddWhys(optionsBox, ans.justifications);
     }
     const feedback = document.getElementById("quiz-feedback");
     feedback.textContent = ans.correct
@@ -2071,6 +2093,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       is_correct: data.correct ? data.is_correct : null,
       chosen: payload,
       correct: data.correct || null,
+      justifications: data.justifications || null,
     };
     if (data.correct) {
       // Fresh choice answer with feedback on: the familiar inline reveal.
@@ -2094,6 +2117,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       else if (chosen.includes(id)) button.classList.add("wrong");
       button.classList.remove("selected");
     }
+    qbAddWhys(document.getElementById("quiz-options"), data.justifications);
     feedback.textContent = data.is_correct ? "✓ " + I18N.correct : "✗ " + I18N.incorrect;
     feedback.style.color = data.is_correct ? "var(--brand-strong)" : "var(--danger-strong)";
     feedback.hidden = false;
@@ -4774,8 +4798,10 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
         } else if (chosen.includes(option.id)) {
           button.classList.add("selected");
         }
+        button.dataset.id = String(option.id);
         optionsBox.appendChild(button);
       }
+      if (!hideResult && q.correct.length) qbAddWhys(optionsBox, q.justifications);
       if (hideResult) savedLine();
       else {
         feedback.textContent = ans.isCorrect === null

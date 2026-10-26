@@ -13,6 +13,7 @@ import nh3
 from django.db.models import Count
 
 from common.i18n_fields import translated_map
+from quizbar import justifications as quizbar_justifications
 from rooms.models import Question
 
 from . import (
@@ -205,6 +206,11 @@ def build_payloads(room):
                 }
                 for option in participant_options
             ]
+            # quizbar (fork): justifications once the presenter pressed J.
+            if quizbar_justifications.is_shown(run, question):
+                quizbar_justifications.attach(
+                    participant["results"], quizbar_justifications.for_question(question)
+                )
             # #86: participants see the same diverging Likert bar as the beamer,
             # with their own vote marked.
             if question.kind == Question.Kind.LIKERT:
@@ -281,6 +287,13 @@ def build_payloads(room):
             presenter["ordering"] = ordering_stats(run, question)
         else:
             presenter["results"] = options_with_counts(run, question)
+            # quizbar (fork): the presenter always has the justifications (J
+            # shows them on the beamer once ``justification_shown``).
+            quizbar_justifications.attach(
+                presenter["results"], quizbar_justifications.for_question(question)
+            )
+            if quizbar_justifications.is_shown(run, question):
+                presenter["justification_shown"] = True
             if question.kind == Question.Kind.LIKERT:
                 presenter["likert"] = likert_summary(presenter["results"])
             # Vorher-Nachher-Paar (#54): for an after-question, attach the
