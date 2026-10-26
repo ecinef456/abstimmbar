@@ -2,26 +2,35 @@
 // Copyright 2026 Universität Osnabrück (virtUOS)
 
 /** Wires the tool's catalogs into @basicbar/ui's i18n and owns the language
- *  preference (abstimmbar_lang: auto|de|en), authoritative over i18next's
- *  own detector cache. "auto" follows the browser language. */
+ *  preference (abstimmbar_lang: auto|de|en|fr), authoritative over i18next's
+ *  own detector cache. "auto" follows the browser language.
+ *  quizbar (fork): French added (fr/translation.json). */
 import { i18n, initI18n } from "@basicbar/ui";
 import { api } from "./api";
 import de from "./locales/de/translation.json";
 import en from "./locales/en/translation.json";
+import fr from "./locales/fr/translation.json";
 
-initI18n({ resources: { en, de } });
+initI18n({
+  resources: { en, de, fr },
+  languages: [
+    { code: "en", label: "English" },
+    { code: "de", label: "Deutsch" },
+    { code: "fr", label: "Français" },
+  ],
+});
 
-export type LangPref = "auto" | "de" | "en";
+export type LangPref = "auto" | "de" | "en" | "fr";
 const LANG_KEY = "abstimmbar_lang";
 
-export function browserLang(): "de" | "en" {
+export function browserLang(): "de" | "en" | "fr" {
   const nav = (navigator.language || "en").split("-")[0];
-  return nav === "de" ? "de" : "en";
+  return nav === "de" || nav === "fr" ? nav : "en";
 }
 
 export function getLangPref(): LangPref {
   const v = localStorage.getItem(LANG_KEY);
-  return v === "de" || v === "en" ? v : "auto";
+  return v === "de" || v === "en" || v === "fr" ? v : "auto";
 }
 
 export function applyLangPref(pref: LangPref, authenticated = false): void {
@@ -31,7 +40,8 @@ export function applyLangPref(pref: LangPref, authenticated = false): void {
   } else {
     localStorage.setItem(LANG_KEY, pref);
     void i18n.changeLanguage(pref);
-    if (authenticated) api.setLanguage(pref).catch(() => {});
+    // The backend keeps de/en only (fr is a UI language of this fork).
+    if (authenticated && pref !== "fr") api.setLanguage(pref).catch(() => {});
   }
 }
 

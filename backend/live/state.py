@@ -14,6 +14,7 @@ from django.db.models import Count
 
 from common.i18n_fields import translated_map
 from quizbar import justifications as quizbar_justifications
+from quizbar import languages as quizbar_languages
 from rooms.models import Question
 
 from . import (
@@ -105,6 +106,8 @@ def build_payloads(room):
             "show_qr": room.show_qr_in_presentation,
             "show_code": room.show_code_in_presentation,
             "corner": room.presentation_corner,
+            # quizbar (fork): the beamer switches its UI to this language.
+            "language": quizbar_languages.room_language(room),
         }
     }
     if run is None:

@@ -34,3 +34,19 @@ class RunJustification(models.Model):
 
     def __str__(self):
         return f"run {self.run_id}: justification of question {self.question_id}"
+
+
+class RoomLanguage(models.Model):
+    """The language of a room: its content and everything participants see
+    (participant pages; the beamer while presenting). Unset = each viewer's
+    own language, as upstream."""
+
+    LANGUAGES = (("de", "Deutsch"), ("en", "English"), ("fr", "Français"))
+
+    room = models.OneToOneField(
+        "rooms.Room", on_delete=models.CASCADE, related_name="qb_language"
+    )
+    language = models.CharField(max_length=8, choices=LANGUAGES)
+
+    def __str__(self):
+        return f"room {self.room_id}: {self.language}"

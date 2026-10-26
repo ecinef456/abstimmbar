@@ -29,6 +29,7 @@ import {
 } from "../api";
 import { localizedText, RichText, stripHtml } from "@basicbar/ui";
 import { mathHtml, MathText } from "../math";
+import i18n from "../i18n";
 import LikertResult from "../components/LikertResult";
 import { useTourSignal } from "../tour/signals";
 import ResultBar, { type BarState } from "../results/ResultBar";
@@ -310,6 +311,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       );
       setOpenOnShow(setData.open_on_show);
       setPresentResultsAfter(setData.present_results_after);
+      // quizbar (fork): the room's language, already for the start dialog.
+      api.getRoom(setData.room).then((room) => setFetchedRoomLanguage(room.language), () => {});
       // Offer the start dialog whenever we'd otherwise touch stored answers:
       // either there are results and no run is active, OR the run we'd resume
       // already carries answers (presenter left it unfinished) — so archiving
@@ -350,6 +353,20 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     : indexRef.current;
 
   const activeKind = state?.question?.kind;
+
+  // quizbar (fork): present in the room's language (phones use it too), and
+  // give the presenter their own UI language back when leaving.
+  const [fetchedRoomLanguage, setFetchedRoomLanguage] = useState<string>("");
+  const roomLanguage = state?.room?.language ?? fetchedRoomLanguage;
+  const ownLanguage = useRef(i18n.resolvedLanguage ?? i18n.language);
+  useEffect(() => {
+    if (!roomLanguage) return;
+    void i18n.changeLanguage(roomLanguage);
+    return () => {
+      void i18n.changeLanguage(ownLanguage.current);
+    };
+  }, [roomLanguage]);
+
   // Word-cloud editing and the AI views are expert-mode tools; easy mode
   // shows the plain cloud only.
   const expert = !whoAi.easy;

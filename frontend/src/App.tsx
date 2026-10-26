@@ -26,7 +26,7 @@ import Footer from "./components/Footer";
 import GenerationStatusBar from "./components/GenerationStatusBar";
 import HelpMenu from "./components/HelpMenu";
 import JoinByCode from "./components/JoinByCode";
-import { applyLangPref } from "./i18n";
+import { applyLangPref, type LangPref } from "./i18n";
 import { EmptyState, SegmentedControl } from "./components/ui";
 import RoomsPage from "./pages/RoomsPage";
 import { useTour } from "./tour/TourController";
@@ -131,7 +131,7 @@ function UserMenu({ whoami }: { whoami: Whoami }) {
           <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
           {/* Picks go through applyLangPref: abstimmbar_lang stays authoritative at
               startup, and signed-in picks are also saved on the account. */}
-          <LanguageOptions onChange={(lang) => applyLangPref(lang as "de" | "en", true)} />
+          <LanguageOptions onChange={(lang) => applyLangPref(lang as LangPref, true)} />
           <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
           <AppearanceControl />
           <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
@@ -451,7 +451,7 @@ export default function App() {
               >
                 {t("Sign in")}
               </a>
-              <PreferencesMenu onLanguageChange={(lang) => applyLangPref(lang as "de" | "en")} />
+              <PreferencesMenu onLanguageChange={(lang) => applyLangPref(lang as LangPref)} />
             </div>
           )}
         </div>

@@ -1,0 +1,643 @@
+# French translations for the Abstimmbar participant page (quizbar fork).
+msgid ""
+msgstr ""
+"Project-Id-Version: abstimmbar\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-25 22:53+0200\n"
+"PO-Revision-Date: 2026-07-10 08:06+0000\n"
+"Last-Translator: Abstimmbar\n"
+"Language-Team: French\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: live/templates/live/home.html:4
+msgid "Abstimmbar — join"
+msgstr "Abstimmbar — participer"
+
+#: live/templates/live/home.html:8
+msgid "Join a poll"
+msgstr "Rejoindre un sondage"
+
+#: live/templates/live/home.html:9
+msgid "Enter the code shown on the wall."
+msgstr "Saisissez le code affiché à l'écran."
+
+#: live/templates/live/home.html:12
+msgid "e.g. tiger-komet-radio"
+msgstr "p. ex. tiger-komet-radio"
+
+#: live/templates/live/home.html:13
+msgid "Room code"
+msgstr "Code de la salle"
+
+#: live/templates/live/home.html:14
+msgid "Continue"
+msgstr "Continuer"
+
+#: live/templates/live/not_found.html:4 live/templates/live/not_found.html:8
+msgid "Room not found"
+msgstr "Salle introuvable"
+
+#: live/templates/live/not_found.html:9
+msgid "Check the code and try again."
+msgstr "Veuillez vérifier le code et réessayer."
+
+#: live/templates/live/not_found.html:11
+msgid "Enter a code"
+msgstr "Saisissez un code"
+
+#: live/templates/live/participant.html:15
+msgid "Language"
+msgstr "Langue"
+
+#: live/templates/live/participant.html:20
+msgid "Deutsch"
+msgstr "Deutsch"
+
+#: live/templates/live/participant.html:22
+msgid "English"
+msgstr "English"
+
+#: live/templates/live/participant.html:27
+msgid "Menu"
+msgstr "Menu"
+
+#: live/templates/live/participant.html:32
+#: live/templates/live/participant.html:128
+msgid "My answers"
+msgstr "Mes réponses"
+
+#: live/templates/live/participant.html:37
+msgid "Connecting …"
+msgstr "Connexion …"
+
+#: live/templates/live/participant.html:41
+#: live/templates/live/participant.html:201
+msgid "The vote has not started yet."
+msgstr "Le vote n'a pas encore commencé."
+
+#: live/templates/live/participant.html:42
+msgid "Keep this page open — it will start automatically."
+msgstr "Gardez cette page ouverte — tout démarrera automatiquement."
+
+#: live/templates/live/participant.html:51
+#: live/templates/live/participant.html:141
+#: live/templates/live/participant.html:172
+msgid "Your term …"
+msgstr "Votre terme …"
+
+#: live/templates/live/participant.html:51
+#: live/templates/live/participant.html:67
+#: live/templates/live/participant.html:141
+#: live/templates/live/participant.html:143
+#: live/templates/live/participant.html:172
+#: live/templates/live/participant.html:174
+msgid "Answer"
+msgstr "Réponse"
+
+#: live/templates/live/participant.html:52
+#: live/templates/live/participant.html:69
+#: live/templates/live/participant.html:145
+#: live/templates/live/participant.html:176
+#: live/templates/live/participant.html:212
+msgid "Submit"
+msgstr "Envoyer"
+
+#: live/templates/live/participant.html:55
+msgid ""
+"You can submit several terms — but each only once. Use × to withdraw an "
+"entry again."
+msgstr ""
+"Vous pouvez envoyer plusieurs termes — mais chacun une seule fois. Utilisez "
+"× pour retirer une entrée."
+
+#: live/templates/live/participant.html:63
+msgid "Done"
+msgstr "Terminé"
+
+#: live/templates/live/participant.html:67
+#: live/templates/live/participant.html:143
+#: live/templates/live/participant.html:174
+msgid "Your answer …"
+msgstr "Votre réponse …"
+
+#: live/templates/live/participant.html:71
+#: live/templates/live/participant.html:147
+#: live/templates/live/participant.html:178
+msgid "Submit answer"
+msgstr "Envoyer la réponse"
+
+#: live/templates/live/participant.html:81
+msgid "Your answer was received."
+msgstr "Votre réponse a été reçue."
+
+#: live/templates/live/participant.html:82
+msgid "Waiting for the next question."
+msgstr "En attente de la prochaine question."
+
+#: live/templates/live/participant.html:85
+msgid "Evaluation of your answer"
+msgstr "Évaluation de votre réponse"
+
+#: live/templates/live/participant.html:93
+msgid "Voting is closed."
+msgstr "Le vote est clos."
+
+#: live/templates/live/participant.html:94
+msgid "You can see the results on the screen."
+msgstr "Vous pouvez voir les résultats à l'écran."
+
+#: live/templates/live/participant.html:119
+msgid "The vote has ended."
+msgstr "Le vote est terminé."
+
+#: live/templates/live/participant.html:120
+msgid "View my answers"
+msgstr "Voir mes réponses"
+
+#: live/templates/live/participant.html:130
+msgid "The presentation is paused – more questions may follow."
+msgstr "La présentation est en pause – d'autres questions peuvent suivre."
+
+#: live/templates/live/participant.html:129
+msgid "You have not answered anything in this round yet."
+msgstr "Vous n'avez encore rien répondu dans cette série."
+
+#: live/templates/live/participant.html:130
+msgid "Back"
+msgstr "Retour"
+
+#: live/templates/live/participant.html:149
+#: live/templates/live/participant.html:207
+msgid "Next"
+msgstr "Suivant"
+
+#: live/templates/live/participant.html:155
+msgid "You can close this page now."
+msgstr "Vous pouvez maintenant fermer cette page."
+
+#: live/templates/live/participant.html:161
+msgid "Previous question"
+msgstr "Question précédente"
+
+#: live/templates/live/participant.html
+msgid "Back to the questions"
+msgstr "Retour aux questions"
+
+#: live/templates/live/participant.html:164
+msgid "Next question"
+msgstr "Question suivante"
+
+#: live/templates/live/participant.html:202
+msgid "Almost there — look at the screen."
+msgstr "Presque — regardez l'écran."
+
+#: live/templates/live/participant.html:203
+msgid "{n}s left"
+msgstr "encore {n} s"
+
+#: live/templates/live/participant.html:204
+msgid "Correct"
+msgstr "Juste"
+
+#: live/templates/live/participant.html
+msgid "Correct!"
+msgstr "Juste !"
+
+#: live/templates/live/participant.html:205
+msgid "Not quite right."
+msgstr "Pas tout à fait."
+
+#: live/templates/live/participant.html:206
+msgid "Answer saved."
+msgstr "Réponse enregistrée."
+
+#: live/templates/live/participant.html:208
+msgid "See results"
+msgstr "Voir les résultats"
+
+#: live/templates/live/participant.html:209
+msgid "Done! {right} of {total} auto-graded questions correct."
+msgstr ""
+"Terminé ! {right} sur {total} questions corrigées automatiquement sont "
+"justes."
+
+#: live/templates/live/participant.html:210
+msgid "Done! You answered all {total} questions."
+msgstr "Terminé ! Vous avez répondu aux {total} questions."
+
+#: live/templates/live/participant.html:211
+msgid "Add"
+msgstr "Ajouter"
+
+#: live/templates/live/participant.html:213
+msgid "You already submitted this term."
+msgstr "Vous avez déjà envoyé ce terme."
+
+#: live/templates/live/participant.html:214
+msgid "You have reached the maximum number of terms."
+msgstr "Vous avez atteint le nombre maximal de termes."
+
+#: live/templates/live/participant.html:215
+msgid "Remove term “{word}”"
+msgstr "Retirer le terme « {word} »"
+
+#: live/templates/live/participant.html:216
+msgid "Your answer: "
+msgstr "Votre réponse : "
+
+#: live/templates/live/participant.html:217
+msgid "Not answered."
+msgstr "Pas de réponse."
+
+#: live/templates/live/participant.html:220
+msgid "You already answered this question."
+msgstr "Vous avez déjà répondu à cette question."
+
+#: live/templates/live/participant.html:218
+msgid "your choice"
+msgstr "votre choix"
+
+#: live/templates/live/participant.html:219
+msgid "{used} of {total} points allocated"
+msgstr "{used} points attribués sur {total}"
+
+#: live/templates/live/participant.html:220
+msgid "lower a value to reallocate points"
+msgstr "baissez une valeur pour redistribuer des points"
+
+#: live/templates/live/participant.html:221
+msgid "Drag the items or use the arrows to sort them."
+msgstr "Faites glisser les éléments ou utilisez les flèches pour les trier."
+
+#: live/templates/live/participant.html:222
+msgid "correct order"
+msgstr "ordre correct"
+
+#: live/templates/live/participant.html:223
+msgid "correctly placed"
+msgstr "bien placé"
+
+#: live/templates/live/participant.html:224
+msgid "Your order"
+msgstr "Votre ordre"
+
+#: live/templates/live/participant.html:225
+msgid "Correct order"
+msgstr "Ordre correct"
+
+#: live/templates/live/participant.html:226
+msgid "All correct!"
+msgstr "Tout est juste !"
+
+#: live/templates/live/participant.html:227
+msgid "Move up"
+msgstr "Monter"
+
+#: live/templates/live/participant.html:228
+msgid "Move down"
+msgstr "Descendre"
+
+#: live/templates/live/participant.html:229
+msgid "you"
+msgstr "vous"
+
+#: live/templates/live/participant.html:230
+msgid "Question {i} of {n}"
+msgstr "Question {i} sur {n}"
+
+#: live/templates/live/participant.html:231
+msgid "Time is up."
+msgstr "Le temps est écoulé."
+
+#: live/templates/live/participant.html:210
+msgid "Finish"
+msgstr "Terminer"
+
+#: live/templates/live/participant.html
+msgid "Model solution"
+msgstr "Solution type"
+
+#: live/templates/live/participant.html
+msgid "Start over"
+msgstr "Recommencer"
+
+#: live/templates/live/participant.html
+msgid "All questions of this self-check"
+msgstr "Toutes les questions de cet autotest"
+
+#: live/templates/live/participant.html
+msgid "{right} of {total} correct."
+msgstr "{right} sur {total} juste(s)."
+
+#: live/templates/live/participant.html
+msgid "You worked through all {total} questions."
+msgstr "Vous avez traité les {total} questions."
+
+#: live/templates/live/participant.html
+msgid "This self-check is not available."
+msgstr "Cet autotest n'est pas disponible."
+
+#: live/templates/live/participant.html
+msgid "Checking …"
+msgstr "Vérification …"
+
+#: live/templates/live/participant.html
+msgid "AI assessment"
+msgstr "Évaluation par l'IA"
+
+#: live/templates/live/participant.html
+msgid ""
+"AI assessment is not available right now — only the model solution is shown."
+msgstr ""
+"L'évaluation par l'IA n'est pas disponible pour le moment — seule la "
+"solution type est affichée."
+
+#: live/templates/live/participant.html
+msgid "You have one answer only and cannot change it afterwards."
+msgstr "Vous n'avez qu'une seule réponse et ne pourrez plus la modifier."
+
+#: live/templates/live/participant.html
+msgid "Fill in your terms and submit them together."
+msgstr "Remplissez vos termes et envoyez-les ensemble."
+
+#: live/templates/live/participant.html
+msgid "Submit all"
+msgstr "Tout envoyer"
+
+#: live/templates/live/participant.html
+msgid "Clear field"
+msgstr "Vider le champ"
+
+#: live/templates/live/participant.html
+msgid "neutral"
+msgstr "neutre"
+
+#: live/templates/live/participant.html
+msgid "Abstentions"
+msgstr "Abstentions"
+
+#: live/templates/live/participant.html
+msgid "Add a term"
+msgstr "Ajouter un terme"
+
+#: live/templates/live/participant.html
+msgid "Add a subterm to “{term}”"
+msgstr "Ajouter un sous-terme à « {term} »"
+
+#: live/templates/live/participant.html
+msgid "Remove your term"
+msgstr "Retirer votre terme"
+
+#: live/templates/live/participant.html
+msgid "Cannot be removed while terms hang below it."
+msgstr "Impossible de le retirer tant que d'autres termes en dépendent."
+
+#: live/templates/live/participant.html
+msgid "1 term left"
+msgstr "encore 1 terme"
+
+#: live/templates/live/participant.html
+msgid "{n} terms left"
+msgstr "encore {n} termes"
+
+#: live/templates/live/participant.html
+msgid "You have added all your terms. Remove one of yours to add another."
+msgstr ""
+"Vous avez ajouté tous vos termes. Retirez-en un pour en ajouter un autre."
+
+#: live/templates/live/participant.html
+msgid "Tap + to add a term below another one."
+msgstr "Touchez + pour ajouter un terme sous un autre."
+
+#: live/templates/live/participant.html
+msgid "Term"
+msgstr "Terme"
+
+#: live/templates/live/participant.html
+msgid "Description (optional)"
+msgstr "Description (facultative)"
+
+#: live/templates/live/participant.html
+msgid "Maximum depth reached"
+msgstr "Profondeur maximale atteinte"
+
+#: live/templates/live/participant.html
+msgid "Cancel"
+msgstr "Annuler"
+
+#: live/templates/live/participant.html
+msgid "You already added this term here."
+msgstr "Vous avez déjà ajouté ce terme ici."
+
+#: live/templates/live/participant.html
+msgid "The mind map is full."
+msgstr "La carte mentale est pleine."
+
+#: live/templates/live/participant.html
+msgid "This term no longer exists."
+msgstr "Ce terme n'existe plus."
+
+#: live/templates/live/participant.html
+msgid "That did not work. Please try again."
+msgstr "Cela n'a pas fonctionné. Veuillez réessayer."
+
+#: live/templates/live/participant.html
+msgid "Voting is closed — you can still look at the shared mind map."
+msgstr ""
+"Le vote est clos — vous pouvez encore consulter la carte mentale commune."
+
+#: live/templates/live/participant.html
+msgid "No terms yet — add the first one!"
+msgstr "Pas encore de termes — ajoutez le premier !"
+
+#: live/templates/live/participant.html
+msgid "No terms were added."
+msgstr "Aucun terme n'a été ajouté."
+
+#: live/templates/live/participant.html
+msgid "Collapse “{term}”"
+msgstr "Replier « {term} »"
+
+#: live/templates/live/participant.html
+msgid "Expand “{term}”"
+msgstr "Déplier « {term} »"
+
+#: live/templates/live/participant.html
+msgid "added {n} times"
+msgstr "ajouté {n} fois"
+
+#: live/templates/live/participant.html
+msgid "There are no questions to answer here."
+msgstr "Il n'y a pas de questions auxquelles répondre ici."
+
+#: live/templates/live/participant.html
+msgid "Give your points to the entries you find most important."
+msgstr "Donnez vos points aux entrées que vous trouvez les plus importantes."
+
+#: live/templates/live/participant.html
+msgid "Rate the entries: thumbs up or thumbs down."
+msgstr "Évaluez les entrées : pouce levé ou pouce baissé."
+
+#: live/templates/live/participant.html
+msgid "1 point left"
+msgstr "encore 1 point"
+
+#: live/templates/live/participant.html
+msgid "{n} points left"
+msgstr "encore {n} points"
+
+#: live/templates/live/participant.html
+msgid "No points left"
+msgstr "Plus de points"
+
+#: live/templates/live/participant.html
+msgid "1 rating left"
+msgstr "encore 1 évaluation"
+
+#: live/templates/live/participant.html
+msgid "{n} ratings left"
+msgstr "encore {n} évaluations"
+
+#: live/templates/live/participant.html
+msgid "No ratings left"
+msgstr "Plus d'évaluations"
+
+#: live/templates/live/participant.html
+msgid "Give a point"
+msgstr "Donner un point"
+
+#: live/templates/live/participant.html
+msgid "Take back a point"
+msgstr "Reprendre un point"
+
+#: live/templates/live/participant.html
+msgid "Nothing to remove yet."
+msgstr "Rien à retirer pour le moment."
+
+#: live/templates/live/participant.html
+msgid "Your points: {n}"
+msgstr "Vos points : {n}"
+
+#: live/templates/live/participant.html
+msgid "Only one point per entry."
+msgstr "Un seul point par entrée."
+
+#: live/templates/live/participant.html
+msgid "Like"
+msgstr "J'aime"
+
+#: live/templates/live/participant.html
+msgid "Dislike"
+msgstr "Je n'aime pas"
+
+#: live/templates/live/participant.html
+msgid "Take back your rating"
+msgstr "Retirer votre évaluation"
+
+#: live/templates/live/participant.html
+msgid "Total {n}"
+msgstr "Total {n}"
+
+#: live/templates/live/participant.html
+msgid "Total: {up} likes, {down} dislikes"
+msgstr "Total : {up} « j'aime », {down} « je n'aime pas »"
+
+#: live/templates/live/participant.html
+msgid "The rating has not started yet."
+msgstr "L'évaluation n'a pas encore commencé."
+
+#: live/templates/live/participant.html
+msgid "The rating is in progress — terms cannot be added or removed now."
+msgstr ""
+"L'évaluation est en cours — impossible d'ajouter ou de retirer des termes "
+"maintenant."
+
+#: live/templates/live/participant.html
+msgid "This term has already been rated and cannot be removed."
+msgstr "Ce terme a déjà été évalué et ne peut plus être retiré."
+
+#: live/templates/live/participant.html
+msgid "Choose a field"
+msgstr "Choisissez un champ"
+
+#: live/templates/live/participant.html
+msgid "Choose a category"
+msgstr "Choisissez une catégorie"
+
+#: live/templates/live/participant.html
+msgid "Title"
+msgstr "Titre"
+
+#: live/templates/live/participant.html
+msgid "Add card"
+msgstr "Ajouter une carte"
+
+#: live/templates/live/participant.html
+msgid "You have reached the maximum number of cards."
+msgstr "Vous avez atteint le nombre maximal de cartes."
+
+#: live/templates/live/participant.html
+msgid "Your cards ({n} of {max})"
+msgstr "Vos cartes ({n} sur {max})"
+
+#: live/templates/live/participant.html
+msgid "Colour {n}"
+msgstr "Couleur {n}"
+
+#: live/templates/live/participant.html
+msgid "between {a} and {b}"
+msgstr "entre {a} et {b}"
+
+#: live/templates/live/participant.html
+msgid "Delete card “{title}”"
+msgstr "Supprimer la carte « {title} »"
+
+#: live/templates/live/participant.html
+msgid "Card added."
+msgstr "Carte ajoutée."
+
+#: live/templates/live/participant.html
+msgid "Field and category stay selected."
+msgstr "Le champ et la catégorie restent sélectionnés."
+
+#: live/templates/live/participant.html
+msgid "The field stays selected."
+msgstr "Le champ reste sélectionné."
+
+#: live/templates/live/participant.html
+msgid "You have not added any cards yet."
+msgstr "Vous n'avez encore ajouté aucune carte."
+
+#: live/templates/live/participant.html
+msgid "Give your points to the cards you find most important."
+msgstr "Donnez vos points aux cartes que vous trouvez les plus importantes."
+
+#: live/templates/live/participant.html
+msgid "Rate the cards: thumbs up or thumbs down."
+msgstr "Évaluez les cartes : pouce levé ou pouce baissé."
+
+#: live/templates/live/participant.html
+msgid "Your card"
+msgstr "Votre carte"
+
+#: live/templates/live/participant.html
+msgid "Summary"
+msgstr "Résumé"
+
+#: live/templates/live/participant.html
+msgid "This card is no longer available."
+msgstr "Cette carte n'est plus disponible."
+
+#: live/templates/live/participant.html
+msgid "The rating is in progress — cards cannot be added or removed now."
+msgstr ""
+"L'évaluation est en cours — impossible d'ajouter ou de retirer des cartes "
+"maintenant."
+
+#: live/templates/live/participant.html
+msgid "Only one point per card."
+msgstr "Un seul point par carte."

@@ -20,6 +20,9 @@ multi-line note must use {% comment %} or it renders as text.)
               style="width:100%;margin:0;border:0;border-radius:0;min-height:0;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>{% trans "Deutsch" %}</span>{% if LANGUAGE_CODE|slice:":2" == "de" %}<svg class="ic" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--brand-strong)" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{% endif %}</button>
       <button id="lang-en" type="button"{% if LANGUAGE_CODE|slice:":2" == "en" %} aria-current="true"{% endif %}
               style="width:100%;margin:0;border:0;border-radius:0;min-height:0;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>{% trans "English" %}</span>{% if LANGUAGE_CODE|slice:":2" == "en" %}<svg class="ic" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--brand-strong)" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{% endif %}</button>
+      {# quizbar (fork): French UI. #}
+      <button id="lang-fr" type="button"{% if LANGUAGE_CODE|slice:":2" == "fr" %} aria-current="true"{% endif %}
+              style="width:100%;margin:0;border:0;border-radius:0;min-height:0;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Français</span>{% if LANGUAGE_CODE|slice:":2" == "fr" %}<svg class="ic" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--brand-strong)" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{% endif %}</button>
     </div>
   </div>
   {# ⋮: review my own answers (#20); shown only once something is answered. #}
@@ -2639,6 +2642,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   }
   document.getElementById("lang-de").addEventListener("click", () => setLanguage("de"));
   document.getElementById("lang-en").addEventListener("click", () => setLanguage("en"));
+  document.getElementById("lang-fr").addEventListener("click", () => setLanguage("fr"));
 
   // Live stream. EventSource reconnects on its own after network errors, and
   // the first snapshot of a new connection resyncs us. That is not enough

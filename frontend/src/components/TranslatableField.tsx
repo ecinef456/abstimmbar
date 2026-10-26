@@ -11,12 +11,12 @@
 import { type ReactNode } from "react";
 import {
   TranslatableField as BaseTranslatableField,
+  getDefaultContentLang,
+  isEmptyHtml,
   localizedMap,
-  setLocalizedLang,
   type LocalizedText,
 } from "@basicbar/ui";
 import { RichTextEditor } from "@basicbar/ui/rich-text-editor";
-import { useEasyMode } from "../App";
 import { api } from "../api";
 
 /** Rich-text image upload for the shared editor: stores the file in our media
@@ -60,6 +60,17 @@ interface TranslatableFieldProps {
   onTranslated?: (lang: string, text: string) => void;
 }
 
+/** quizbar (fork): content is authored in ONE language — the room's — so
+ *  every field edits a single value, without DE/EN tabs. It lives in the
+ *  canonical column; editing clears the other language columns so no stale
+ *  "translation" can ever win over it when a viewer's UI language differs.
+ *  A field that so far only has text in another language shows that text. */
+function singleValue(map: Partial<Record<string, string>>, canonical: string, rich: boolean): string {
+  const filled = (v: string | undefined) => !!v && (rich ? !isEmptyHtml(v) : !!v.trim());
+  if (filled(map[canonical])) return map[canonical] ?? "";
+  return Object.values(map).find(filled) ?? map[canonical] ?? "";
+}
+
 export default function TranslatableField({
   value,
   onChange,
@@ -67,18 +78,29 @@ export default function TranslatableField({
   inputClassName = "",
   onActiveLangChange,
   className = "",
+  stale: _stale,
+  onMarkSynced: _onMarkSynced,
+  onTranslated: _onTranslated,
   ...rest
 }: TranslatableFieldProps) {
-  const easyMode = useEasyMode();
+  const canonical = getDefaultContentLang();
+  const map = localizedMap(value);
   return (
     <BaseTranslatableField
       {...rest}
-      // Space the label/language-tab row off the input so the input's focus
-      // ring doesn't crowd the DE/EN tags above it.
       className={`space-y-1.5 ${className}`.trim()}
-      values={localizedMap(value)}
-      onChange={(lang, text) => onChange(setLocalizedLang(value, lang, text))}
-      singleLanguage={easyMode}
+      values={{ [canonical]: singleValue(map, canonical, variant === "rich") }}
+      onChange={(_lang, text) =>
+        onChange(
+          Object.fromEntries(
+            [...new Set([...Object.keys(map), canonical])].map((lang) => [
+              lang,
+              lang === canonical ? text : "",
+            ]),
+          ),
+        )
+      }
+      singleLanguage
       format={variant === "rich" ? "html" : "text"}
       inputClass={`${INPUT_CLASS} ${inputClassName}`.trim()}
       labelClassName="text-sm font-medium text-slate-700 dark:text-slate-300"

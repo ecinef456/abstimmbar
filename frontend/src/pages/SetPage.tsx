@@ -2047,9 +2047,9 @@ export default function SetPage() {
               // #91: a persisted stale translation (one language edited after
               // the last sync) — surfaced here so it's visible without opening
               // the question.
-              const hasStaleTranslation = Object.values(
-                question.translation_stale ?? {},
-              ).some((langs) => langs.length > 0);
+              // quizbar (fork): content is single-language, so there are no
+              // translations that could be outdated.
+              const hasStaleTranslation = false;
               // Easy mode (#52): before/after is a Pro feature — hide the
               // action (existing pairs still render/work).
               const canAddAfter =

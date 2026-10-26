@@ -35,6 +35,9 @@ export interface Whoami {
   example_set_id?: number | null;
 }
 
+/** quizbar (fork): a room's language ("" = each viewer's own). */
+export type RoomLanguage = "" | "de" | "en" | "fr";
+
 export interface Room {
   id: number;
   code: string;
@@ -46,6 +49,8 @@ export interface Room {
   presentation_corner: PresentationCorner;
   /** Sanitized HTML shown to participants once the vote is finished (#24). */
   closing_info: LocalizedText;
+  /** quizbar (fork): language of phones and beamer for this room. */
+  language: RoomLanguage;
   is_favorite: boolean;
   is_archived: boolean;
   last_used_at: string | null;
@@ -890,6 +895,7 @@ export const api = {
     show_qr_in_presentation?: boolean;
     show_code_in_presentation?: boolean;
     presentation_corner?: PresentationCorner;
+    language?: RoomLanguage;
   }) =>
     request<Room>("/api/rooms/", { method: "POST", body: JSON.stringify(data) }),
   updateRoom: (id: number, data: Partial<Room>) =>
@@ -1180,6 +1186,8 @@ export interface LiveState {
     show_qr?: boolean;
     show_code?: boolean;
     corner?: PresentationCorner;
+    /** quizbar (fork): the beamer UI switches to this language. */
+    language?: RoomLanguage;
   };
   phase: "idle" | "lobby" | "preview" | "open" | "closed" | "results" | "finished";
   mode?: "live" | "self_paced";

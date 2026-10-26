@@ -1168,7 +1168,8 @@ class ParticipantI18nTests(LiveTestCase):
         self.assertEqual(resp.cookies[settings.LANGUAGE_COOKIE_NAME].value, "en")
 
     def test_participant_home_ignores_unsupported_lang(self):
-        resp = self.client.get("/p/?lang=fr", HTTP_ACCEPT_LANGUAGE="de")
+        # quizbar (fork): fr is supported here, so test with another code.
+        resp = self.client.get("/p/?lang=xx", HTTP_ACCEPT_LANGUAGE="de")
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode()
         self.assertIn('<html lang="de">', html)

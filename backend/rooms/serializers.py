@@ -18,6 +18,7 @@ from rest_framework import serializers
 from common.i18n_fields import LANGS, TranslatedMapMixin
 from common.serializers import TranslationSyncMixin
 from quizbar import justifications as quizbar_justifications
+from quizbar import languages as quizbar_languages
 
 from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Room, Section, UploadedImage
@@ -71,6 +72,11 @@ class RoomSerializer(TranslatedMapMixin, serializers.ModelSerializer):
     is_archived = serializers.SerializerMethodField()
     last_used_at = serializers.SerializerMethodField()
     is_lti = serializers.SerializerMethodField()
+    # quizbar (fork): the room's language ("" = each viewer's own); stored in
+    # quizbar's own table, added on read in to_representation.
+    language = serializers.ChoiceField(
+        choices=quizbar_languages.CHOICES, required=False, allow_blank=True, write_only=True
+    )
 
     class Meta:
         model = Room
@@ -82,9 +88,28 @@ class RoomSerializer(TranslatedMapMixin, serializers.ModelSerializer):
             "created_by_name", "updated_by_name",
             "owner_name", "is_owner", "is_member", "owner_count",
             "is_favorite", "is_archived",
-            "last_used_at", "is_lti",
+            "last_used_at", "is_lti", "language",
         ]
         read_only_fields: ClassVar = ["code"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["language"] = quizbar_languages.room_language(instance)
+        return data
+
+    def create(self, validated_data):
+        language = validated_data.pop("language", None)
+        room = super().create(validated_data)
+        if language is not None:
+            quizbar_languages.set_room_language(room, language)
+        return room
+
+    def update(self, instance, validated_data):
+        language = validated_data.pop("language", None)
+        room = super().update(instance, validated_data)
+        if language is not None:
+            quizbar_languages.set_room_language(room, language)
+        return room
 
     def get_created_by_name(self, obj):
         return _user_name(obj.created_by)

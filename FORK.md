@@ -58,6 +58,28 @@ Code: `backend/quizbar/` (tables `OptionJustification`,
 hooks in `rooms/serializers.py`, `rooms/transfer.py`, `live/state.py`,
 `live/views.py`, `participant.html`, `QuestionPage.tsx`, `PresentPage.tsx`.
 
+### One content language per room, French interface
+
+- **No more DE/EN tabs.** Every text (questions, answers, sets, rooms) is
+  written once, in a single field. It is stored in the canonical language
+  column; editing a field clears the other language's column, so an old
+  "translation" can never show instead of it. Text that so far existed
+  only in the other language is shown (and moved over on the next save).
+- **Room language** (room settings): Deutsch, English, Français, or
+  Automatic (each person's own language, as upstream). It decides the
+  language of the participant pages and of the beamer while presenting
+  that room; a participant's own pick in the 🌐 menu still wins.
+- **French** as a third interface language: the whole app
+  (`frontend/src/locales/fr/translation.json`) and the participant pages
+  (`backend/locale/fr/`). French is an interface language only, so
+  `settings.LANGUAGES` (which also defines the content columns) stays de/en;
+  `quizbar.languages.ParticipantLanguageMiddleware` adds fr for `/p/`, `/c/`
+  and `/r/`.
+
+Code: `components/TranslatableField.tsx`, `quizbar/languages.py` (table
+`RoomLanguage`), hooks in `RoomSerializer`, `live/state.py`, `RoomPage.tsx`,
+`PresentPage.tsx`, `i18n.ts`, `participant.html`.
+
 ### A–Z as the default sort
 
 Rooms and question sets open sorted by title; numbers sort naturally

@@ -14,6 +14,7 @@ import {
   type PresentationCorner,
   type QuestionSet,
   type Room,
+  type RoomLanguage,
   type RoomOwner,
 } from "../api";
 import { Pager } from "../components/Pager";
@@ -178,6 +179,8 @@ export interface RoomSettings {
   show_code_in_presentation: boolean;
   presentation_corner: PresentationCorner;
   closing_info: LocalizedText;
+  /** quizbar (fork). */
+  language: RoomLanguage;
 }
 
 export const NEW_ROOM_DEFAULTS: RoomSettings = {
@@ -188,7 +191,15 @@ export const NEW_ROOM_DEFAULTS: RoomSettings = {
   show_code_in_presentation: false,
   presentation_corner: "bottom-right",
   closing_info: "",
+  language: "",
 };
+
+// quizbar (fork): language names are shown in their own language.
+const LANGUAGE_OPTIONS: { value: RoomLanguage; label: string }[] = [
+  { value: "de", label: "Deutsch" },
+  { value: "en", label: "English" },
+  { value: "fr", label: "Français" },
+];
 
 const CORNER_OPTIONS: { value: PresentationCorner; label: string }[] = [
   { value: "top-left", label: "top left" },
@@ -234,6 +245,25 @@ export function RoomSettingsForm({
         value={draft.description}
         onChange={(description) => onChange({ description })}
       />
+      {/* quizbar (fork): one language per room, for phones and beamer. */}
+      <div>
+        <Field label={t("Room language")}>
+          <Select
+            value={draft.language}
+            onChange={(event) => onChange({ language: event.target.value as RoomLanguage })}
+          >
+            <option value="">{t("Automatic (each person's own language)")}</option>
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {t("Participants' phones and the beamer are shown in this language.")}
+        </p>
+      </div>
       <ProOnly easyMode={easyMode}>
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -562,6 +592,7 @@ export default function RoomPage() {
       show_code_in_presentation: room.show_code_in_presentation,
       presentation_corner: room.presentation_corner,
       closing_info: room.closing_info,
+      language: room.language ?? "",
     });
   }
 
@@ -594,6 +625,7 @@ export default function RoomPage() {
         show_code_in_presentation: room.show_code_in_presentation,
         presentation_corner: room.presentation_corner,
         closing_info: room.closing_info,
+        language: room.language ?? "",
       });
 
   function requestOpenSettings() {

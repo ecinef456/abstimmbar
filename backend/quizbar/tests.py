@@ -229,3 +229,61 @@ class FeedbackTests(Base):
         data = self.client.get(f"/api/live/check/{self.question_set.self_check_token}/").json()
         question = data["questions"][0]
         self.assertEqual(question["justifications"][str(self.right.pk)], "Because $2 + 2 = 4$.")
+
+
+class RoomLanguageTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+
+    def test_room_api_reads_and_writes_language(self):
+        self.assertEqual(self.client.get(f"/api/rooms/{self.room.pk}/").json()["language"], "")
+        resp = self.client.patch(
+            f"/api/rooms/{self.room.pk}/", {"language": "fr"}, content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.json()["language"], "fr")
+        self.assertEqual(build_payloads(self.room)["presenter"]["room"]["language"], "fr")
+        self.client.patch(
+            f"/api/rooms/{self.room.pk}/", {"language": ""}, content_type="application/json"
+        )
+        self.assertEqual(self.client.get(f"/api/rooms/{self.room.pk}/").json()["language"], "")
+
+    def test_invalid_language_rejected(self):
+        resp = self.client.patch(
+            f"/api/rooms/{self.room.pk}/", {"language": "xx"}, content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 400)
+
+
+class ParticipantLanguageTests(Base):
+    def page(self, cookie=None, **extra):
+        self.client.logout()  # also drops all cookies
+        if cookie:
+            self.client.cookies["django_language"] = cookie
+        return self.client.get(f"/p/{self.room.code}/", **extra)
+
+    def test_room_language_sets_page_language(self):
+        set_room_language = __import__("quizbar.languages", fromlist=["x"]).set_room_language
+        set_room_language(self.room, "fr")
+        html = self.page(HTTP_ACCEPT_LANGUAGE="de").content.decode()
+        self.assertIn('<html lang="fr">', html)
+        self.assertIn("Mes réponses", html)
+
+    def test_participant_pick_beats_room_language(self):
+        __import__("quizbar.languages", fromlist=["x"]).set_room_language(self.room, "fr")
+        self.assertIn('<html lang="en">', self.page(cookie="en").content.decode())
+
+    def test_lang_param_fr_sets_cookie(self):
+        resp = self.page(QUERY_STRING="lang=fr")
+        self.assertIn('<html lang="fr">', resp.content.decode())
+        self.assertEqual(resp.cookies["django_language"].value, "fr")
+
+    def test_browser_french_without_room_language(self):
+        html = self.page(HTTP_ACCEPT_LANGUAGE="fr-CH,fr;q=0.9,en;q=0.5").content.decode()
+        self.assertIn('<html lang="fr">', html)
+
+    def test_other_paths_untouched(self):
+        self.client.cookies["django_language"] = "fr"
+        resp = self.client.get("/api/whoami/")
+        self.assertNotEqual(resp.get("Content-Language"), "fr")
