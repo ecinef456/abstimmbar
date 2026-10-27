@@ -1966,6 +1966,69 @@ export interface LibraryEntry {
   };
 }
 
+/** quizbar (fork): statistics of one question (choice kinds). `correct`
+ *  is a share 0–1 (null: no correct answer / no answers). */
+export interface QuestionStat {
+  id: number;
+  position: number;
+  kind: QuestionKind;
+  text: LocalizedText;
+  answers: number;
+  correct: number | null;
+  options: { id: number; text: LocalizedText; is_correct: boolean; count: number }[];
+  /** Peer instruction: vote 1 (counts in option order). */
+  peer: { votes: number; counts: number[]; correct: number | null } | null;
+  confidence: { answers: number; average: number | null; right: number | null; wrong: number | null } | null;
+}
+
+export interface SetStat {
+  id: number;
+  type: "live_poll" | "self_paced" | "self_check";
+  title?: LocalizedText | string;
+  title_map?: LocalizedText;
+  questions: QuestionStat[];
+  runs: { id: number; date: string; votes: number }[];
+  run: number | "all" | null;
+  /** Distinct participants (self-check: completed attempts). */
+  participants: number;
+  answers: number;
+  correct: number | null;
+}
+
+export interface PrePostPair {
+  name: string;
+  pre: number;
+  post: number;
+  pre_correct: number | null;
+  post_correct: number | null;
+  questions: { pre_id: number; post_id: number; text: LocalizedText; pre: number | null; post: number | null }[];
+}
+
+export interface RoomStats {
+  room: number;
+  groups: { folder: number | null; title: string | null; sets: SetStat[]; pairs: PrePostPair[] }[];
+}
+
+/** quizbar (fork): GET a file (CSV, PDF) and return it with its name. */
+async function fetchFile(path: string, fallback: string): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
+    headers: { "X-CSRFToken": csrfToken() },
+  });
+  if (!response.ok) {
+    let detail = `${response.status}`;
+    try {
+      detail = JSON.stringify(await response.json());
+    } catch {
+      /* keep status code */
+    }
+    throw new Error(detail);
+  }
+  const blob = await response.blob();
+  const named = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
+  return { blob, filename: named?.[1] ?? fallback };
+}
+
 /** quizbar (fork): what to export as PDF (see the export dialog). */
 export type ExportRequest = {
   scope: "room" | "folder" | "library";
@@ -2080,6 +2143,14 @@ export const quizbar = {
   leaderboard: (runId: number, final = false) =>
     request<GameLeaderboard>(`/api/quizbar/game/runs/${runId}/leaderboard/${final ? "?final=1" : ""}`),
   /** Presenter key J: show/hide the active question's justifications. */
+  roomStats: (roomId: number, folder: string) =>
+    request<RoomStats>(`/api/quizbar/rooms/${roomId}/stats/?folder=${encodeURIComponent(folder)}`),
+  setStats: (setId: number, run: string) =>
+    request<SetStat>(`/api/quizbar/sets/${setId}/stats/?run=${encodeURIComponent(run)}`),
+  statsCsv: (roomId: number, folder: string, lang: string) =>
+    fetchFile(`/api/quizbar/rooms/${roomId}/stats/csv/?folder=${encodeURIComponent(folder)}&lang=${lang}`, "statistics.csv"),
+  statsPdf: (roomId: number, folder: string, lang: string) =>
+    fetchFile(`/api/quizbar/rooms/${roomId}/stats/pdf/?folder=${encodeURIComponent(folder)}&lang=${lang}`, "statistics.pdf"),
   /** Peer instruction (key D): keep vote 1, let the class vote again. */
   peerStart: (runId: number) =>
     request<{ status: string }>(`/api/quizbar/runs/${runId}/peer/`, { method: "POST" }),

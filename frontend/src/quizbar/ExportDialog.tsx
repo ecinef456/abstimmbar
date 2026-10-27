@@ -13,7 +13,7 @@ import { TRANSLATION_LANGS, type TranslationLang } from "./Translations";
 
 const LANG_NAMES: Record<TranslationLang, string> = { en: "English", de: "Deutsch", fr: "Français" };
 
-function download(blob: Blob, filename: string) {
+export function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

@@ -11,7 +11,19 @@ from live.models import Run
 from live.state import broadcast
 from rooms.models import QuestionSet, Room
 
-from . import course, export, folders, game, justifications, library, peer, selfcheck, typst_import
+from . import (
+    course,
+    export,
+    folders,
+    game,
+    justifications,
+    library,
+    peer,
+    report,
+    selfcheck,
+    stats,
+    typst_import,
+)
 from .models import LibraryEntry, LibraryTag, SetFolder, SetPlacement
 
 
@@ -371,6 +383,70 @@ def export_pdf(request):
     response = HttpResponse(payload, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="{name}"'
     response["Access-Control-Expose-Headers"] = "Content-Disposition"  # dev: other port
+    return response
+
+
+# -- statistics ----------------------------------------------------------------
+
+
+def _folder_scope(request, room):
+    folder = request.query_params.get("folder") or "all"
+    if folder in ("all", "none"):
+        return folder
+    try:
+        return _owned_folder(request.user, int(folder)).pk if room.qb_folders.filter(pk=int(folder)).exists() else "all"
+    except (TypeError, ValueError):
+        return "all"
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def room_stats(request, room_id):
+    """?folder=all|none|<id> → per folder: the sets' statistics (latest
+    run) and the PRE → POST pairs."""
+    room = _owned_room(request.user, room_id)
+    return Response(stats.room_stats(room, _folder_scope(request, room)))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def set_stats(request, set_id):
+    """?run=latest|all|<id> → one set's statistics question by question."""
+    question_set = _owned_set(request.user, set_id)
+    data = stats.set_stats(question_set, request.query_params.get("run") or "latest")
+    data["title"] = translated_map(question_set, "title")
+    return Response(data)
+
+
+def _report_lang(request, room):
+    from .languages import room_language
+
+    lang = request.query_params.get("lang") or room_language(room) or "en"
+    return lang if lang in ("en", "de", "fr") else "en"
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def room_stats_csv(request, room_id):
+    room = _owned_room(request.user, room_id)
+    folder, lang = _folder_scope(request, room), _report_lang(request, room)
+    response = HttpResponse(report.csv_bytes(room, folder, lang), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{report.csv_name(room, folder, lang)}"'
+    response["Access-Control-Expose-Headers"] = "Content-Disposition"
+    return response
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def room_stats_pdf(request, room_id):
+    room = _owned_room(request.user, room_id)
+    try:
+        name, pdf = report.pdf_bytes(room, _folder_scope(request, room), _report_lang(request, room))
+    except export.ExportError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{name}"'
+    response["Access-Control-Expose-Headers"] = "Content-Disposition"
     return response
 
 

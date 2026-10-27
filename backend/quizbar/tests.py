@@ -1558,3 +1558,65 @@ class PeerConfidenceTests(TestCase):
         self.assertEqual(self.client.post(url, bad, content_type="application/json").status_code, 400)
         summary = build_payloads(self.room)["presenter"]["qb_confidence"]
         self.assertEqual(summary, {"answers": 2, "average": 5.0, "right": 8.0, "wrong": 2.0})
+
+
+class RoomStatsTests(TestCase):
+    """Statistics view of a room / folder, CSV and PDF report."""
+
+    def setUp(self):
+        from live.models import ParticipantToken
+
+        from . import folders
+
+        self.owner = User.objects.create_user(username="rs")
+        self.room = Room.objects.create(title="Physics", owner=self.owner)
+        self.room.owners.add(self.owner)
+        self.client.force_login(self.owner)
+        self.week = folders.create_folder(self.room, "Week 1")
+        self.tokens = [ParticipantToken.objects.create(room=self.room) for _ in range(4)]
+        self.pre = self.make("1 - Activators PRE", right_votes=1)
+        self.post = self.make("4 - Activators POST", right_votes=3)
+        folders.place(self.pre, self.week)
+        folders.place(self.post, self.week)
+
+    def make(self, title, right_votes):
+        from live.models import Vote
+
+        question_set = QuestionSet.objects.create(room=self.room, title=title, title_de=title)
+        question = Question.objects.create(question_set=question_set, kind="single_choice", text="<p>Q $x$</p>")
+        right = AnswerOption.objects.create(question=question, text="r", is_correct=True, position=0)
+        wrong = AnswerOption.objects.create(question=question, text="w", position=1)
+        run = Run.objects.create(question_set=question_set, phase="finished")
+        for index, token in enumerate(self.tokens):
+            vote = Vote.objects.create(run=run, question=question, token=token)
+            vote.options.add(right if index < right_votes else wrong)
+        return question_set
+
+    def test_overview_pairs_detail(self):
+        data = self.client.get(f"/api/quizbar/rooms/{self.room.pk}/stats/?folder={self.week.pk}").json()
+        group = data["groups"][0]
+        self.assertEqual([s["id"] for s in group["sets"]], [self.pre.pk, self.post.pk])
+        self.assertEqual(group["sets"][0]["correct"], 0.25)
+        self.assertEqual(group["sets"][0]["participants"], 4)
+        pair = group["pairs"][0]
+        self.assertEqual((pair["pre_correct"], pair["post_correct"]), (0.25, 0.75))
+        self.assertEqual(len(pair["questions"]), 1)
+        detail = self.client.get(f"/api/quizbar/sets/{self.post.pk}/stats/?run=all").json()
+        self.assertEqual(detail["run"], "all")
+        self.assertEqual([o["count"] for o in detail["questions"][0]["options"]], [3, 1])
+
+    def test_csv_and_pdf(self):
+        response = self.client.get(f"/api/quizbar/rooms/{self.room.pk}/stats/csv/?folder=all&lang=de")
+        self.assertEqual(response.status_code, 200)
+        text = response.content.decode("utf-8-sig")
+        self.assertIn("Week 1;1 - Activators PRE", text)
+        self.assertIn(";25;A;", text)
+        response = self.client.get(f"/api/quizbar/rooms/{self.room.pk}/stats/pdf/?folder={self.week.pk}&lang=de")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        text = ExportTests.pdf_text(response.content)
+        self.assertIn("Vorher und nachher", text)
+        self.assertIn("75", text)
+        empty = Room.objects.create(title="Empty", owner=self.owner)
+        empty.owners.add(self.owner)
+        self.assertEqual(self.client.get(f"/api/quizbar/rooms/{empty.pk}/stats/pdf/").status_code, 400)

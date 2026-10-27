@@ -1418,5 +1418,21 @@
   "wrong answers {{avg}}": "mauvaises réponses {{avg}}",
   "quizbar_peer_hint_d": "Discuter à deux, puis revoter avec <1>D</1>",
   "Ask how sure students are": "Demander aux étudiant·e·s leur degré de certitude",
-  "After answering, phones show an optional row 0–10 (guessing … sure). The results show the average, separately for right and wrong answers. Peer instruction: press D on a question to let the class discuss and vote again.": "Après la réponse, les téléphones affichent une rangée facultative 0–10 (au hasard … sûr·e). Les résultats montrent la moyenne, séparément pour les bonnes et les mauvaises réponses. Peer instruction : appuyez sur D sur une question pour que la classe discute et revote."
+  "After answering, phones show an optional row 0–10 (guessing … sure). The results show the average, separately for right and wrong answers. Peer instruction: press D on a question to let the class discuss and vote again.": "Après la réponse, les téléphones affichent une rangée facultative 0–10 (au hasard … sûr·e). Les résultats montrent la moyenne, séparément pour les bonnes et les mauvaises réponses. Peer instruction : appuyez sur D sur une question pour que la classe discute et revote.",
+  "not run yet": "pas encore lancé",
+  "Before and after": "Avant et après",
+  "No question sets here.": "Aucun set de questions ici.",
+  "Date": "Date",
+  "Run": "Session",
+  "All runs combined": "Toutes les sessions réunies",
+  "Full results": "Tous les résultats",
+  "{{count}} participants_one": "{{count}} participant·e",
+  "{{count}} participants_other": "{{count}} participant·e·s",
+  "{{count}} completed attempts_one": "{{count}} passage terminé",
+  "{{count}} completed attempts_other": "{{count}} passages terminés",
+  "No single- or multiple-choice questions in this set.": "Pas de question à choix unique ou multiple dans ce set.",
+  "The statistics could not be loaded.": "Les statistiques n’ont pas pu être chargées.",
+  "Loading statistics …": "Chargement des statistiques …",
+  "PDF report": "Rapport PDF",
+  "Nothing to report yet: no answers to single- or multiple-choice questions here.": "Rien à rapporter : pas encore de réponses à des questions à choix unique ou multiple ici."
 }

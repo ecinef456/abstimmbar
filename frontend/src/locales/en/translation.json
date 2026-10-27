@@ -66,5 +66,9 @@
   "{{count}} questions_one": "{{count}} question",
   "{{count}} questions_other": "{{count}} questions",
   "{{count}} runs_one": "{{count}} run",
-  "{{count}} runs_other": "{{count}} runs"
+  "{{count}} runs_other": "{{count}} runs",
+  "{{count}} participants_one": "{{count}} participant",
+  "{{count}} participants_other": "{{count}} participants",
+  "{{count}} completed attempts_one": "{{count}} completed attempt",
+  "{{count}} completed attempts_other": "{{count}} completed attempts"
 }

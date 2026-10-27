@@ -379,8 +379,10 @@ class Markup:
 class Renderer:
     """Converts one export's texts; collects figures and math."""
 
-    def __init__(self, folder):
+    def __init__(self, folder, rel="../figures/", figure_height=FIGURE_HEIGHT):
         self.folder = Path(folder)
+        self.rel = rel  # figures/ seen from the .typ files
+        self.figure_height = figure_height
         self.figures = {}  # media path → file name in figures/
         self.math_items = []  # (kind, value)
         self.bad = set()  # Typst math that does not compile
@@ -458,7 +460,8 @@ class Renderer:
         self.figures[src] = name
         return name
 
-    def image_call(self, name, max_width, max_height, rel="../figures/"):
+    def image_call(self, name, max_width, max_height, rel=None):
+        rel = self.rel if rel is None else rel
         width = max_width
         try:
             from PIL import Image
@@ -523,7 +526,7 @@ class Renderer:
             if name:
                 if not markup.line_start:
                     markup.newline()
-                markup.raw("#align(center, " + self.image_call(name, FIGURE_WIDTH, FIGURE_HEIGHT) + ")")
+                markup.raw("#align(center, " + self.image_call(name, FIGURE_WIDTH, self.figure_height) + ")")
                 markup.newline()
         elif tag in ("ul", "ol"):
             self._list(node, markup, "- " if tag == "ul" else "+ ")

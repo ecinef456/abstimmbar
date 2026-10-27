@@ -310,6 +310,36 @@ Code: `quizbar/peer.py` (models `PeerRound`, `SetConfidence`,
 hooks in `live/state.py` and `live/results.py`; the phone's vote marker gets
 a round suffix (`participant.html`).
 
+### Statistics of a room or folder (CSV, PDF report)
+
+Room page → **Statistics** (works with "All sets", a folder, or "Not in a
+folder"):
+
+- **Left:** the sets, compact, each with its share of correct answers and
+  its questions underneath (one line each, with their %).
+- **Right, overview:** **before and after** — sets whose titles differ only
+  by *PRE* / *POST* (e.g. "1 – Activators PRE" / "4 – Activators POST") are
+  compared, overall and question by question (questions matched through
+  the library, else by position); then a table of all sets (date,
+  participants, % correct). Click a set for its **detail**: every question
+  with its answer bars (vote 1 above vote 2 after peer instruction), how
+  sure the class was, a run selector (latest by default, or all runs
+  combined) and a link to the full results page.
+- **CSV:** one row per question (folder, set, date, participants, % correct,
+  correct options, vote 1, confidence, count per option), semicolon
+  separated for Excel.
+- **PDF report** (Typst): per folder an overview of the sets, the
+  PRE → POST comparison, then one page per set with every question's bars.
+  Sets without answers are left out.
+
+Numbers: the latest run of each set; a vote is correct when exactly the
+correct options were chosen. Self-checks count completed attempts.
+
+Code: `quizbar/stats.py`, `quizbar/report.py`,
+`frontend/src/quizbar/RoomStatistics.tsx`; endpoints
+`/api/quizbar/rooms/<id>/stats/` (`csv/`, `pdf/`) and
+`/api/quizbar/sets/<id>/stats/?run=`.
+
 ### Game mode (Kahoot style)
 
 - **Switch it on** per live poll: set page → *Game mode*. Duplicated sets

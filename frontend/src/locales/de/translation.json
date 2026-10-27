@@ -1439,5 +1439,21 @@
   "wrong answers {{avg}}": "falsche Antworten {{avg}}",
   "quizbar_peer_hint_d": "Zu zweit diskutieren, dann mit <1>D</1> nochmals abstimmen",
   "Ask how sure students are": "Fragen, wie sicher die Studierenden sind",
-  "After answering, phones show an optional row 0–10 (guessing … sure). The results show the average, separately for right and wrong answers. Peer instruction: press D on a question to let the class discuss and vote again.": "Nach dem Antworten zeigen die Handys eine freiwillige Reihe 0–10 (geraten … sicher). Die Ergebnisse zeigen den Durchschnitt, getrennt für richtige und falsche Antworten. Peer Instruction: Drücken Sie D bei einer Frage, damit die Klasse diskutiert und nochmals abstimmt."
+  "After answering, phones show an optional row 0–10 (guessing … sure). The results show the average, separately for right and wrong answers. Peer instruction: press D on a question to let the class discuss and vote again.": "Nach dem Antworten zeigen die Handys eine freiwillige Reihe 0–10 (geraten … sicher). Die Ergebnisse zeigen den Durchschnitt, getrennt für richtige und falsche Antworten. Peer Instruction: Drücken Sie D bei einer Frage, damit die Klasse diskutiert und nochmals abstimmt.",
+  "not run yet": "noch nicht durchgeführt",
+  "Before and after": "Vorher und nachher",
+  "No question sets here.": "Hier gibt es keine Fragensets.",
+  "Date": "Datum",
+  "Run": "Durchführung",
+  "All runs combined": "Alle Durchführungen zusammen",
+  "Full results": "Alle Ergebnisse",
+  "{{count}} participants_one": "{{count}} Teilnehmende*r",
+  "{{count}} participants_other": "{{count}} Teilnehmende",
+  "{{count}} completed attempts_one": "{{count}} abgeschlossener Durchgang",
+  "{{count}} completed attempts_other": "{{count}} abgeschlossene Durchgänge",
+  "No single- or multiple-choice questions in this set.": "Keine Single- oder Multiple-Choice-Fragen in diesem Set.",
+  "The statistics could not be loaded.": "Die Statistik konnte nicht geladen werden.",
+  "Loading statistics …": "Statistik wird geladen …",
+  "PDF report": "PDF-Bericht",
+  "Nothing to report yet: no answers to single- or multiple-choice questions here.": "Noch nichts zu berichten: Hier gibt es keine Antworten auf Single- oder Multiple-Choice-Fragen."
 }

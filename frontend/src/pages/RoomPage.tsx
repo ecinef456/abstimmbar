@@ -40,6 +40,7 @@ import { localizedText, type LocalizedText, RichText, TranslationControlsSlot } 
 import { SetSettingsForm, type SetSettings } from "./SetPage";
 import { FolderBar, MoveToFolder, parseFolderSelection } from "../quizbar/Folders";
 import ExportDialog from "../quizbar/ExportDialog";
+import RoomStatistics from "../quizbar/RoomStatistics";
 import { CREATABLE_SET_TYPES, SET_TYPES, type SetType } from "../setTypes";
 
 /** #75: pick the set type up front — like "+ New question" for questions.
@@ -533,7 +534,7 @@ function formatDateTime(iso: string) {
 /** Room page: header with editable title/description, provenance, and a
  * question-set card grid with a sort dropdown (concept §5.1). */
 export default function RoomPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { roomId } = useParams();
   const id = Number(roomId);
   const navigate = useNavigate();
@@ -544,6 +545,16 @@ export default function RoomPage() {
   const [folders, setFolders] = useState<SetFolder[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const folderSelection = parseFolderSelection(searchParams.get("folder"));
+  // quizbar (fork): statistics view (master–detail) instead of the set cards.
+  const statsMode = searchParams.get("stats") === "1";
+  function toggleStats() {
+    const next = new URLSearchParams(searchParams);
+    if (statsMode) {
+      next.delete("stats");
+      next.delete("statset");
+    } else next.set("stats", "1");
+    setSearchParams(next, { replace: true });
+  }
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("title");
@@ -1003,6 +1014,15 @@ export default function RoomPage() {
           <InfoHint
             text={t("A question set is a single quiz — e.g. for one lecture session.")}
           />
+          <Button
+            variant={statsMode ? "primary" : "secondary"}
+            aria-pressed={statsMode}
+            onClick={toggleStats}
+            className="inline-flex items-center gap-1.5"
+          >
+            <ChartColumnDecreasing aria-hidden className="h-4 w-4" />
+            {t("Statistics")}
+          </Button>
           <div data-tour="room.new-set">
             <NewSetMenu easyMode={easyMode} onPick={requestOpenNewSet} />
           </div>
@@ -1102,6 +1122,17 @@ export default function RoomPage() {
         />
       )}
 
+      {statsMode ? (
+        <RoomStatistics
+          roomId={id}
+          folder={folderSelection}
+          folderTitle={
+            openFolder ? openFolder.title : folderSelection === "none" ? t("Not in a folder") : t("All sets")
+          }
+          defaultLang={room.language || (i18n.language ?? "en").slice(0, 2)}
+        />
+      ) : (
+      <>
       {sorted.length === 0 && search ? (
         <EmptyState icon={SearchX} title={t("No results")}>
           {t("No question set matches “{{query}}”.", { query: search })}
@@ -1308,6 +1339,8 @@ export default function RoomPage() {
             setSetsPage(1);
           }}
         />
+      )}
+      </>
       )}
     </div>
   );
