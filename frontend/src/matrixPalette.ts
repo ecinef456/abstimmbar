@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Universität Osnabrück (virtUOS)
 
-import { localizedMap, type LocalizedText } from "@basicbar/ui";
+import { i18n, localizedMap, type LocalizedText } from "@basicbar/ui";
 
 /** Colours of the four-field matrix categories (Okabe–Ito, colour-blind safe).
  *  Keys mirror backend rooms/matrix.MATRIX_PALETTE. Colour is never the only
@@ -24,18 +24,21 @@ export function paletteEntry(key: string) {
   return MATRIX_PALETTE.find((entry) => entry.key === key);
 }
 
-const COLOR_NAMES: Record<MatrixColor, { de: string; en: string }> = {
-  blue: { de: "Blau", en: "Blue" },
-  orange: { de: "Orange", en: "Orange" },
-  green: { de: "Grün", en: "Green" },
-  red: { de: "Rot", en: "Red" },
-  purple: { de: "Violett", en: "Purple" },
-  sky: { de: "Hellblau", en: "Sky blue" },
+// quizbar (fork): French names too.
+const COLOR_NAMES: Record<MatrixColor, { de: string; en: string; fr: string }> = {
+  blue: { de: "Blau", en: "Blue", fr: "Bleu" },
+  orange: { de: "Orange", en: "Orange", fr: "Orange" },
+  green: { de: "Grün", en: "Green", fr: "Vert" },
+  red: { de: "Rot", en: "Red", fr: "Rouge" },
+  purple: { de: "Violett", en: "Purple", fr: "Violet" },
+  sky: { de: "Hellblau", en: "Sky blue", fr: "Bleu ciel" },
 };
 
-/** Display name of a palette colour in the given UI language. */
+/** Display name of a palette colour in the given UI language. Callers pass
+ *  "de" | "en"; quizbar (fork): a French UI gets the French name. */
 export function colorName(key: string, lang: "de" | "en"): string {
-  return COLOR_NAMES[key as MatrixColor]?.[lang] ?? "";
+  const ui = i18n.language?.startsWith("fr") ? "fr" : lang;
+  return COLOR_NAMES[key as MatrixColor]?.[ui] ?? "";
 }
 
 /** Label of a category: `named` mode shows colour + name only; `colors` mode

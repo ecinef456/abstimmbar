@@ -1369,5 +1369,7 @@
   "{{points}} points": "{{points}} points",
   "quizbar_leaderboard_hint_p": "Classement avec <1>P</1>",
   "Game mode": "Mode jeu",
-  "Students play under a nickname. A correct answer earns 500–1000 points (faster = more); P shows the leaderboard, the end shows the podium. Your own sounds play if you added them (M mutes).": "Les étudiants jouent sous un pseudo. Une bonne réponse rapporte 500 à 1000 points (plus elle est rapide, plus elle rapporte) ; P affiche le classement, la fin affiche le podium. Vos propres sons sont joués si vous les avez ajoutés (M coupe le son)."
+  "Students play under a nickname. A correct answer earns 500–1000 points (faster = more); P shows the leaderboard, the end shows the podium. Your own sounds play if you added them (M mutes).": "Les étudiants jouent sous un pseudo. Une bonne réponse rapporte 500 à 1000 points (plus elle est rapide, plus elle rapporte) ; P affiche le classement, la fin affiche le podium. Vos propres sons sont joués si vous les avez ajoutés (M coupe le son).",
+  "One language per room": "Une langue par salle",
+  "Questions are written in one language. Set it per room (⋮ → Settings): the beamer and the phones switch to it.": "Les questions sont rédigées dans une seule langue. Choisissez-la par salle (⋮ → Paramètres) : le projecteur et les téléphones passent à cette langue."
 }

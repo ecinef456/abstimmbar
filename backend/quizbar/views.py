@@ -385,7 +385,7 @@ def game_enter(request, code):
         return Response({"detail": "Unknown participant token."}, status=403)
     if run is None or not run.is_active:
         return Response({"detail": "No game running."}, status=409)
-    _, error = game.enter(run, token, request.data.get("nickname"))
+    _, error = game.enter(run, token, request.data.get("nickname"), str(request.data.get("avatar") or ""))
     if error:
         return Response({"error": error}, status=409 if error == "taken" else 400)
     broadcast(room)

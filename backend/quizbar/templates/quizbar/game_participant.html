@@ -1,11 +1,21 @@
-{% load i18n %}
+{% load i18n static %}
 {# quizbar (fork): game mode on the phone. Listens to the page's "quizbar-state" events; talks to /api/quizbar/game/<code>/… with the participant token. #}
 <style>
   #qb-nick { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex;
-             align-items: center; justify-content: center; padding: 24px; }
-  #qb-nick form { width: 100%; max-width: 360px; text-align: center; }
-  #qb-nick .big { font-size: 56px; line-height: 1; margin-bottom: 10px; }
-  #qb-nick h2 { margin: 0 0 18px; font-size: 24px; }
+             align-items: flex-start; justify-content: center; padding: 20px 16px; overflow-y: auto; }
+  #qb-nick form { width: 100%; max-width: 380px; text-align: center; margin: auto 0; }
+  #qb-nick .me { width: 96px; height: 96px; border-radius: 50%; display: block; margin: 0 auto 4px;
+                 box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+  #qb-nick .who { font-size: 13px; color: var(--ink-soft); margin: 0 0 12px; min-height: 1.2em; }
+  #qb-nick h2 { margin: 0 0 14px; font-size: 22px; }
+  #qb-avatars { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 14px 0 4px; }
+  #qb-avatars button { padding: 0; margin: 0; min-height: 0; border: 3px solid transparent; border-radius: 50%;
+                       background: none; aspect-ratio: 1; overflow: hidden; }
+  #qb-avatars button[aria-pressed="true"] { border-color: var(--brand-strong); }
+  #qb-avatars img { width: 100%; height: 100%; display: block; }
+  #qb-pill img { width: 24px; height: 24px; border-radius: 50%; vertical-align: -7px; margin: -4px 6px -4px -8px; }
+  #qb-final .face { width: 120px; height: 120px; border-radius: 50%; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+  #qb-final .medal { font-size: 44px; line-height: 1; margin-top: -30px; }
   #qb-nick input { width: 100%; box-sizing: border-box; font-size: 20px; padding: 14px 16px; text-align: center;
                    border: 2px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); }
   #qb-nick input:focus { outline: none; border-color: var(--brand-strong); }
@@ -35,10 +45,12 @@
 </style>
 <div id="qb-nick" hidden>
   <form id="qb-nick-form" autocomplete="off">
-    <div class="big" aria-hidden="true">🎮</div>
-    <h2>{% trans "Choose a nickname" %}</h2>
+    <h2>{% trans "Pick a physicist and a nickname" %}</h2>
+    <img class="me" id="qb-me" alt="" src="">
+    <p class="who" id="qb-who"></p>
     <input id="qb-nick-input" maxlength="20" autocapitalize="off" spellcheck="false"
            aria-label="{% trans 'Nickname' %}" placeholder="{% trans 'Nickname' %}">
+    <div id="qb-avatars" role="group" aria-label="{% trans 'Avatar' %}"></div>
     <button class="primary" type="submit">{% trans "Play!" %}</button>
     <p class="err" id="qb-nick-err" role="alert"></p>
   </form>
@@ -46,7 +58,8 @@
 <div id="qb-toast" hidden role="status"><div class="main"></div><div class="sub"></div></div>
 <div id="qb-pill" hidden></div>
 <div id="qb-final" hidden>
-  <div class="big" aria-hidden="true"></div>
+  <img class="face big" alt="" src="">
+  <div class="medal" aria-hidden="true"></div>
   <div class="rank"></div>
   <div class="score"></div>
   <button type="button" id="qb-final-close">{% trans "Close" %}</button>
@@ -56,6 +69,8 @@
   const CODE = "{{ room.code|escapejs }}";
   if (!CODE) return;
   const TOKEN_KEY = "abstimmbar_token_" + CODE;
+  const AVATAR_BASE = "{% static 'quizbar/avatars/' %}";
+  let chosenAvatar = "";
   const T = {
     taken: "{% trans 'This nickname is already taken.' %}",
     empty: "{% trans 'Please enter a nickname.' %}",
@@ -99,7 +114,7 @@
       nick.hidden = false;
       const input = $("qb-nick-input");
       if (!input.value) input.value = me.suggested || "";
-      input.focus();
+      buildAvatars(me.avatars || [], chosenAvatar || me.suggested_avatar);
     } else if (!needNick) {
       nick.hidden = true;
     }
@@ -109,6 +124,12 @@
     if (playing && me.nickname) {
       pill.hidden = false;
       pill.innerHTML = "";
+      if (me.avatar) {
+        const face = document.createElement("img");
+        face.src = AVATAR_BASE + me.avatar + ".svg";
+        face.alt = "";
+        pill.append(face);
+      }
       const name = document.createElement("span");
       name.textContent = me.nickname + " · ";
       const pts = document.createElement("span");
@@ -136,9 +157,41 @@
     }
   }
 
+  function buildAvatars(list, selected) {
+    const grid = $("qb-avatars");
+    grid.innerHTML = "";
+    for (const avatar of list) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.title = avatar.name;
+      button.setAttribute("aria-label", avatar.name);
+      button.dataset.slug = avatar.slug;
+      const img = document.createElement("img");
+      img.src = AVATAR_BASE + avatar.slug + ".svg";
+      img.alt = "";
+      img.loading = "lazy";
+      button.append(img);
+      button.addEventListener("click", () => pickAvatar(avatar.slug, list));
+      grid.append(button);
+    }
+    pickAvatar(selected || (list[0] && list[0].slug) || "", list);
+  }
+  function pickAvatar(slug, list) {
+    chosenAvatar = slug;
+    for (const button of $("qb-avatars").children) {
+      button.setAttribute("aria-pressed", String(button.dataset.slug === slug));
+    }
+    const found = list.find((a) => a.slug === slug);
+    $("qb-me").src = slug ? AVATAR_BASE + slug + ".svg" : "";
+    $("qb-who").textContent = found ? found.name : "";
+  }
+
   function showFinal(data) {
     if (!data || !data.nickname || !data.players) return;
-    final.querySelector(".big").textContent =
+    const face = final.querySelector(".face");
+    face.hidden = !data.avatar;
+    if (data.avatar) face.src = AVATAR_BASE + data.avatar + ".svg";
+    final.querySelector(".medal").textContent =
       data.rank === 1 ? "🥇" : data.rank === 2 ? "🥈" : data.rank === 3 ? "🥉" : "🏁";
     final.querySelector(".rank").textContent = fmt(T.finished, { rank: data.rank, players: data.players });
     final.querySelector(".score").textContent = fmt(T.points, { n: num(data.score) });
@@ -197,7 +250,7 @@
     const nickname = $("qb-nick-input").value.trim();
     if (!nickname) { err.textContent = T.empty; return; }
     err.textContent = "";
-    const { status, data } = await call("enter", { run: runId, nickname });
+    const { status, data } = await call("enter", { run: runId, nickname, avatar: chosenAvatar });
     if (status === 201) {
       me = data;
       paint();

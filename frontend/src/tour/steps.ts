@@ -231,7 +231,9 @@ export const proTour: TourStep[] = [
     "Participants place cards on a coordinate graph with two axes you label — for example effort against benefit. Optionally, cards can also sit on the axis lines, carry a description and a coloured category.",
     [{ key: "On the projector you move the cards, stack similar ones, hide or add your own — and open a card to read it." }]),
   { id: "question.lang-tabs", page: "question", target: "question.lang-tabs", kind: "info", modes: ["pro"],
-    titleKey: "Author in two languages", bodyKey: "Rich text, options and images — with German/English tabs." },
+    // quizbar (fork): no DE/EN tabs any more — one content language per room.
+    titleKey: "One language per room",
+    bodyKey: "Questions are written in one language. Set it per room (⋮ → Settings): the beamer and the phones switch to it." },
   ]),
   ...inSection("present", [
   { id: "set.present", page: "set", target: "set.present", kind: "info", navigateTo: "exampleSet",

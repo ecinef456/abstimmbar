@@ -80,6 +80,9 @@ Code: `components/TranslatableField.tsx`, `quizbar/languages.py` (table
 `RoomLanguage`), hooks in `RoomSerializer`, `live/state.py`, `RoomPage.tsx`,
 `PresentPage.tsx`, `i18n.ts`, `participant.html`.
 
+- The matrix colour names and the guided tour are in French too (the
+  tour's old "German/English tabs" step now explains the room language).
+
 ### Folders of question sets, numbered order, "Next quiz"
 
 - **Folders inside a room** (e.g. one per week): chips above the set list —
@@ -234,12 +237,19 @@ Code: `quizbar/typst_import.py` (parser + import), endpoint
 - **Beamer:** the lobby lists the players; **P** shows the leaderboard (top
   5 with this question's points); the closing slide becomes the **podium**
   (3rd, 2nd, drum roll, 1st, then places 4–9). **M** mutes.
+- **Avatars:** next to the nickname each player picks one of 30 cartoon
+  physicists (Newton with his apple, Einstein in sunglasses, Curie with a
+  glowing flask, Schrödinger with his box …; a free one is preselected,
+  last time's next time). They show on the phone, in the lobby, on the
+  leaderboard and on the podium. Drawn by `fork/avatars/generate.py`
+  (SVG, `backend/quizbar/static/quizbar/avatars/`): edit and rerun it to
+  change or add one.
 - **Sounds:** your own MP3 files in `frontend/public/quizbar/sounds/`
   (`lobby`, `question`, `reveal`, `leaderboard`, `drumroll`, `podium`).
   They are git-ignored, so each server keeps its own; see the README in
   that folder. Missing files stay silent.
 
-Code: `quizbar/game.py` (tables `SetGame`, `GameEntry`, `GameQuestion`;
+Code: `quizbar/game.py`, `quizbar/avatars.py` (tables `SetGame`, `GameEntry`, `GameQuestion`;
 Run signal in `quizbar/apps.py`), `quizbar/templates/quizbar/game_participant.html`
 (included by the participant page), `frontend/src/quizbar/Game.tsx`,
 `GameModePanel.tsx`; hooks in `live/state.py`, `participant.html` (one

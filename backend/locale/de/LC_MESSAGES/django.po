@@ -688,3 +688,11 @@ msgstr "Platz {rank} von {players}"
 #: quizbar/templates/quizbar/game_participant.html
 msgid "You finished #{rank} of {players}"
 msgstr "Sie sind auf Platz {rank} von {players}!"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Pick a physicist and a nickname"
+msgstr "Wählen Sie eine Figur und einen Spielnamen"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Avatar"
+msgstr "Avatar"

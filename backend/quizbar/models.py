@@ -223,6 +223,8 @@ class GameEntry(models.Model):
         "live.ParticipantToken", on_delete=models.CASCADE, related_name="qb_games"
     )
     nickname = models.CharField(max_length=20)
+    # A physicist (quizbar/avatars.py); "" = none.
+    avatar = models.CharField(max_length=30, blank=True, default="")
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

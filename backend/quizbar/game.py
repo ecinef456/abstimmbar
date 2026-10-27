@@ -7,6 +7,7 @@ choices of a multiple-choice question must be right). Questions without a
 correct answer score nothing. Points are computed from the votes, so
 nothing is stored per answer: only when each question was first opened.
 """
+import random
 import re
 
 from django.db import IntegrityError, transaction
@@ -15,6 +16,7 @@ from django.db.models import Q
 from live.models import Run, Vote
 from rooms.models import Question
 
+from .avatars import AVATARS, SLUGS
 from .models import GameEntry, GameQuestion, SetGame
 
 NICKNAME_MAX = 20
@@ -71,7 +73,10 @@ def attach(run, participant, presenter):
         "question": run.active_question_id,
         "revealed": revealed,
     }
-    players = list(GameEntry.objects.filter(run=run).values_list("nickname", flat=True))
+    players = [
+        {"nickname": nickname, "avatar": avatar}
+        for nickname, avatar in GameEntry.objects.filter(run=run).values_list("nickname", "avatar")
+    ]
     presenter["game"] = {"players": players}
 
 
@@ -129,6 +134,7 @@ def standings(run, hide_question=None):
             {
                 "token": token,
                 "nickname": entry.nickname,
+                "avatar": entry.avatar,
                 "score": sum(per[token].values()),
                 "last": per[token].get(last_question),
                 "answered_last": last_question in per[token],
@@ -163,7 +169,7 @@ def leaderboard(run, limit=10, final=False):
         "players": len(data["rows"]),
         "questions": data["questions"],
         "leaderboard": [
-            {k: row[k] for k in ("rank", "nickname", "score", "last")}
+            {k: row[k] for k in ("rank", "nickname", "avatar", "score", "last")}
             for row in data["rows"][:limit]
         ],
     }
@@ -172,17 +178,20 @@ def leaderboard(run, limit=10, final=False):
 def me(run, token):
     """A player's own view: nickname, score, rank, last question's points."""
     entry = GameEntry.objects.filter(run=run, token=token).first()
-    last_nickname = (
-        GameEntry.objects.filter(token=token).order_by("-joined_at").values_list("nickname", flat=True).first()
+    previous = (
+        GameEntry.objects.filter(token=token).order_by("-joined_at").values_list("nickname", "avatar").first()
     )
     out = {
         "game": True,
         "run": run.pk,
         "finished": run.phase == Run.Phase.FINISHED,
         "nickname": entry.nickname if entry else None,
-        "suggested": last_nickname or "",
+        "avatar": entry.avatar if entry else "",
+        "suggested": previous[0] if previous else "",
+        "suggested_avatar": (previous[1] if previous else "") or free_avatar(run),
     }
     if entry is None:
+        out["avatars"] = [{"slug": slug, "name": name} for slug, name in AVATARS]
         return out
     data = standings(run, hide_question=hidden_question(run))
     row = next(r for r in data["rows"] if r["token"] == token.pk)
@@ -205,8 +214,17 @@ def me(run, token):
     return out
 
 
-def enter(run, token, nickname):
-    """Join a game run under a nickname (or rename). Returns (entry, error)."""
+def free_avatar(run):
+    """A random avatar nobody in this run has yet (any, once all are taken)."""
+    used = set(GameEntry.objects.filter(run=run).values_list("avatar", flat=True))
+    free = [slug for slug, _ in AVATARS if slug not in used]
+    return random.choice(free or [slug for slug, _ in AVATARS])
+
+
+def enter(run, token, nickname, avatar=""):
+    """Join a game run under a nickname and avatar (or change them).
+    Returns (entry, error)."""
+    avatar = avatar if avatar in SLUGS else free_avatar(run)
     name = clean_nickname(nickname)
     if not name:
         return None, "empty"
@@ -218,7 +236,7 @@ def enter(run, token, nickname):
     try:
         with transaction.atomic():
             entry, _ = GameEntry.objects.update_or_create(
-                run=run, token=token, defaults={"nickname": name}
+                run=run, token=token, defaults={"nickname": name, "avatar": avatar}
             )
     except IntegrityError:
         return None, "taken"

@@ -1209,8 +1209,8 @@ export interface LiveState {
   revealed?: boolean;
   /** quizbar (fork): J pressed — the beamer shows the justifications. */
   justification_shown?: boolean;
-  /** quizbar (fork): game mode — the nicknames that joined this run. */
-  game?: { players: string[] };
+  /** quizbar (fork): game mode — the players that joined this run. */
+  game?: { players: GamePlayer[] };
   ends_at?: string;
   participants?: number;
   /** Recording mode (#53): the run's deep-link token (present when recording
@@ -1887,11 +1887,16 @@ export interface SelfCheckSources {
 }
 
 /** quizbar (fork): this fork's own endpoints (backend app `quizbar`). */
-/** quizbar (fork): game mode leaderboard. */
+/** quizbar (fork): game mode. */
+export interface GamePlayer {
+  nickname: string;
+  /** A physicist avatar slug ("" = none). */
+  avatar: string;
+}
 export interface GameLeaderboard {
   players: number;
   questions: number;
-  leaderboard: { rank: number; nickname: string; score: number; last: number | null }[];
+  leaderboard: { rank: number; nickname: string; avatar: string; score: number; last: number | null }[];
 }
 
 /** quizbar (fork): question library. */

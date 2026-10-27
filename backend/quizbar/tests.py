@@ -904,13 +904,13 @@ class GameTests(TestCase):
         self.assertEqual(resp.json(), {"enabled": True})
         self.run = Run.objects.create(question_set=self.quiz, phase=Run.Phase.LOBBY)
 
-    def player(self, nickname):
+    def player(self, nickname, avatar=""):
         from live.models import ParticipantToken
 
         token = ParticipantToken.objects.create(room=self.room)
         resp = self.client.post(
             f"/api/quizbar/game/{self.room.code}/enter/",
-            {"token": token.key, "run": self.run.pk, "nickname": nickname},
+            {"token": token.key, "run": self.run.pk, "nickname": nickname, "avatar": avatar},
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 201, resp.content)
@@ -995,12 +995,40 @@ class GameTests(TestCase):
         self.assertEqual(
             payloads["participant"]["game"], {"run": self.run.pk, "question": None, "revealed": False}
         )
-        self.assertEqual(payloads["presenter"]["game"], {"players": ["Ada"]})
+        self.assertEqual([p["nickname"] for p in payloads["presenter"]["game"]["players"]], ["Ada"])
         self.client.put(
             f"/api/quizbar/sets/{self.quiz.pk}/game/", {"enabled": False},
             content_type="application/json",
         )
         self.assertNotIn("game", build_payloads(self.room)["participant"])
+
+    def test_avatars(self):
+        from .avatars import SLUGS
+        from .models import GameEntry
+
+        curie = self.player("Ada", "curie")
+        self.player("Bob", "not-a-physicist")
+        avatars = dict(GameEntry.objects.values_list("nickname", "avatar"))
+        self.assertEqual(avatars["Ada"], "curie")
+        self.assertIn(avatars["Bob"], SLUGS - {"curie"})  # a free one instead
+        board = self.client.get(f"/api/quizbar/game/runs/{self.run.pk}/leaderboard/").json()
+        self.assertEqual({r["avatar"] for r in board["leaderboard"]}, set(avatars.values()))
+        # Next run: the phone suggests the same avatar again.
+        self.run.phase = Run.Phase.FINISHED
+        self.run.save()
+        self.run = Run.objects.create(question_set=self.quiz, phase=Run.Phase.LOBBY)
+        mine = self.me(curie)
+        self.assertEqual(mine["suggested_avatar"], "curie")
+        self.assertEqual(len(mine["avatars"]), 30)
+
+    def test_avatar_files_exist(self):
+        from pathlib import Path
+
+        from .avatars import AVATARS
+
+        folder = Path(__file__).parent / "static/quizbar/avatars"
+        for slug, _ in AVATARS:
+            self.assertTrue((folder / f"{slug}.svg").exists(), slug)
 
     def test_duplicate_keeps_game_mode(self):
         from . import game

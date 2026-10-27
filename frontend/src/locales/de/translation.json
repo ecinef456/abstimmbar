@@ -1390,5 +1390,7 @@
   "{{points}} points": "{{points}} Punkte",
   "quizbar_leaderboard_hint_p": "Rangliste mit <1>P</1>",
   "Game mode": "Spielmodus",
-  "Students play under a nickname. A correct answer earns 500–1000 points (faster = more); P shows the leaderboard, the end shows the podium. Your own sounds play if you added them (M mutes).": "Die Studierenden spielen unter einem Spielnamen. Eine richtige Antwort bringt 500–1000 Punkte (schneller = mehr); P zeigt die Rangliste, am Ende kommt das Siegertreppchen. Eigene Sounds werden abgespielt, falls hinterlegt (M schaltet stumm)."
+  "Students play under a nickname. A correct answer earns 500–1000 points (faster = more); P shows the leaderboard, the end shows the podium. Your own sounds play if you added them (M mutes).": "Die Studierenden spielen unter einem Spielnamen. Eine richtige Antwort bringt 500–1000 Punkte (schneller = mehr); P zeigt die Rangliste, am Ende kommt das Siegertreppchen. Eigene Sounds werden abgespielt, falls hinterlegt (M schaltet stumm).",
+  "One language per room": "Eine Sprache pro Raum",
+  "Questions are written in one language. Set it per room (⋮ → Settings): the beamer and the phones switch to it.": "Fragen werden in einer Sprache geschrieben. Legen Sie sie pro Raum fest (⋮ → Einstellungen): Beamer und Smartphones wechseln in diese Sprache."
 }
