@@ -1465,5 +1465,11 @@
   "replace what is already there": "Vorhandenes ersetzen",
   "Translate": "Übersetzen",
   "A draft: check it before saving. Math stays as it is.": "Ein Entwurf: Prüfen Sie ihn vor dem Speichern. Formeln bleiben unverändert.",
-  "No translation service is set up.": "Es ist kein Übersetzungsdienst eingerichtet."
+  "No translation service is set up.": "Es ist kein Übersetzungsdienst eingerichtet.",
+  "Imported into the library: {{quizzes}} quiz(zes), {{questions}} new question(s). Already there (tags added): {{skipped}}.": "In die Bibliothek importiert: {{quizzes}} Quiz, {{questions}} neue Frage(n). Schon vorhanden (Tags ergänzt): {{skipped}}.",
+  "The import failed.": "Der Import ist fehlgeschlagen.",
+  "A .zip with your .typ quizzes (name.en.typ, name.de.typ, name.fr.typ) and their figures": "Ein .zip mit Ihren .typ-Quiz (name.en.typ, name.de.typ, name.fr.typ) und ihren Abbildungen",
+  "Importing …": "Wird importiert …",
+  "Import Typst quizzes (.zip)": "Typst-Quiz importieren (.zip)",
+  "Many quizzes at once: Import Typst quizzes (.zip) — they go to the archived room “Library imports”, tagged with their file name.": "Viele Quiz auf einmal: Typst-Quiz importieren (.zip) – sie landen im archivierten Raum „Library imports“, mit ihrem Dateinamen als Tag."
 }

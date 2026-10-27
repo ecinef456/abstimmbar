@@ -2095,6 +2095,15 @@ export const quizbar = {
       { method: "POST", body },
     );
   },
+  /** Many Typst quizzes (a .zip) straight into the library. */
+  importLibrary: (files: File[]) => {
+    const body = new FormData();
+    for (const file of files) body.append("files", file);
+    return request<{ quizzes: number; questions: number; skipped: number; warnings: string[]; room: number | null }>(
+      "/api/quizbar/library/import/",
+      { method: "POST", body },
+    );
+  },
   insertFromLibrary: (setId: number, entries: number[]) =>
     request<{ inserted: number[]; skipped: number[] }>("/api/quizbar/library/insert/", {
       method: "POST",

@@ -1708,3 +1708,63 @@ class TranslateTests(TestCase):
         self.assertNotIn("$lambda", seen["payload"]["text"][0])  # math never sent
         self.assertIn("$x < y$", data["en"]["options"][0]["text"])
         self.assertEqual(data["en"]["options"][0]["justification"], "")
+
+
+class LibraryImportTests(TestCase):
+    """Many Typst quizzes (with language versions) straight into the library."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="li")
+        self.client.force_login(self.owner)
+
+    def upload(self, files):
+        import io
+        import zipfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            for name, text in files.items():
+                archive.writestr(name, text)
+        return self.client.post(
+            "/api/quizbar/library/import/", {"files": [SimpleUploadedFile("all.zip", buffer.getvalue())]}
+        )
+
+    def test_bulk_import(self):
+        from .models import LibraryEntry
+
+        broken = '#import "quizbar.typ": *\n#question([Only two], answers: (answer(true, [a]), answer(false, [b])))\n'
+        files = {
+            "src/quizbar.typ": "// package",
+            "src/kinematics/kinematics.en.typ": TranslationTests.EN,
+            "src/kinematics/kinematics.de.typ": TranslationTests.DE,
+            "src/oscillations/oscillations.en.typ": TranslationTests.EN.replace("Speed of the wave?", "Period of a pendulum?"),
+            "src/bad/bad.en.typ": broken,
+            "src/bad/bad.de.typ": broken.replace("answer(false, [b])", "answer(false, [b]), answer(false, [c])"),
+        }
+        response = self.upload(files)
+        self.assertEqual(response.status_code, 201, response.content)
+        summary = response.json()
+        self.assertEqual(summary["quizzes"], 2)
+        # oscillations repeats "Which are waves?" from kinematics: skipped once
+        self.assertEqual(summary["questions"], 3)
+        self.assertEqual(summary["skipped"], 1)
+        self.assertTrue(any(w.startswith("src/bad/bad:") for w in summary["warnings"]))
+        entries = LibraryEntry.objects.filter(owner=self.owner)
+        self.assertEqual(entries.count(), 3)
+        speed = next(e for e in entries if "Speed of the wave" in e.master.text)
+        self.assertEqual(sorted(t.name for t in speed.tags.all()), ["kinematics", "waves"])
+        from . import i18n
+
+        self.assertIn("Wie schnell", i18n.question_map(speed.master)["de"])
+        room = speed.master.question_set.room
+        self.assertEqual(room.title, "Library imports")
+        self.assertTrue(room.archived_by.filter(pk=self.owner.pk).exists())
+        # again: everything is already there
+        again = self.upload(files).json()
+        self.assertEqual((again["questions"], again["skipped"]), (0, 4))
+        self.assertEqual(LibraryEntry.objects.filter(owner=self.owner).count(), 3)
+        waves = next(e for e in entries if "Which are waves" in e.master.text)
+        # in both quizzes: tagged with both file names
+        self.assertEqual(sorted(t.name for t in waves.tags.all()), ["kinematics", "oscillations"])

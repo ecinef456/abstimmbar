@@ -4,11 +4,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { CopyPlus, FileDown, Library, Pencil, Trash2 } from "lucide-react";
+import { CopyPlus, FileDown, Library, Loader2, Pencil, Trash2, Upload } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
 import {
   api,
   quizbar,
+  requestDetail,
   type LibraryEntry,
   type LibraryTag,
   type QuestionSet,
@@ -347,6 +348,33 @@ export default function LibraryPage() {
   const [removing, setRemoving] = useState<LibraryEntry | null>(null);
   const [bulkTags, setBulkTags] = useState<string[]>([]);
   const [notice, setNotice] = useState<{ text: string; setId?: number } | null>(null);
+  // Bulk import of Typst quizzes (a .zip) straight into the library.
+  const importInput = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importReport, setImportReport] = useState<{ text: string; warnings: string[]; error?: boolean } | null>(
+    null,
+  );
+  async function importFiles(files: File[]) {
+    setImporting(true);
+    setImportReport(null);
+    try {
+      const result = await quizbar.importLibrary(files);
+      setImportReport({
+        text: t("Imported into the library: {{quizzes}} quiz(zes), {{questions}} new question(s). Already there (tags added): {{skipped}}.", {
+          questions: result.questions,
+          quizzes: result.quizzes,
+          skipped: result.skipped,
+        }),
+        warnings: result.warnings,
+      });
+      await reload();
+    } catch (err) {
+      const detail = requestDetail(err);
+      setImportReport({ text: detail ? t(detail) : t("The import failed."), warnings: [], error: true });
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const reload = () => quizbar.library().then(setData);
   useEffect(() => {
@@ -363,10 +391,54 @@ export default function LibraryPage() {
       <nav className="mb-4 text-sm text-slate-500 dark:text-slate-400">
         <HomeCrumb /> / {t("Question library")}
       </nav>
-      <h1 className="flex items-center gap-2 text-2xl font-bold">
-        <Library aria-hidden className="h-6 w-6" />
-        {t("Question library")}
-      </h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="flex flex-1 items-center gap-2 text-2xl font-bold">
+          <Library aria-hidden className="h-6 w-6" />
+          {t("Question library")}
+        </h1>
+        <Button
+          className="inline-flex items-center gap-1.5"
+          disabled={importing}
+          onClick={() => importInput.current?.click()}
+          title={t("A .zip with your .typ quizzes (name.en.typ, name.de.typ, name.fr.typ) and their figures")}
+        >
+          {importing ? <Loader2 aria-hidden className="h-4 w-4 animate-spin" /> : <Upload aria-hidden className="h-4 w-4" />}
+          {importing ? t("Importing …") : t("Import Typst quizzes (.zip)")}
+        </Button>
+        <input
+          ref={importInput}
+          type="file"
+          multiple
+          accept=".zip,.typ,image/png,image/jpeg,image/webp,image/gif"
+          aria-label={t("Import Typst quizzes (.zip)")}
+          tabIndex={-1}
+          className="sr-only"
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            if (files.length) void importFiles(files);
+            event.target.value = "";
+          }}
+        />
+      </div>
+      {importReport && (
+        <div
+          role="status"
+          className={`mt-3 rounded-xl px-4 py-2 text-sm ${
+            importReport.error
+              ? "bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200"
+              : "bg-brand-50 text-brand-900 dark:bg-brand-950/40 dark:text-brand-100"
+          }`}
+        >
+          <p>{importReport.text}</p>
+          {importReport.warnings.length > 0 && (
+            <ul className="mt-1 list-disc pl-5 text-xs text-amber-800 dark:text-amber-200">
+              {importReport.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       <p className="mb-6 mt-1 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
         {t(
           "Every question you write in your rooms lands here once, however often it is copied. Tag it to find it again; untagged ones wait under “To sort”.",
@@ -386,7 +458,8 @@ export default function LibraryPage() {
           wave.png
         </a>
         {" — "}
-        {t("then import the quiz in a room: ⋮ → Import Typst quiz.")}
+        {t("then import the quiz in a room: ⋮ → Import Typst quiz.")}{" "}
+        {t("Many quizzes at once: Import Typst quizzes (.zip) — they go to the archived room “Library imports”, tagged with their file name.")}
       </p>
       {notice && (
         <p

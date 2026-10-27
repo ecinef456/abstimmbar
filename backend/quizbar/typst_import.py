@@ -614,12 +614,13 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_ZIP_ENTRIES = 500
 
 
-def collect_files(uploads):
+def collect_files(uploads, max_bytes=MAX_UPLOAD_BYTES, max_entries=MAX_ZIP_ENTRIES):
     """{path: bytes} from uploaded .typ / image files and .zip archives."""
     import io
     import zipfile
 
     files, total = {}, 0
+    too_large = f"The upload is too large ({max_bytes // (1024 * 1024)} MB at most)."
     for upload in uploads:
         data = upload.read()
         total += len(data)
@@ -634,17 +635,17 @@ def collect_files(uploads):
                 for info in archive.infolist()
                 if not info.is_dir() and not info.filename.startswith("__MACOSX/")
             ]
-            if len(entries) > MAX_ZIP_ENTRIES:
+            if len(entries) > max_entries:
                 raise TypstImportError(f"{name} has too many files.")
             for info in entries:
                 total += info.file_size
-                if total > MAX_UPLOAD_BYTES:
-                    raise TypstImportError("The upload is too large (40 MB at most).")
+                if total > max_bytes:
+                    raise TypstImportError(too_large)
                 files[posixpath.normpath(info.filename)] = archive.read(info)
         else:
             files[name] = data
-        if total > MAX_UPLOAD_BYTES:
-            raise TypstImportError("The upload is too large (40 MB at most).")
+        if total > max_bytes:
+            raise TypstImportError(too_large)
     return files
 
 
@@ -729,63 +730,17 @@ def import_quiz(room, user, uploads, folder=None):
     """Create a question set in ``room`` from uploaded files, or fill an
     empty set of the same title and type (e.g. one made from a course
     template). Returns (question_set, warnings)."""
-    from django.core.files.base import ContentFile
     from django.db import transaction
 
-    from rooms.images import InvalidImageError, normalize_image
-    from rooms.models import UploadedImage
     from rooms.transfer import EXPORT_FORMAT, import_set
 
-    from . import folders, i18n, library
+    from . import folders, library
 
     files = collect_files(uploads)
     versions = language_versions(quiz_sources(files))
-    _, path, quiz = versions[0]
-    warnings = []
-    base_dir = posixpath.dirname(path)
-    figures = posixpath.normpath(posixpath.join(base_dir, quiz.figures)) if base_dir else quiz.figures
-
     with transaction.atomic():
-        items, figure_html = [], []
-        for number, question in enumerate(quiz.questions, start=1):
-            html_text = question.text_html
-            figure_html.append("")
-            if question.image:
-                key = find_figure(files, figures, question.image)
-                if key is None:
-                    warnings.append(f"Question {number}: figure {question.image} was not uploaded.")
-                elif len(files[key]) > MAX_IMAGE_BYTES:
-                    warnings.append(f"Question {number}: figure {question.image} is over 5 MB.")
-                else:
-                    try:
-                        normalized = normalize_image(
-                            ContentFile(files[key], name=posixpath.basename(key))
-                        )
-                    except InvalidImageError:
-                        warnings.append(
-                            f"Question {number}: figure {question.image} is not an image "
-                            "abstimmbar can show (use PNG or JPG)."
-                        )
-                    else:
-                        uploaded = UploadedImage.objects.create(uploader=user, file=normalized)
-                        figure_html[-1] = f'<p><img src="{uploaded.file.url}" alt=""></p>'
-                        html_text += figure_html[-1]
-            items.append(
-                {
-                    "kind": question.kind,
-                    "text": html_text,
-                    "shuffle_options": question.shuffle,
-                    "time_limit": question.time_limit,
-                    "options": [
-                        {
-                            "text": option["text"],
-                            "is_correct": option["is_correct"],
-                            "justification": option["justification"],
-                        }
-                        for option in question.options
-                    ],
-                }
-            )
+        items, figure_html, warnings = build_items(files, versions, user)
+        _, path, quiz = versions[0]
         title = quiz.title or posixpath.splitext(posixpath.basename(path))[0]
         question_set = import_set(
             room,
@@ -813,20 +768,210 @@ def import_quiz(room, user, uploads, folder=None):
                 entry = library.entry_of(question)
                 if entry is not None:
                     library.set_tags(entry, parsed.tags)
-            # The other language versions become the question's translations.
-            i18n.save(
-                question,
-                {
-                    lang: {
-                        "text": other.questions[index].text_html + figure_html[index],
-                        "options": [
-                            {"text": o["text"], "justification": o["justification"]}
-                            for o in other.questions[index].options
-                        ],
-                    }
-                    for lang, _, other in versions[1:]
-                },
-            )
+            save_translations(question, index, versions, figure_html)
         if folder is not None:
             folders.place(question_set, folder)
     return question_set, warnings
+
+
+def save_translations(question, index, versions, figure_html):
+    """The other language versions become the question's translations."""
+    from . import i18n
+
+    i18n.save(
+        question,
+        {
+            lang: {
+                "text": other.questions[index].text_html + figure_html[index],
+                "options": [
+                    {"text": o["text"], "justification": o["justification"]}
+                    for o in other.questions[index].options
+                ],
+            }
+            for lang, _, other in versions[1:]
+        },
+    )
+
+
+def build_items(files, versions, user):
+    """The main version's questions as import_set items (figures uploaded).
+    Returns (items, figure html per question, warnings)."""
+    from django.core.files.base import ContentFile
+
+    from rooms.images import InvalidImageError, normalize_image
+    from rooms.models import UploadedImage
+
+    _, path, quiz = versions[0]
+    warnings = []
+    base_dir = posixpath.dirname(path)
+    figures = posixpath.normpath(posixpath.join(base_dir, quiz.figures)) if base_dir else quiz.figures
+    items, figure_html = [], []
+    for number, question in enumerate(quiz.questions, start=1):
+        html_text = question.text_html
+        figure_html.append("")
+        if question.image:
+            key = find_figure(files, figures, question.image)
+            if key is None:
+                warnings.append(f"Question {number}: figure {question.image} was not uploaded.")
+            elif len(files[key]) > MAX_IMAGE_BYTES:
+                warnings.append(f"Question {number}: figure {question.image} is over 5 MB.")
+            else:
+                try:
+                    normalized = normalize_image(
+                        ContentFile(files[key], name=posixpath.basename(key))
+                    )
+                except InvalidImageError:
+                    warnings.append(
+                        f"Question {number}: figure {question.image} is not an image "
+                        "abstimmbar can show (use PNG or JPG)."
+                    )
+                else:
+                    uploaded = UploadedImage.objects.create(uploader=user, file=normalized)
+                    figure_html[-1] = f'<p><img src="{uploaded.file.url}" alt=""></p>'
+                    html_text += figure_html[-1]
+        items.append(
+            {
+                "kind": question.kind,
+                "text": html_text,
+                "shuffle_options": question.shuffle,
+                "time_limit": question.time_limit,
+                "options": [
+                    {
+                        "text": option["text"],
+                        "is_correct": option["is_correct"],
+                        "justification": option["justification"],
+                    }
+                    for option in question.options
+                ],
+            }
+        )
+    return items, figure_html, warnings
+
+
+# -- many quizzes straight into the library ----------------------------------
+
+LIBRARY_MAX_BYTES = 150 * 1024 * 1024
+LIBRARY_MAX_ENTRIES = 3000
+
+
+def _quiz_group(path):
+    """'kinematics/kinematics.de.typ' → ('kinematics', 'kinematics'): the
+    language versions of one quiz share folder and name."""
+    name = posixpath.basename(path)
+    stem = re.sub(r"(\.(en|de|fr))?\.typ$", "", name, flags=re.IGNORECASE)
+    return posixpath.dirname(path), stem
+
+
+def _same_question_key(kind, text_html, options):
+    """Kind, text (without markup and pictures) and answers: an imported
+    question that is already in the library is not added again."""
+    def plain(value):
+        value = re.sub(r"<img[^>]*>", "", value or "")
+        return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", value)).split())
+
+    return (kind, plain(text_html), tuple((plain(o[0]), bool(o[1])) for o in options))
+
+
+IMPORT_ROOM_TITLE = "Library imports"
+
+
+def _import_room(user):
+    """The teacher's (archived) room that holds quizzes imported straight
+    into the library: one set per quiz, so the questions stay editable."""
+    from rooms.models import Room
+
+    room = Room.objects.filter(owner=user, title=IMPORT_ROOM_TITLE).order_by("id").first()
+    if room is None:
+        room = Room.objects.create(title=IMPORT_ROOM_TITLE, title_de=IMPORT_ROOM_TITLE, owner=user)
+        room.owners.add(user)
+        room.archived_by.add(user)
+    return room
+
+
+def import_library(user, uploads):
+    """Import any number of quizzes (each with its language versions) into
+    ``user``'s library. Each quiz becomes a set of the archived room
+    "Library imports"; every question gets its own tags plus the quiz's file
+    name as a tag (e.g. "kinematics"). Questions already in the library are
+    not added again, they only get those tags. Returns a summary dict."""
+    from django.db import transaction
+
+    from common.i18n_fields import translated_map
+    from rooms.transfer import EXPORT_FORMAT, import_set
+
+    from . import library
+    from .models import LibraryEntry
+
+    files = collect_files(uploads, LIBRARY_MAX_BYTES, LIBRARY_MAX_ENTRIES)
+    groups = {}
+    for path, text in quiz_sources(files):
+        groups.setdefault(_quiz_group(path), []).append((path, text))
+
+    def first(obj):
+        return next((v for v in translated_map(obj, "text").values() if v), "")
+
+    known = {}  # question key → its library entry
+    for entry in LibraryEntry.objects.filter(owner=user, master__isnull=False).select_related(
+        "master"
+    ).prefetch_related("master__options", "tags"):
+        master = entry.master
+        key = _same_question_key(
+            master.kind, first(master), [(first(o), o.is_correct) for o in master.options.all()]
+        )
+        known.setdefault(key, entry)
+
+    def add_tags(entry, names):
+        current = [tag.name for tag in entry.tags.all()]
+        library.set_tags(entry, [*current, *names])
+
+    room = None
+    summary = {"quizzes": 0, "questions": 0, "skipped": 0, "warnings": [], "room": None}
+    for (folder, stem), sources in sorted(groups.items()):
+        label = posixpath.join(folder, stem) if folder else stem
+        try:
+            versions = language_versions(sources)
+        except TypstImportError as exc:
+            summary["warnings"].append(f"{label}: {exc}")
+            continue
+        _, _, quiz = versions[0]
+        keys = [
+            _same_question_key(q.kind, q.text_html, [(o["text"], o["is_correct"]) for o in q.options])
+            for q in quiz.questions
+        ]
+        topic = library.normalize_tag(stem)
+        kept = []
+        for index, key in enumerate(keys):
+            names = [*quiz.questions[index].tags, topic] if topic else quiz.questions[index].tags
+            if key in known:
+                summary["skipped"] += 1
+                add_tags(known[key], names)
+            else:
+                kept.append(index)
+        if not kept:
+            continue
+        with transaction.atomic():
+            items, figure_html, warnings = build_items(files, versions, user)
+            summary["warnings"] += [f"{label}: {w}" for w in warnings]
+            room = room or _import_room(user)
+            question_set = import_set(
+                room,
+                {
+                    "format": EXPORT_FORMAT,
+                    "title": quiz.title or stem,
+                    "description": quiz.description_html,
+                    "type": quiz.set_type,
+                    "questions": [items[i] for i in kept],
+                },
+            )
+            created = list(question_set.questions.order_by("position", "id"))
+            for question, index in zip(created, kept, strict=True):
+                entry = library.entry_of(question)
+                parsed = quiz.questions[index]
+                if entry is not None:
+                    library.set_tags(entry, [*parsed.tags, topic] if topic else parsed.tags)
+                    known[keys[index]] = entry
+                save_translations(question, index, versions, figure_html)
+        summary["quizzes"] += 1
+        summary["questions"] += len(kept)
+    summary["room"] = room.pk if room else None
+    return summary

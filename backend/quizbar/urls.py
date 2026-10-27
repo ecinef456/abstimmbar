@@ -18,6 +18,7 @@ urlpatterns = [
     path("library/tags/", views.library_bulk_tags),
     path("library/tags/<int:tag_id>/", views.library_tag),
     path("library/insert/", views.library_insert),
+    path("library/import/", views.import_library),
     path("rooms/<int:room_id>/import-typst/", views.import_typst),
     path("export/", views.export_pdf),
     path("translate/", views.translate_question),

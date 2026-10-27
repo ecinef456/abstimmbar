@@ -324,6 +324,23 @@ def library_insert(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser])
+def import_library(request):
+    """Upload many quizzes written with quizbar.typ (``files``: a .zip with
+    the .typ files — language versions as name.en.typ / name.de.typ /
+    name.fr.typ — and their figures) straight into the library."""
+    uploads = request.FILES.getlist("files")
+    if not uploads:
+        return Response({"detail": "No file uploaded."}, status=400)
+    try:
+        summary = typst_import.import_library(request.user, uploads)
+    except typst_import.TypstImportError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    return Response(summary, status=201)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser])
 def import_typst(request, room_id):
     """Upload a quiz written with quizbar.typ (``files``: the .typ, figures,
     or a .zip of the folder; optional ``folder`` id) → a new question set."""
