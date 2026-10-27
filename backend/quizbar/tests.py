@@ -1264,3 +1264,180 @@ class TranslationTests(TestCase):
         from . import i18n
 
         self.assertEqual(i18n.question_map(copy)["de"], "<p>Wie schnell?</p>")
+
+
+class ExportTests(TestCase):
+    """PDF export (room, folder, library) typeset with Typst."""
+
+    def setUp(self):
+        from . import folders
+
+        self.owner = User.objects.create_user(username="ex")
+        self.room = Room.objects.create(title="Physics HS26", title_de="Physics HS26", owner=self.owner)
+        self.room.owners.add(self.owner)
+        self.client.force_login(self.owner)
+        self.week1 = folders.create_folder(self.room, "Week 1")
+        self.quiz_b = self.make_set("B quiz", [("<p>Second set question</p>", "single_choice")])
+        self.quiz_a = self.make_set("A quiz", [("<p>First set question</p>", "multiple_choice")])
+        folders.place(self.quiz_b, self.week1)
+        folders.place(self.quiz_a, self.week1)  # ordered folder: B before A
+        self.loose = self.make_set(
+            "Loose", [("<p>Loose question</p>", "single_choice"), ("<p>Cloud</p>", "word_cloud")]
+        )
+
+    def make_set(self, title, questions):
+        question_set = QuestionSet.objects.create(room=self.room, title=title, title_de=title)
+        for position, (text, kind) in enumerate(questions):
+            question = Question.objects.create(
+                question_set=question_set, kind=kind, text=text, text_de=text, position=position
+            )
+            if kind != "word_cloud":
+                right = AnswerOption.objects.create(
+                    question=question, text="Right", text_de="Right", is_correct=True, position=0
+                )
+                AnswerOption.objects.create(question=question, text="Wrong", text_de="Wrong", position=1)
+                justifications.set_text(right, "Because $v = lambda f$.")
+        return question_set
+
+    def post(self, **data):
+        return self.client.post("/api/quizbar/export/", data, content_type="application/json")
+
+    @staticmethod
+    def pdf_text(data):
+        import io
+
+        from pypdf import PdfReader
+
+        return " ".join(page.extract_text() for page in PdfReader(io.BytesIO(data)).pages)
+
+    def test_room_single_pdf(self):
+        response = self.post(scope="room", id=self.room.pk, langs=["en"], blank=True, solutions=False)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn('filename="physics-hs26-en.pdf"', response["Content-Disposition"])
+        text = self.pdf_text(response.content)
+        # folder, then its sets in folder order, then sets outside folders
+        self.assertLess(text.index("Week 1"), text.index("B quiz"))
+        self.assertLess(text.index("B quiz"), text.index("A quiz"))
+        self.assertLess(text.index("A quiz"), text.index("Other quizzes"))
+        self.assertIn("Loose question", text)
+        self.assertNotIn("Cloud", text)  # only single / multiple choice
+        self.assertNotIn("Because", text)  # no solutions
+
+    def test_zip_languages_and_versions(self):
+        import io
+        import zipfile
+
+        from .models import OptionTranslation, QuestionTranslation
+
+        question = Question.objects.get(text="<p>Loose question</p>")
+        QuestionTranslation.objects.create(question=question, lang="fr", text="<p>Question libre</p>")
+        right = question.options.get(is_correct=True)
+        OptionTranslation.objects.create(option=right, lang="fr", text="Juste", justification="Parce que.")
+        response = self.post(scope="room", id=self.room.pk, langs=["fr", "en"], blank=True, solutions=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        archive = zipfile.ZipFile(io.BytesIO(response.content))
+        names = set(archive.namelist())
+        for lang in ("en", "fr"):
+            for name in ("physics-hs26.typ", "physics-hs26.pdf", "physics-hs26-solutions.pdf"):
+                self.assertIn(f"physics-hs26/{lang}/{name}", names)
+        self.assertIn("physics-hs26/quizbar.typ", names)
+        source = archive.read("physics-hs26/fr/physics-hs26.typ").decode()
+        self.assertIn('lang: "fr"', source)
+        self.assertIn("Question libre", source)
+        self.assertIn("why: [Parce que.]", source)
+        solutions = self.pdf_text(archive.read("physics-hs26/fr/physics-hs26-solutions.pdf"))
+        self.assertIn("Parce que", solutions)
+        self.assertIn("Autres quiz", solutions)
+        blank = self.pdf_text(archive.read("physics-hs26/fr/physics-hs26.pdf"))
+        self.assertNotIn("Parce que", blank)
+
+    def test_folder_and_library(self):
+        response = self.post(scope="folder", id=self.week1.pk, langs=["de"], solutions=True)
+        self.assertEqual(response.status_code, 200)
+        text = self.pdf_text(response.content)
+        self.assertIn("Lösungen", text)
+        self.assertNotIn("Loose question", text)
+        self.assertLess(text.index("Second set question"), text.index("First set question"))
+
+        from . import library
+
+        loose = library.entry_of(Question.objects.get(text="<p>Loose question</p>"))
+        first = library.entry_of(Question.objects.get(text="<p>First set question</p>"))
+        response = self.post(
+            scope="library", entries=[loose.pk, first.pk], label="tag: waves", langs=["en"], blank=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("library-tag-waves-en.pdf", response["Content-Disposition"])
+        text = self.pdf_text(response.content)
+        self.assertLess(text.index("Loose question"), text.index("First set question"))
+        self.assertNotIn("Second set question", text)
+
+    def test_errors_and_access(self):
+        self.assertEqual(self.post(scope="room", id=self.room.pk, langs=[], blank=True).status_code, 400)
+        self.assertEqual(self.post(scope="room", id=self.room.pk, langs=["en"]).status_code, 400)
+        empty = Room.objects.create(title="Empty", owner=self.owner)
+        empty.owners.add(self.owner)
+        response = self.post(scope="room", id=empty.pk, langs=["en"], blank=True)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Nothing to export", response.json()["detail"])
+        stranger = User.objects.create_user(username="stranger")
+        self.client.force_login(stranger)
+        self.assertEqual(self.post(scope="room", id=self.room.pk, langs=["en"], blank=True).status_code, 404)
+        entry_ids = list(self.owner.qb_library.values_list("pk", flat=True))
+        response = self.post(scope="library", entries=entry_ids, langs=["en"], blank=True)
+        self.assertEqual(response.status_code, 400)  # not their entries: nothing
+
+    def test_markup_conversion(self):
+        import tempfile
+
+        from . import export
+
+        with tempfile.TemporaryDirectory() as tmp:
+            renderer = export.Renderer(tmp)
+            out = renderer.html(
+                "<p>1. a #tag @x [y] a_b *c* x--y // c</p><ul><li>one</li><li>two</li></ul>"
+                "<p>- no list <strong>bold</strong>. (z)</p>"
+            )
+            self.assertIn(r"1\. a \#tag \@x \[y\] a\_b \*c\* x\--y \// c", out)
+            self.assertIn("- one\n- two", out)
+            self.assertIn(r"\- no list #strong[bold]\. (z)", out)
+            out = renderer.plain(r"Fine $v = lambda f$, broken $x = sqrt(2$, LaTeX $\omega$, \$5")
+            import typst
+
+            renderer.check_math(typst.Compiler(root=tmp, ignore_system_fonts=True))
+            out = renderer.finish(out)
+            self.assertIn("$v = lambda f$", out)
+            self.assertIn('#raw("$x = sqrt(2$")', out)
+            self.assertIn('#raw("$\\\\omega$")', out)
+            self.assertIn(r"\$5", out)
+
+    def test_images_are_copied(self):
+        import tempfile
+        from pathlib import Path
+
+        from django.test import override_settings
+        from PIL import Image
+
+        from . import export
+
+        with tempfile.TemporaryDirectory() as media, tempfile.TemporaryDirectory() as tmp:
+            (Path(media) / "question-images").mkdir()
+            Image.new("RGB", (400, 200), "white").save(Path(media) / "question-images" / "w.png")
+            with override_settings(MEDIA_ROOT=media, MEDIA_URL="/media/"):
+                renderer = export.Renderer(tmp)
+                out = renderer.html('<p><img src="/media/question-images/w.png"></p>')
+                self.assertIn('image("../figures/w.png", width: 9.96cm)', out)
+                self.assertTrue((Path(tmp) / "figures" / "w.png").exists())
+                self.assertEqual(renderer.html('<img src="/media/../secret.png">'), "")
+
+    def test_package_copies_match(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        from . import export
+
+        frontend = Path(settings.BASE_DIR).parent / "frontend" / "public" / "quizbar" / "quizbar.typ"
+        self.assertEqual(export.PACKAGE.read_text(), frontend.read_text())

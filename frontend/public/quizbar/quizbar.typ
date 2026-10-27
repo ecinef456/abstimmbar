@@ -80,6 +80,12 @@
     solutions: if solutions == auto { c.solutions } else { solutions },
   ))
   set page(margin: (x: 2.2cm, y: 2.2cm), numbering: "1")
+  show heading.where(level: 1): it => block(above: 1.6em, below: 0.8em, width: 100%)[
+    #text(size: 15pt, weight: "bold", it.body)
+    #v(-0.5em)
+    #line(length: 100%, stroke: 0.8pt + luma(150))
+  ]
+  show heading.where(level: 2): it => block(above: 1.4em, below: 0.6em, text(size: 12.5pt, weight: "bold", it.body))
   set par(justify: false)
   set text(size: 11pt)
   if title != none {
@@ -104,6 +110,13 @@
   } else {
     box(baseline: 0.15em, circle(radius: 0.4em, fill: fill, stroke: stroke))
   }
+}
+
+/// A heading over the following questions (their numbering restarts).
+/// abstimmbar's PDF export uses it for folders (level 1) and sets (level 2).
+#let section(title, level: 2) = {
+  _number.update(0)
+  heading(level: level, outlined: true, title)
 }
 
 /// A single- or multiple-choice question.

@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { CopyPlus, Library, Pencil, Trash2 } from "lucide-react";
+import { CopyPlus, FileDown, Library, Pencil, Trash2 } from "lucide-react";
 import { localizedText } from "@basicbar/ui";
 import {
   api,
@@ -17,43 +17,10 @@ import {
 import { Button, ConfirmDialog, Field, Select } from "../components/ui";
 import HomeCrumb from "../components/HomeCrumb";
 import { EntryContent, LibraryBrowser, TagInput, UsedIn } from "./Library";
+import Modal from "./Modal";
+import ExportDialog from "./ExportDialog";
 
 type LibraryData = { entries: LibraryEntry[]; tags: LibraryTag[] };
-
-function Modal({
-  title,
-  onClose,
-  children,
-  wide = false,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  wide?: boolean;
-}) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-8"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-    >
-      <div
-        className={`w-full ${wide ? "max-w-3xl" : "max-w-md"} rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 /** Choose a room and a set, then copy the given entries to its end. */
 export function InsertIntoSetDialog({
@@ -338,6 +305,7 @@ export default function LibraryPage() {
   const [data, setData] = useState<LibraryData | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [insertIds, setInsertIds] = useState<number[] | null>(null);
+  const [exporting, setExporting] = useState<{ entries: number[]; label: string } | null>(null);
   const [removing, setRemoving] = useState<LibraryEntry | null>(null);
   const [bulkTags, setBulkTags] = useState<string[]>([]);
   const [notice, setNotice] = useState<{ text: string; setId?: number } | null>(null);
@@ -406,8 +374,12 @@ export default function LibraryPage() {
           await quizbar.deleteTag(tag.id);
           await reload();
         }}
-        toolbar={(visible) => {
+        toolbar={(visible, filter) => {
           const visibleIds = visible.map((entry) => entry.id);
+          // PDF export: the selection if there is one, else what is shown.
+          const exportable = (selected.length ? data.entries.filter((e) => selected.includes(e.id)) : visible).filter(
+            (entry) => entry.kind === "single_choice" || entry.kind === "multiple_choice",
+          );
           const allChosen = visibleIds.length > 0 && visibleIds.every((id) => selected.includes(id));
           return (
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-800">
@@ -456,6 +428,21 @@ export default function LibraryPage() {
                   </Button>
                 </>
               )}
+              <Button
+                variant="ghost"
+                className="ml-auto inline-flex items-center gap-1.5"
+                disabled={!exportable.length}
+                title={t("Single- and multiple-choice questions only.")}
+                onClick={() =>
+                  setExporting({
+                    entries: exportable.map((entry) => entry.id),
+                    label: selected.length ? "" : filter,
+                  })
+                }
+              >
+                <FileDown aria-hidden className="h-4 w-4" />
+                {selected.length ? t("Export selection as PDF") : t("Export shown as PDF")}
+              </Button>
             </div>
           );
         }}
@@ -482,6 +469,14 @@ export default function LibraryPage() {
           />
         )}
       />
+      {exporting && (
+        <ExportDialog
+          title={exporting.label ? `${t("Question library")} · ${exporting.label}` : t("Question library")}
+          target={{ scope: "library", entries: exporting.entries, label: exporting.label }}
+          count={exporting.entries.length}
+          onClose={() => setExporting(null)}
+        />
+      )}
       {insertIds && (
         <InsertIntoSetDialog
           entryIds={insertIds}

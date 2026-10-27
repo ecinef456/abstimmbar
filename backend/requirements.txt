@@ -14,6 +14,8 @@ nh3==0.3.7
 # (closing info, #24); output is passed through the nh3 allowlist.
 Markdown==3.11.2
 Pillow==12.3.0
+# quizbar (fork): PDF export of quizzes, typeset with Typst.
+typst==0.15.0
 # ASGI server — SSE streams need async views without thread-per-connection
 # (ADR-0003). [standard] brings uvloop, httptools and watchfiles (--reload).
 uvicorn[standard]==0.54.0

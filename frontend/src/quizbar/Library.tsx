@@ -239,8 +239,9 @@ export function LibraryBrowser({
   entries: LibraryEntry[];
   tags: LibraryTag[];
   renderEntry: (entry: LibraryEntry) => ReactNode;
-  /** Shown under the filters, given the visible entries (e.g. bulk actions). */
-  toolbar?: (visible: LibraryEntry[]) => ReactNode;
+  /** Shown under the filters, given the visible entries (e.g. bulk actions)
+   *  and a short description of the filter ("" when none). */
+  toolbar?: (visible: LibraryEntry[], filter: string) => ReactNode;
   onRenameTag?: (tag: LibraryTag, name: string) => Promise<void>;
   onDeleteTag?: (tag: LibraryTag) => Promise<void>;
   /** Picker: entries of other kinds are hidden. */
@@ -461,7 +462,15 @@ export function LibraryBrowser({
         </div>
       )}
 
-      {toolbar?.(visible)}
+      {toolbar?.(
+        visible,
+        [
+          tagMode ? terms.join(", ") : query.trim(),
+          currentTag?.name ?? (tagFilter === "untagged" ? t("To sort") : ""),
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      )}
 
       {visible.length === 0 ? (
         <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">

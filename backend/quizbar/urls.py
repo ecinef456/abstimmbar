@@ -19,6 +19,7 @@ urlpatterns = [
     path("library/tags/<int:tag_id>/", views.library_tag),
     path("library/insert/", views.library_insert),
     path("rooms/<int:room_id>/import-typst/", views.import_typst),
+    path("export/", views.export_pdf),
     path("sets/<int:set_id>/game/", views.set_game),
     path("game/<str:code>/me/", views.game_me),
     path("game/<str:code>/enter/", views.game_enter),

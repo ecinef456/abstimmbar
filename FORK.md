@@ -247,6 +247,44 @@ The package lives in `frontend/public/quizbar/` (`quizbar.typ`, `example.typ`,
 Code: `quizbar/typst_import.py` (parser + import), endpoint
 `/api/quizbar/rooms/<id>/import-typst/`, menu item in `RoomPage.tsx`.
 
+### PDF export (Typst)
+
+Single- and multiple-choice questions can be exported as PDF, typeset by the
+server with Typst (Python package `typst`, no Typst install needed):
+
+- **Room:** ⋮ → *Export quizzes as PDF* — the folders as chapters, their sets
+  in folder order, then the sets outside folders ("Other quizzes").
+- **Folder:** open the folder → *Export PDF* — its sets as chapters.
+- **Library:** *Export shown as PDF* — exactly the questions the search /
+  tag filter shows (or *Export selection as PDF* when questions are ticked).
+
+The dialog has one checkbox per language (English, Deutsch, Français) and two
+for the versions: **without solutions** (empty ○ one answer / □ several
+answers, to tick on paper) and **with solutions** (correct answers filled
+green, the "why" of every answer, tags). Question numbers restart in every
+set. Texts come in the chosen language (the translation, else the
+original). One language and one version → one PDF; otherwise a zip:
+
+```
+<name>/README.txt  quizbar.typ  figures/
+<name>/en/<name>.typ  <name>.pdf  <name>-solutions.pdf
+<name>/de/…  <name>/fr/…
+```
+
+The `.typ` files use the same `quizbar.typ` package (with `#section(...)`
+headings) and can be edited and recompiled:
+`typst compile --root . en/<name>.typ` (add `--input solutions=true`).
+Math stays Typst math; LaTeX math and Typst math that does not compile are
+printed as source code instead of failing the export; images from questions
+and answers are copied into `figures/`. Word clouds, open questions etc. are
+left out.
+
+Code: `quizbar/export.py`, endpoint `POST /api/quizbar/export/`, dialog
+`frontend/src/quizbar/ExportDialog.tsx`. The package is kept twice
+(`frontend/public/quizbar/quizbar.typ` for download,
+`backend/quizbar/typst/quizbar.typ` for the server); a test checks they are
+identical.
+
 ### Game mode (Kahoot style)
 
 - **Switch it on** per live poll: set page → *Game mode*. Duplicated sets

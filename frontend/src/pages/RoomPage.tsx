@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { Archive, ChartColumnDecreasing, CopyPlus, FileCode, ChevronDown, ChevronUp, Crown, DoorOpen, Heart, Layers, Play, Search, SearchX, Settings, Trash2, Upload, Users, X } from "lucide-react";
+import { Archive, ChartColumnDecreasing, CopyPlus, FileCode, FileDown, ChevronDown, ChevronUp, Crown, DoorOpen, Heart, Layers, Play, Search, SearchX, Settings, Trash2, Upload, Users, X } from "lucide-react";
 import { useEasyMode } from "../App";
 import {
   api,
@@ -39,6 +39,7 @@ import TranslatableField from "../components/TranslatableField";
 import { localizedText, type LocalizedText, RichText, TranslationControlsSlot } from "@basicbar/ui";
 import { SetSettingsForm, type SetSettings } from "./SetPage";
 import { FolderBar, MoveToFolder, parseFolderSelection } from "../quizbar/Folders";
+import ExportDialog from "../quizbar/ExportDialog";
 import { CREATABLE_SET_TYPES, SET_TYPES, type SetType } from "../setTypes";
 
 /** #75: pick the set type up front — like "+ New question" for questions.
@@ -558,6 +559,8 @@ export default function RoomPage() {
   // quizbar (fork): import a quiz written with the Typst package.
   const typstInput = useRef<HTMLInputElement>(null);
   const [typstNotice, setTypstNotice] = useState<{ setId: number; warnings: string[] } | null>(null);
+  // quizbar (fork): PDF export of the room or one folder.
+  const [exporting, setExporting] = useState<{ scope: "room" | "folder"; id: number; title: string } | null>(null);
 
   // Room settings (title / description / features), behind the ⋮ menu (#2).
   const [settingsDraft, setSettingsDraft] = useState<RoomSettings | null>(null);
@@ -871,6 +874,9 @@ export default function RoomPage() {
             <MenuItem onClick={() => typstInput.current?.click()}>
               <FileCode aria-hidden className="h-4 w-4" />{t("Import Typst quiz (.typ or .zip)")}
             </MenuItem>
+            <MenuItem onClick={() => setExporting({ scope: "room", id, title: localizedText(room.title) })}>
+              <FileDown aria-hidden className="h-4 w-4" />{t("Export quizzes as PDF")}
+            </MenuItem>
           </MoreMenu>
         </div>
         <input
@@ -1083,7 +1089,18 @@ export default function RoomPage() {
           selectFolder("all");
           await reloadFolders();
         }}
+        onExport={(folder) =>
+          setExporting({ scope: "folder", id: folder.id, title: `${localizedText(room.title)} · ${folder.title}` })
+        }
       />
+      {exporting && (
+        <ExportDialog
+          title={exporting.title}
+          target={{ scope: exporting.scope, id: exporting.id }}
+          defaultLang={room.language || undefined}
+          onClose={() => setExporting(null)}
+        />
+      )}
 
       {sorted.length === 0 && search ? (
         <EmptyState icon={SearchX} title={t("No results")}>

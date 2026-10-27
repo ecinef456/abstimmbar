@@ -1947,6 +1947,17 @@ export interface LibraryEntry {
   updated_at: string;
 }
 
+/** quizbar (fork): what to export as PDF (see the export dialog). */
+export type ExportRequest = {
+  scope: "room" | "folder" | "library";
+  id?: number;
+  entries?: number[];
+  label?: string;
+  langs: string[];
+  solutions: boolean;
+  blank: boolean;
+};
+
 export const quizbar = {
   library: () => request<{ entries: LibraryEntry[]; tags: LibraryTag[] }>("/api/quizbar/library/"),
   setEntryTags: (entryId: number, tags: string[]) =>
@@ -1969,6 +1980,28 @@ export const quizbar = {
   deleteTag: (tagId: number) =>
     request<void>(`/api/quizbar/library/tags/${tagId}/`, { method: "DELETE" }),
   /** A quiz written with quizbar.typ: the .typ, figures, or a .zip. */
+  /** One PDF, or a zip of PDFs and Typst sources (a file to download). */
+  exportPdf: async (body: ExportRequest): Promise<{ blob: Blob; filename: string }> => {
+    const response = await fetch(`${API_BASE_URL}/api/quizbar/export/`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      let detail = `${response.status}`;
+      try {
+        detail = JSON.stringify(await response.json());
+      } catch {
+        /* keep status code */
+      }
+      throw new Error(detail);
+    }
+    const blob = await response.blob();
+    const named = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
+    const fallback = blob.type === "application/zip" ? "quizzes.zip" : "quizzes.pdf";
+    return { blob, filename: named?.[1] ?? fallback };
+  },
   importTypst: (roomId: number, files: File[], folder?: number) => {
     const body = new FormData();
     for (const file of files) body.append("files", file);

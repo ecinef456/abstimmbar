@@ -61,6 +61,28 @@ def option_map(option, question=None):
     return _map(option, _load(question)[1].get(option.pk, {}))
 
 
+def preload(questions):
+    """Load the translations of many questions at once (2 queries in all)."""
+    by_id = {q.pk: q for q in questions}
+    texts, options = {pk: {} for pk in by_id}, {pk: {} for pk in by_id}
+    for t in QuestionTranslation.objects.filter(question_id__in=by_id):
+        texts[t.question_id][t.lang] = t
+    for t in OptionTranslation.objects.filter(option__question_id__in=by_id).select_related(
+        "option"
+    ):
+        options[t.option.question_id].setdefault(t.option_id, {})[t.lang] = t
+    for pk, question in by_id.items():
+        question._qb_i18n = (texts[pk], options[pk])
+
+
+def text_in(lang, question, option=None):
+    """The text of a question (or of one of its options) in ``lang``: the
+    translation, else the original."""
+    obj = option or question
+    values = question_map(question) if option is None else option_map(option, question)
+    return values.get(lang) or _original(obj)[1]
+
+
 def justification(option_id, lang, original, question):
     """An option's justification in ``lang`` (else the original)."""
     if lang:

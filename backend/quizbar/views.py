@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import MultiPartParser
@@ -11,7 +11,7 @@ from live.models import Run
 from live.state import broadcast
 from rooms.models import QuestionSet, Room
 
-from . import course, folders, game, justifications, library, selfcheck, typst_import
+from . import course, export, folders, game, justifications, library, selfcheck, typst_import
 from .models import LibraryEntry, LibraryTag, SetFolder, SetPlacement
 
 
@@ -334,6 +334,44 @@ def import_typst(request, room_id):
         {"id": question_set.pk, "questions": question_set.questions.count(), "warnings": warnings},
         status=201,
     )
+
+
+# -- PDF export ----------------------------------------------------------------
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def export_pdf(request):
+    """{scope: "room"|"folder"|"library", id (room / folder), entries (library:
+    entry ids as shown), label?, langs: ["en", …], solutions: bool,
+    blank: bool} → one PDF, or a zip of PDFs and Typst sources."""
+    data = request.data
+    scope = data.get("scope")
+    try:
+        if scope == "room":
+            document = export.room_document(_owned_room(request.user, int(data.get("id"))))
+        elif scope == "folder":
+            document = export.folder_document(_owned_folder(request.user, int(data.get("id"))))
+        elif scope == "library":
+            ids = data.get("entries")
+            ids = [i for i in ids if isinstance(i, int)] if isinstance(ids, list) else []
+            label = str(data.get("label") or "").strip()[:80]
+            document = export.library_document(request.user, ids, label)
+        else:
+            return Response({"detail": "Unknown scope."}, status=400)
+    except (TypeError, ValueError):
+        return Response({"detail": "Missing id."}, status=400)
+    langs = data.get("langs") if isinstance(data.get("langs"), list) else []
+    try:
+        name, content_type, payload = export.build(
+            document, langs, bool(data.get("solutions")), bool(data.get("blank"))
+        )
+    except export.ExportError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    response = HttpResponse(payload, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{name}"'
+    response["Access-Control-Expose-Headers"] = "Content-Disposition"  # dev: other port
+    return response
 
 
 # -- game mode ---------------------------------------------------------------

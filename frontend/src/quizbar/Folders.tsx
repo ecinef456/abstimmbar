@@ -6,7 +6,7 @@
  *  The room page keeps the set grid; these only drive which sets it shows. */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Folder, FolderInput, FolderPlus, ListOrdered, Pencil, Trash2 } from "lucide-react";
+import { Check, FileDown, Folder, FolderInput, FolderPlus, ListOrdered, Pencil, Trash2 } from "lucide-react";
 import type { SetFolder } from "../api";
 import { Button, ConfirmDialog, TextInput, ToggleSwitch } from "../components/ui";
 
@@ -41,6 +41,7 @@ export function FolderBar({
   onCreate,
   onUpdate,
   onDelete,
+  onExport,
 }: {
   folders: SetFolder[];
   /** Ids of all sets in the room (to count the ones not in a folder). */
@@ -50,6 +51,8 @@ export function FolderBar({
   onCreate: (title: string, ordered: boolean) => Promise<void>;
   onUpdate: (id: number, patch: { title?: string; ordered?: boolean }) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
+  /** Export the folder's quizzes as PDF. */
+  onExport?: (folder: SetFolder) => void;
 }) {
   const { t } = useTranslation();
   const [creating, setCreating] = useState(false);
@@ -199,14 +202,18 @@ export function FolderBar({
               ? t("Sets keep a fixed order; “Next quiz” follows it.")
               : t("Sets are listed with the normal sort.")}
           </span>
-          <Button
-            variant="danger"
-            className="ml-auto inline-flex items-center gap-1.5"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 aria-hidden className="h-4 w-4" />
-            {t("Delete folder")}
-          </Button>
+          <div className="ml-auto flex items-center gap-1">
+            {onExport && (
+              <Button variant="ghost" className="inline-flex items-center gap-1.5" onClick={() => onExport(current)}>
+                <FileDown aria-hidden className="h-4 w-4" />
+                {t("Export PDF")}
+              </Button>
+            )}
+            <Button variant="danger" className="inline-flex items-center gap-1.5" onClick={() => setConfirmDelete(true)}>
+              <Trash2 aria-hidden className="h-4 w-4" />
+              {t("Delete folder")}
+            </Button>
+          </div>
         </div>
       )}
       {current && confirmDelete && (
