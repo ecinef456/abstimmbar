@@ -1295,5 +1295,10 @@
   "Move to folder": "Déplacer vers un dossier",
   "This folder is empty.": "Ce dossier est vide.",
   "Next quiz: {{title}}": "Quiz suivant : {{title}}",
-  "N: next quiz": "N : quiz suivant"
+  "N: next quiz": "N : quiz suivant",
+  "Fill automatically from": "Remplir automatiquement à partir de",
+  "The questions of the chosen sets are copied here and kept up to date (single and multiple choice, ordering, free text). Edit them in their own set.": "Les questions des séries choisies sont copiées ici et tenues à jour (choix unique et multiple, ordre, texte libre). Modifiez-les dans leur propre série.",
+  "There are no other sets in this room.": "Il n’y a pas d’autres séries dans cette salle.",
+  "Show all sets of this room": "Afficher toutes les séries de cette salle",
+  "Duplicate room": "Dupliquer la salle"
 }

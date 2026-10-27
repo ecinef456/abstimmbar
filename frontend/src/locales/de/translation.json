@@ -1316,5 +1316,10 @@
   "This question already has an after-question.": "Zu dieser Frage gibt es bereits eine Nachher-Frage.",
   "AI is turned off for this question.": "Die KI ist für diese Frage ausgeschaltet.",
   "The logo exceeds 5 MB.": "Das Logo überschreitet 5 MB.",
-  "Only image files (including SVG).": "Nur Bilddateien (auch SVG)."
+  "Only image files (including SVG).": "Nur Bilddateien (auch SVG).",
+  "Fill automatically from": "Automatisch füllen aus",
+  "The questions of the chosen sets are copied here and kept up to date (single and multiple choice, ordering, free text). Edit them in their own set.": "Die Fragen der gewählten Sets werden hierher kopiert und aktuell gehalten (Einfach- und Mehrfachauswahl, Reihenfolge, Freitext). Bearbeiten Sie sie in ihrem eigenen Set.",
+  "There are no other sets in this room.": "In diesem Raum gibt es keine anderen Sets.",
+  "Show all sets of this room": "Alle Sets dieses Raums anzeigen",
+  "Duplicate room": "Raum duplizieren"
 }

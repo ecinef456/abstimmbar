@@ -33,6 +33,7 @@ from common.i18n_fields import resolve_translated_text, translated_map
 from common.markdown import render_markdown
 from common.models import SiteConfig
 from quizbar import justifications as quizbar_justifications
+from quizbar import selfcheck as quizbar_selfcheck
 from rooms.models import AnswerOption, Question, QuestionSet, Room
 
 from . import (
@@ -1655,9 +1656,10 @@ def _self_check_solution(question):
         "correct_order": correct_order,
     }
     # quizbar (fork): per-option justifications, shown with the feedback.
-    if question.kind in Question.CHOICE_KINDS:
-        if texts := quizbar_justifications.for_question(question):
-            solution["justifications"] = texts
+    if question.kind in Question.CHOICE_KINDS and (
+        texts := quizbar_justifications.for_question(question)
+    ):
+        solution["justifications"] = texts
     return solution
 
 
@@ -1670,6 +1672,8 @@ def check_questions(request, token):
     stateless per attempt, unlike recording/self-paced resume. ``?q=<id>``
     restricts to a single question (per-question QR deep link)."""
     qs = _self_check_set(token)
+    # quizbar (fork): a self-check filled from other sets catches up first.
+    quizbar_selfcheck.ensure_synced(qs)
     questions = list(qs.questions.prefetch_related("options"))
     q_id = request.GET.get("q")
     single = bool(q_id and q_id.isdigit())

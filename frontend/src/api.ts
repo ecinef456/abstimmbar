@@ -977,7 +977,7 @@ export const api = {
     }),
 
   listSections: (setId: number) =>
-    request<Paginated<Section>>(`/api/sections/?question_set=${setId}`),
+    request<Paginated<Section>>(`/api/sections/?question_set=${setId}&page_size=1000`),
   createSection: (setId: number, title: LocalizedText = "") =>
     request<Section>("/api/sections/", {
       method: "POST",
@@ -1006,7 +1006,8 @@ export const api = {
     }),
 
   listQuestions: (setId: number) =>
-    request<Paginated<Question>>(`/api/questions/?question_set=${setId}`),
+    // quizbar (fork): all questions (the API's default page of 25 cut longer sets).
+    request<Paginated<Question>>(`/api/questions/?question_set=${setId}&page_size=1000`),
   getQuestion: (id: number) => request<Question>(`/api/questions/${id}/`),
   createQuestion: (data: Omit<Partial<Question>, "id">) =>
     request<Question>("/api/questions/", {
@@ -1872,6 +1873,14 @@ export interface SetNextInfo {
   next: { id: number; title: LocalizedText; type: SetType; number: number } | null;
 }
 
+/** quizbar (fork): sets a self-check copies its questions from. */
+export interface SelfCheckSources {
+  self_check: boolean;
+  sources: number[];
+  candidates: { id: number; title: LocalizedText; type: SetType; folder: number | null }[];
+  folder: number | null;
+}
+
 /** quizbar (fork): this fork's own endpoints (backend app `quizbar`). */
 export const quizbar = {
   folders: (roomId: number) =>
@@ -1899,6 +1908,16 @@ export const quizbar = {
       body: JSON.stringify({ folder }),
     }),
   nextSet: (setId: number) => request<SetNextInfo>(`/api/quizbar/sets/${setId}/next/`),
+  /** Self-check sources; GET also brings the self-check up to date. */
+  selfCheckSources: (setId: number) =>
+    request<SelfCheckSources>(`/api/quizbar/sets/${setId}/self-check-sources/`),
+  setSelfCheckSources: (setId: number, sources: number[]) =>
+    request<SelfCheckSources>(`/api/quizbar/sets/${setId}/self-check-sources/`, {
+      method: "PUT",
+      body: JSON.stringify({ sources }),
+    }),
+  duplicateRoom: (roomId: number) =>
+    request<{ id: number }>(`/api/quizbar/rooms/${roomId}/duplicate/`, { method: "POST", body: "{}" }),
   /** Presenter key J: show/hide the active question's justifications. */
   justification: (runId: number, show: boolean) =>
     request<{ status: string; shown: boolean }>(`/api/quizbar/runs/${runId}/justification/`, {

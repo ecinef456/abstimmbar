@@ -8,6 +8,7 @@ import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleH
 import {
   api,
   live,
+  quizbar,
   requestDetail,
   requestError,
   results,
@@ -19,6 +20,7 @@ import {
   type RevealAnswers,
   type Room,
   type Section as SectionType,
+  type SelfCheckSources,
 } from "../api";
 import { useEasyMode } from "../App";
 import AiGenerateForm from "../components/AiGenerateForm";
@@ -43,6 +45,7 @@ import {
 } from "../components/ui";
 import { LICENSE_OPTIONS, licenseNeedsHolder } from "../licenses";
 import { useTourSignal } from "../tour/signals";
+import SelfCheckSourcesPanel from "../quizbar/SelfCheckSources";
 
 // Values are English source strings, translated with t() at each render site
 // (this Record lives at module scope, outside any component).
@@ -863,12 +866,20 @@ export default function SetPage() {
   const [ending, setEnding] = useState(false);
 
   useEffect(() => {
-    void Promise.all([
-      api.getQuestionSet(id),
-      api.listQuestions(id),
-      api.listSections(id),
-      api.whoami(),
-    ]).then(([setData, page, sectionPage, who]) => {
+    // quizbar (fork): a self-check filled from other sets catches up first.
+    void quizbar
+      .selfCheckSources(id)
+      .catch(() => null)
+      .then((sources) => {
+        setSelfCheckSources(sources?.self_check ? sources : null);
+        return Promise.all([
+          api.getQuestionSet(id),
+          api.listQuestions(id),
+          api.listSections(id),
+          api.whoami(),
+        ]);
+      })
+      .then(([setData, page, sectionPage, who]) => {
       setSet(setData);
       setQuestions(page.results);
       setSections(sectionPage.results);
@@ -993,6 +1004,8 @@ export default function SetPage() {
     const page = await api.listQuestions(id);
     setQuestions(page.results);
   }
+  // quizbar (fork): sets this self-check copies its questions from.
+  const [selfCheckSources, setSelfCheckSources] = useState<SelfCheckSources | null>(null);
 
   /** Archive current results & prepare a fresh run (#27/#56) — same action as
    * the room's set table, surfaced here in the set's ⋮ menu. Reloads the set
@@ -1579,6 +1592,19 @@ export default function SetPage() {
           </ProOnly>
           {metaError && <p className="mt-1 text-sm text-danger">{metaError}</p>}
         </div>
+      )}
+
+      {/* quizbar (fork): fill this self-check from other sets automatically. */}
+      {set.type === "self_check" && selfCheckSources && (
+        <SelfCheckSourcesPanel
+          setId={id}
+          data={selfCheckSources}
+          onChanged={(next) => {
+            setSelfCheckSources(next);
+            void reloadQuestions();
+            void api.listSections(id).then((page) => setSections(page.results));
+          }}
+        />
       )}
 
       {/* Lernkontrolle "Veröffentlichen" panel (#75 phase 3): permanent link,

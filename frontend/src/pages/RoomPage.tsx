@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { Archive, ChartColumnDecreasing, ChevronDown, ChevronUp, Crown, DoorOpen, Heart, Layers, Play, Search, SearchX, Settings, Trash2, Upload, Users, X } from "lucide-react";
+import { Archive, ChartColumnDecreasing, CopyPlus, ChevronDown, ChevronUp, Crown, DoorOpen, Heart, Layers, Play, Search, SearchX, Settings, Trash2, Upload, Users, X } from "lucide-react";
 import { useEasyMode } from "../App";
 import {
   api,
@@ -702,6 +702,12 @@ export default function RoomPage() {
     if (updated.is_archived) navigate("/");
   }
 
+  // quizbar (fork): copy the whole room (folders, sets, self-check links).
+  async function duplicateRoom() {
+    const { id: copy } = await quizbar.duplicateRoom(id);
+    navigate(`/rooms/${copy}`);
+  }
+
   async function handleCreate() {
     if (!newSet) return;
     // A blank title is fine — the backend fills a dated default.
@@ -830,6 +836,9 @@ export default function RoomPage() {
             <MenuItem onClick={() => void toggleArchive()}>
               <Archive aria-hidden className="h-4 w-4" />
               {room.is_archived ? t("Restore room") : t("Archive room")}
+            </MenuItem>
+            <MenuItem onClick={() => void duplicateRoom()}>
+              <CopyPlus aria-hidden className="h-4 w-4" />{t("Duplicate room")}
             </MenuItem>
             {!easyMode && (
               <MenuItem onClick={() => importInput.current?.click()}>

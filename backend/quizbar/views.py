@@ -5,12 +5,13 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from common.i18n_fields import translated_map
 from live.models import Run
 from live.state import broadcast
 from rooms.models import QuestionSet, Room
 
-from . import folders, justifications
-from .models import SetFolder
+from . import course, folders, justifications, selfcheck
+from .models import SetFolder, SetPlacement
 
 
 def _owner(user, room):
@@ -146,3 +147,67 @@ def set_folder(request, set_id):
 def set_next(request, set_id):
     """The set's folder, its number there and the next presentable set."""
     return Response(folders.next_info(_owned_set(request.user, set_id)))
+
+
+# --- self-checks filled from other sets; room duplication ---------------------
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def self_check_sources(request, set_id):
+    """GET: sync if needed, then the source ids and the possible sources
+    (other presentable sets of the room). PUT {"sources": [id, …]}."""
+    question_set = _owned_set(request.user, set_id)
+    if question_set.type != QuestionSet.SetType.SELF_CHECK:
+        if request.method == "PUT":
+            return Response({"detail": "Only self-checks have sources."}, status=400)
+        return Response({"self_check": False, "sources": [], "candidates": [], "folder": None})
+    if request.method == "PUT":
+        try:
+            ids = [int(x) for x in request.data.get("sources") or []]
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid sources."}, status=400)
+        by_id = {s.pk: s for s in question_set.room.question_sets.filter(pk__in=ids)}
+        if len(by_id) != len(set(ids)):
+            return Response({"detail": "Sources must be sets of this room."}, status=400)
+        try:
+            selfcheck.set_sources(question_set, [by_id[i] for i in ids])
+        except ValueError as error:
+            return Response({"detail": str(error)}, status=400)
+    else:
+        selfcheck.ensure_synced(question_set)
+    candidates = (
+        question_set.room.question_sets.exclude(pk=question_set.pk)
+        .exclude(type=QuestionSet.SetType.SELF_CHECK)
+        .order_by("id")
+    )
+    placement = {
+        p.question_set_id: p.folder_id
+        for p in SetPlacement.objects.filter(question_set__room=question_set.room)
+    }
+    return Response(
+        {
+            "self_check": True,
+            "sources": [s.pk for s in selfcheck.sources(question_set)],
+            "candidates": [
+                {
+                    "id": s.pk,
+                    "title": translated_map(s, "title"),
+                    "type": s.type,
+                    "folder": placement.get(s.pk),
+                }
+                for s in candidates
+            ],
+            "folder": placement.get(question_set.pk),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def duplicate_room(request, room_id):
+    """Copy a room with its sets, folders and self-check sources (no results)."""
+    room = _owned_room(request.user, room_id)
+    title = str(request.data.get("title") or "").strip()[:200] or None
+    copy = course.duplicate_room(room, request.user, title=title)
+    return Response({"id": copy.pk}, status=201)

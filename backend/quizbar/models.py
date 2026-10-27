@@ -88,3 +88,53 @@ class SetPlacement(models.Model):
 
     def __str__(self):
         return f"set {self.question_set_id} in folder {self.folder_id}"
+
+
+class SelfCheckSource(models.Model):
+    """A set whose questions a self-check copies automatically, in order."""
+
+    self_check = models.ForeignKey(
+        "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_sources"
+    )
+    source = models.ForeignKey(
+        "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_feeds"
+    )
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("position", "id")
+        constraints = (
+            models.UniqueConstraint(fields=("self_check", "source"), name="qb_unique_source"),
+        )
+
+
+class SyncedQuestion(models.Model):
+    """A self-check question copied from ``source`` (kept in place on sync,
+    so per-question attempt statistics survive edits of the original)."""
+
+    copy = models.OneToOneField(
+        "rooms.Question", on_delete=models.CASCADE, related_name="qb_synced_from"
+    )
+    source = models.ForeignKey(
+        "rooms.Question", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+
+
+class SyncedSection(models.Model):
+    """A self-check section standing for one source set."""
+
+    section = models.OneToOneField(
+        "rooms.Section", on_delete=models.CASCADE, related_name="qb_synced_from"
+    )
+    source_set = models.ForeignKey(
+        "rooms.QuestionSet", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+
+
+class SelfCheckState(models.Model):
+    """Fingerprint of the sources at the last sync (skip unchanged ones)."""
+
+    self_check = models.OneToOneField(
+        "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_sync_state"
+    )
+    fingerprint = models.CharField(max_length=64, blank=True, default="")

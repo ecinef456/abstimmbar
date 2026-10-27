@@ -363,3 +363,147 @@ class FolderTests(Base):
         self.client.force_login(User.objects.create_user(username="eve"))
         self.assertEqual(self.api("get", f"rooms/{self.room.pk}/folders/").status_code, 404)
         self.assertEqual(self.api("delete", f"folders/{fid}/").status_code, 404)
+
+
+class SelfCheckSyncTests(Base):
+    """Self-checks that fill themselves from other sets (quizbar.selfcheck)."""
+
+    def setUp(self):
+        super().setUp()
+        from . import selfcheck
+
+        self.sc = selfcheck
+        self.quiz2 = QuestionSet.objects.create(room=self.room, title="Quiz 2")
+        self.cloud = Question.objects.create(
+            question_set=self.quiz2, kind=Question.Kind.WORD_CLOUD, text="cloud", position=0
+        )
+        self.mc = Question.objects.create(
+            question_set=self.quiz2, kind=Question.Kind.MULTIPLE_CHOICE, text="mc", position=1
+        )
+        AnswerOption.objects.create(question=self.mc, text="a", is_correct=True, position=0)
+        AnswerOption.objects.create(question=self.mc, text="b", position=1)
+        self.check = QuestionSet.objects.create(
+            room=self.room, title="Self-check", type=QuestionSet.SetType.SELF_CHECK
+        )
+        self.sc.set_sources(self.check, [self.question_set, self.quiz2])
+
+    def outline(self):
+        sections = [(s.position, "S", s.title) for s in self.check.sections.all()]
+        questions = [(q.position, "Q", q.text) for q in self.check.questions.all()]
+        return [(kind, text) for _p, kind, text in sorted(sections + questions)]
+
+    def test_copies_allowed_kinds_with_sections_and_justifications(self):
+        self.assertEqual(
+            self.outline(),
+            [("S", "Woche 1"), ("Q", "<p>2+2?</p>"), ("S", "Quiz 2"), ("Q", "mc")],
+        )
+        copy = self.check.questions.get(text="<p>2+2?</p>")
+        right = copy.options.get(is_correct=True)
+        self.assertEqual(justifications.text_for(right), "Because $2 + 2 = 4$.")
+
+    def test_edit_updates_copy_in_place_and_keeps_id(self):
+        copy_id = self.check.questions.get(text="mc").pk
+        self.mc.text = "mc edited"
+        self.mc.save()
+        self.assertTrue(self.sc.ensure_synced(self.check))
+        self.assertEqual(self.check.questions.get(pk=copy_id).text, "mc edited")
+        self.assertFalse(self.sc.ensure_synced(self.check))  # unchanged → no work
+
+    def test_deleted_source_question_and_removed_source(self):
+        self.mc.delete()
+        self.sc.ensure_synced(self.check)
+        self.assertEqual(self.outline(), [("S", "Woche 1"), ("Q", "<p>2+2?</p>")])
+        self.sc.set_sources(self.check, [self.quiz2])
+        self.assertEqual(self.outline(), [])
+
+    def test_manual_questions_are_kept_after_copies(self):
+        Question.objects.create(
+            question_set=self.check, kind=Question.Kind.SINGLE_CHOICE, text="mine", position=0
+        )
+        self.sc.ensure_synced(self.check, force=True)
+        self.assertEqual(self.outline()[-1], ("Q", "mine"))
+        self.assertEqual(self.check.questions.count(), 3)
+
+    def test_student_page_catches_up(self):
+        self.check.enable_self_check()
+        self.mc.text = "changed"
+        self.mc.save()
+        data = self.client.get(f"/api/live/check/{self.check.self_check_token}/").json()
+        texts = {q["text"]["de"] or q["text"]["en"] for q in data["questions"]}
+        self.assertIn("changed", texts)
+
+    def test_sources_api(self):
+        self.client.force_login(self.owner)
+        url = f"/api/quizbar/sets/{self.check.pk}/self-check-sources/"
+        data = self.client.get(url).json()
+        self.assertEqual(data["sources"], [self.question_set.pk, self.quiz2.pk])
+        self.assertEqual({c["id"] for c in data["candidates"]}, {self.question_set.pk, self.quiz2.pk})
+        resp = self.client.put(url, {"sources": [self.quiz2.pk]}, content_type="application/json")
+        self.assertEqual(resp.json()["sources"], [self.quiz2.pk])
+        self.assertEqual(self.outline(), [("S", "Quiz 2"), ("Q", "mc")])
+
+
+class CourseTests(Base):
+    def test_create_course_structure(self):
+        from . import course, languages
+
+        room = course.create_course(self.owner, "0000 - TEMPLATE", weeks=3, archived=True)
+        self.assertTrue(room.archived_by.filter(pk=self.owner.pk).exists())
+        self.assertEqual(languages.room_language(room), "en")
+        folders_ = list(room.qb_folders.all())
+        self.assertEqual([f.title for f in folders_], ["Week 1", "Week 2", "Week 3"])
+        week2 = [
+            p.question_set for p in folders_[1].placements.select_related("question_set")
+        ]
+        self.assertEqual(
+            [qs.title for qs in week2],
+            ["Week 2 – Activators PRE", "Week 2 – Quiz 1", "Week 2 – Quiz 2",
+             "Week 2 – Activators POST", "Week 2 – Self-check"],
+        )
+        self.assertEqual(week2[0].reveal_answers, "never")
+        self.assertEqual(week2[4].type, QuestionSet.SetType.SELF_CHECK)
+        self.assertEqual(
+            [s.source.title for s in week2[4].qb_sources.all()],
+            ["Week 2 – Quiz 1", "Week 2 – Quiz 2", "Week 2 – Activators POST"],
+        )
+
+    def test_duplicate_room_keeps_structure_and_relinks(self):
+        from . import course, languages
+
+        template = course.create_course(self.owner, "0000 - TEMPLATE", weeks=2, archived=True)
+        languages.set_room_language(template, "fr")
+        quiz = template.question_sets.get(title_de="Week 1 – Quiz 1")
+        q = Question.objects.create(question_set=quiz, kind=Question.Kind.SINGLE_CHOICE, text="q1")
+        AnswerOption.objects.create(question=q, text="x", is_correct=True)
+        check = template.question_sets.get(title_de="Week 1 – Self-check")
+        course.selfcheck.ensure_synced(check)
+        self.assertEqual(check.questions.count(), 1)
+
+        self.client.force_login(self.owner)
+        resp = self.client.post(f"/api/quizbar/rooms/{template.pk}/duplicate/", {}, content_type="application/json")
+        copy = Room.objects.get(pk=resp.json()["id"])
+        self.assertEqual(copy.title, "0000 - TEMPLATE (copy)")
+        self.assertFalse(copy.archived_by.exists())
+        self.assertEqual(languages.room_language(copy), "fr")
+        self.assertEqual(copy.question_sets.count(), 10)
+        self.assertEqual(copy.qb_folders.count(), 2)
+        new_check = copy.question_sets.get(title_de="Week 1 – Self-check")
+        self.assertEqual(
+            [s.source.room_id for s in new_check.qb_sources.all()], [copy.pk] * 3
+        )
+        # One copy, linked to the NEW room's quiz (not doubled, not the old one).
+        self.assertEqual(new_check.questions.count(), 1)
+        new_quiz = copy.question_sets.get(title_de="Week 1 – Quiz 1")
+        new_quiz.questions.update(text="changed in copy")
+        Question.objects.filter(question_set=new_quiz).first().save()
+        course.selfcheck.ensure_synced(new_check)
+        self.assertEqual(new_check.questions.get().text, "changed in copy")
+        self.assertEqual(check.questions.get().text, "q1")
+
+    def test_management_command(self):
+        from django.core.management import call_command
+
+        call_command("quizbar_course", owner="frank", title="HS26 - TA - Physics", weeks=14)
+        room = Room.objects.get(title_de="HS26 - TA - Physics")
+        self.assertEqual(room.qb_folders.count(), 14)
+        self.assertEqual(room.question_sets.count(), 70)

@@ -11,4 +11,6 @@ urlpatterns = [
     path("folders/<int:folder_id>/order/", views.folder_order),
     path("sets/<int:set_id>/folder/", views.set_folder),
     path("sets/<int:set_id>/next/", views.set_next),
+    path("sets/<int:set_id>/self-check-sources/", views.self_check_sources),
+    path("rooms/<int:room_id>/duplicate/", views.duplicate_room),
 ]

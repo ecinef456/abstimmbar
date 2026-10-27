@@ -100,6 +100,42 @@ under `/api/quizbar/rooms|folders|sets/…`), `frontend/src/quizbar/Folders.tsx`
 hooks in `RoomPage.tsx`, `PresentPage.tsx` and the set `duplicate` view.
 The room page now also loads all of a room's sets (upstream stopped at 25).
 
+### Self-checks filled automatically, course rooms, duplicating a room
+
+- **Fill automatically from:** a self-check's page has a box listing the
+  other sets of its folder (*Show all sets of this room* for the rest).
+  Tick sets and their questions are copied into the self-check, one
+  section per set, and kept up to date: edit a question in its own set and
+  the self-check follows the next time it is opened (by you or a student).
+  Only kinds a self-check supports are copied (single/multiple choice,
+  ordering, free text). Questions you add to the self-check by hand stay,
+  after the copied ones. Copies keep their ids, so attempt statistics
+  survive edits.
+- **Course rooms:** a management command creates a room with folders
+  *Week 1 … Week N*, each with five sets in numbered order: *Activators
+  PRE* (live poll, answers never revealed), *Quiz 1*, *Quiz 2*, *Activators
+  POST* (live polls) and a *Self-check* filled from Quiz 1, Quiz 2 and
+  Activators POST of that week. Room language English unless
+  `--language de|fr|none`.
+
+  ```bash
+  sudo docker exec abstimmbar_app python manage.py quizbar_course \
+      --owner <username> --title "0000 - TEMPLATE" --archived
+  sudo docker exec abstimmbar_app python manage.py quizbar_course \
+      --owner <username> --title "HS26 - TA - Physics"        # --weeks 14 is the default
+  ```
+- **Duplicate room** (room ⋮ menu, also for archived rooms): copies
+  settings, language, folders, every set with its questions and the
+  self-check links, which then point to the copy's own sets. The copy is
+  called "… (copy)" and is not archived; rename it in the room settings.
+  Keep an archived "0000 - TEMPLATE" and duplicate it for each new course.
+
+Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
+`quizbar/management/commands/quizbar_course.py` (tables `SelfCheckSource`,
+`SyncedQuestion`, `SyncedSection`, `SelfCheckState`),
+`frontend/src/quizbar/SelfCheckSources.tsx`; hooks in `live/views.py`
+(sync before a student loads the self-check), `SetPage.tsx`, `RoomPage.tsx`.
+
 ### A–Z as the default sort
 
 Rooms and question sets open sorted by title; numbers sort naturally
