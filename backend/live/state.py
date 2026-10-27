@@ -14,6 +14,7 @@ from django.db.models import Count
 
 from common.i18n_fields import translated_map
 from quizbar import game as quizbar_game
+from quizbar import i18n as quizbar_i18n
 from quizbar import justifications as quizbar_justifications
 from quizbar import languages as quizbar_languages
 from rooms.models import Question
@@ -63,7 +64,8 @@ def question_payload(question, shuffle_seed):
         "kind": question.kind,
         # Authored content (#33 MR2): the SSE hub broadcasts one payload to
         # every participant, so text is a {de, en} map resolved client-side.
-        "text": translated_map(question, "text"),
+        # quizbar (fork): with its translations (en/de/fr).
+        "text": quizbar_i18n.question_map(question),
         "multiple": question.kind == Question.Kind.MULTIPLE_CHOICE,
         # Recording viewers run a per-question client countdown (#53); harmless
         # for other consumers.
@@ -87,7 +89,7 @@ def question_payload(question, shuffle_seed):
         "options": [
             {
                 "id": o.pk,
-                "text": translated_map(o, "text"),
+                "text": quizbar_i18n.option_map(o, question),
                 "is_abstention": o.is_abstention,
                 **({"image": o.image} if o.image else {}),
             }
@@ -191,7 +193,7 @@ def build_payloads(room):
         participant["question"] = {
             "id": question.pk,
             "kind": question.kind,
-            "text": translated_map(question, "text"),
+            "text": quizbar_i18n.question_map(question),
         }
         if question.kind in Question.TEXT_KINDS:
             participant["words"] = words_with_counts(run, question)
@@ -343,7 +345,7 @@ def _self_paced_payloads(room, run, base):
             # client resolves the map like every other authored text (#33).
             "text": {
                 lang: " ".join(nh3.clean(value, tags=set()).split())
-                for lang, value in translated_map(question, "text").items()
+                for lang, value in quizbar_i18n.question_map(question).items()
             },
             "votes": counts.get(question.pk, 0),
         }

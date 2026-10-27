@@ -304,6 +304,8 @@ export interface Question {
   /** quizbar (fork): question library state (read). Write
    *  `{ in_library, tags }` to change it. */
   library?: QuestionLibraryInfo;
+  /** quizbar (fork): translations (options in position order). */
+  translations?: QuestionTranslations;
   /** single_choice only: created via the binary Ja/Nein preset — the editor
    *  shows the Ja/Nein · Wahr/Falsch template quick-fill above two options (#79). */
   binary_choice: boolean;
@@ -1907,6 +1909,11 @@ export interface GameLeaderboard {
   questions: number;
   leaderboard: (GamePlayer & { rank: number; score: number; last: number | null })[];
 }
+
+/** quizbar (fork): a question in other languages. */
+export type QuestionTranslations = Partial<
+  Record<"en" | "de" | "fr", { text: string; options: { text: string; justification?: string }[] }>
+>;
 
 /** quizbar (fork): question library. */
 export interface QuestionLibraryInfo {

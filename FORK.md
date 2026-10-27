@@ -179,6 +179,26 @@ Code: `quizbar/library.py` (tables `LibraryEntry`, `LibraryTag`,
 (`library` field of a question), `rooms/views.py` (hidden store never
 listed), `QuestionPage.tsx`, `SetPage.tsx`, `App.tsx`, `main.tsx`.
 
+### Questions in three languages (English, German, French)
+
+- A question keeps its **own text** (the original) and can have
+  **translations** for English, German and French — question text, answers
+  and justifications.
+- Wherever it is shown (beamer, phones, self-check, results) the room's
+  language picks the translation; a missing one falls back to the original.
+  Rooms without a language: each phone picks its own.
+- The **library** shows English (the English translation, if the original
+  is not English). Tags are English.
+- Editor: a collapsed **Translations** box under the answers (tabs English /
+  Deutsch / Français).
+- Copies (library, duplicated sets/rooms, self-checks) keep the translations.
+- From Typst: one file per language, imported together (see below).
+
+Code: `quizbar/i18n.py` (tables `QuestionTranslation`, `OptionTranslation`),
+`frontend/src/quizbar/Translations.tsx`; hooks in `live/state.py`,
+`live/results.py`, `quizbar/justifications.py`, `rooms/transfer.py`,
+`rooms/serializers.py` (`translations` field), `QuestionPage.tsx`.
+
 ### Quizzes written in Typst (quizbar.typ)
 
 The package lives in `frontend/public/quizbar/` (`quizbar.typ`, `example.typ`,
@@ -212,6 +232,13 @@ The package lives in `frontend/public/quizbar/` (`quizbar.typ`, `example.typ`,
   with the same title and type** (e.g. from the course template), the
   questions go into it; otherwise a new set is made (in the open folder).
   The questions join the library with their tags.
+- **Several languages:** `quiz.en.typ`, `quiz.de.typ`, `quiz.fr.typ` with
+  `lang: "en"` / `"de"` / `"fr"` in the show rule (the PDF headings follow
+  it), same questions and answers in the same order, imported together in
+  one `.zip`: one set, each question once, the other files become its
+  translations. The English file is the original (correct answers, images,
+  tags, time limits come from it). Mismatched files are refused with the
+  question number.
 - Kept on import: math (as Typst math), paragraphs, `- lists`, `*bold*`,
   `_italic_`; answers and `why:` become plain text with math. Other markup
   is reduced to its text. The file is read, not run, so `#question(...)`

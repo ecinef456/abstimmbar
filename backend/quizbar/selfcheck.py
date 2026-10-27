@@ -25,6 +25,7 @@ from rooms.transfer import (
     duplicate_question,
 )
 
+from . import i18n
 from .models import (
     OptionJustification,
     SelfCheckSource,
@@ -72,6 +73,7 @@ def fingerprint(self_check):
             "option_id", "text"
         ).order_by("option_id"):
             digest.update(f"J{row[0]}|{row[1]}|".encode())
+        digest.update(repr(i18n.fingerprint_rows(ids)).encode())
     return digest.hexdigest()
 
 
@@ -105,7 +107,8 @@ def _update_copy(source, copy, *, section, position):
     copy.position = position
     copy.save()
     copy.options.all().delete()
-    _copy_options(source, copy)  # also copies the justifications
+    _copy_options(source, copy)  # also copies the justifications and translations
+    i18n.copy_question(source, copy)
 
 
 def _sync(self_check):

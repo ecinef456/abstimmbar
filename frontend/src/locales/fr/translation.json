@@ -1376,5 +1376,10 @@
   "Otherwise each phone gets a random funny name, like “Chaotic Capybara”.": "Sinon, chaque téléphone reçoit un nom amusant au hasard, comme « Chaotic Capybara ».",
   "Students choose an avatar": "Les étudiants choisissent un avatar",
   "Otherwise no avatars: the podium shows the medals only.": "Sinon, pas d’avatars : le podium n’affiche que les médailles.",
-  "Game mode: points for fast correct answers, leaderboard (P) and podium at the end. Your own sounds play if you added them (M mutes).": "Mode jeu : des points pour les bonnes réponses rapides, le classement (P) et le podium à la fin. Vos propres sons sont joués si vous les avez ajoutés (M coupe le son)."
+  "Game mode: points for fast correct answers, leaderboard (P) and podium at the end. Your own sounds play if you added them (M mutes).": "Mode jeu : des points pour les bonnes réponses rapides, le classement (P) et le podium à la fin. Vos propres sons sont joués si vous les avez ajoutés (M coupe le son).",
+  "Translations": "Traductions",
+  "none yet": "aucune pour l’instant",
+  "The text above is the original. A translation is shown instead when the room is set to that language; empty fields fall back to the original.": "Le texte ci-dessus est l’original. Une traduction s’affiche à la place lorsque la salle est réglée sur cette langue ; les champs vides reprennent l’original.",
+  "Why right / wrong (translation)": "Pourquoi juste / faux (traduction)",
+  "Answer": "Réponse"
 }

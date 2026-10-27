@@ -253,3 +253,36 @@ class GameQuestion(models.Model):
         constraints = (
             models.UniqueConstraint(fields=("run", "question"), name="qb_game_question_once"),
         )
+
+
+class QuestionTranslation(models.Model):
+    """A question's text in another language (en/de/fr). The question's own
+    text stays the original; a translation wins when the room (or viewer)
+    uses that language."""
+
+    question = models.ForeignKey(
+        "rooms.Question", on_delete=models.CASCADE, related_name="qb_translations"
+    )
+    lang = models.CharField(max_length=5)
+    text = models.TextField(blank=True, default="")
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(fields=("question", "lang"), name="qb_one_question_translation"),
+        )
+
+
+class OptionTranslation(models.Model):
+    """An answer option's text and justification in another language."""
+
+    option = models.ForeignKey(
+        "rooms.AnswerOption", on_delete=models.CASCADE, related_name="qb_translations"
+    )
+    lang = models.CharField(max_length=5)
+    text = models.CharField(max_length=500, blank=True, default="")
+    justification = models.TextField(blank=True, default="")
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(fields=("option", "lang"), name="qb_one_option_translation"),
+        )

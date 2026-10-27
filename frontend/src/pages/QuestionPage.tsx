@@ -49,6 +49,12 @@ import TranslatableField from "../components/TranslatableField";
 import { Button, ClampedNumberInput, EmptyState, Field, InfoHint, MenuItem, MoreMenu, ProOnly, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
 import { KIND_LABEL, REVEAL_LABEL } from "./SetPage";
 import { LibraryField } from "../quizbar/Library";
+import TranslationsPanel, {
+  emptyTranslations,
+  translationsFromApi,
+  translationsToApi,
+  type TranslationState,
+} from "../quizbar/Translations";
 
 /** Which languages of a translatable field look outdated, computed live in
  * the editor (#91) so the amber marker appears the moment you edit one
@@ -57,6 +63,10 @@ import { LibraryField } from "../quizbar/Library";
  * HAS changed. With no live edit yet, fall back to the server's persisted
  * `translation_stale` (a stale state saved in an earlier session), unless the
  * author already brought the field back in sync this session (`synced`). */
+// quizbar (fork): kinds whose answers are not translated (no options, or
+// options generated from the scale).
+const OPTIONLESS_TRANSLATION = ["word_cloud", "open_text", "mindmap", "matrix", "likert"];
+
 function liveStaleLangs(
   baseline: LocalizedText,
   current: LocalizedText,
@@ -225,6 +235,8 @@ export default function QuestionPage() {
   const [inLibrary, setInLibrary] = useState(true);
   const [libraryTags, setLibraryTags] = useState<string[]>([]);
   const [knownTags, setKnownTags] = useState<string[]>([]);
+  // quizbar (fork): translations of the question (en/de/fr).
+  const [trans, setTrans] = useState<TranslationState>(emptyTranslations);
   useEffect(() => {
     void quizbar
       .library()
@@ -356,6 +368,7 @@ export default function QuestionPage() {
       setBinaryChoice(template === "binary");
       setInLibrary(true);
       setLibraryTags([]);
+      setTrans(emptyTranslations());
       setOptions(defaultOptions(kind, template));
       setOptionBaseline({});
       return supersede;
@@ -441,6 +454,7 @@ export default function QuestionPage() {
         }
       }
       setOptions(editableOptions);
+      setTrans(translationsFromApi(data.translations, editableOptions.map((o) => o.clientId)));
       setOptionBaseline(
         Object.fromEntries(editableOptions.map((o) => [o.clientId, o.text])),
       );
@@ -674,6 +688,10 @@ export default function QuestionPage() {
           : {}),
         time_limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : null,
         library: { in_library: inLibrary, tags: libraryTags },
+        translations: translationsToApi(
+          trans,
+          OPTIONLESS_TRANSLATION.includes(question.kind) ? [] : filledOptions.map((o) => o.clientId),
+        ),
         // #91: report fields whose (non-canonical) translation now matches
         // what's being saved, so the API re-baselines their sync state.
         synced_fields: Array.from(new Set([...syncedFields, ...extraSynced])),
@@ -930,7 +948,7 @@ export default function QuestionPage() {
   function editSnapshot() {
     return JSON.stringify({
       text, shuffle, binaryChoice, reveal, options,
-      timeLimit, likertPreset, abstention, inLibrary, libraryTags,
+      timeLimit, likertPreset, abstention, inLibrary, libraryTags, trans,
       // Likert step count and endpoint labels live outside `options` until
       // save (likertOptions() bakes them in), so the unsaved-changes guard
       // must watch them directly — otherwise editing only an endpoint label or
@@ -2186,6 +2204,12 @@ export default function QuestionPage() {
             </div>
           </Field>
         </div>
+
+        <TranslationsPanel
+          value={trans}
+          onChange={setTrans}
+          options={OPTIONLESS_TRANSLATION.includes(question.kind) ? [] : filledOptions}
+        />
 
         <LibraryField
           inLibrary={inLibrary}

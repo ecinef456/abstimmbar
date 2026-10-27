@@ -8,7 +8,7 @@ from collections import Counter
 
 from django.db.models import Avg, Count, Max, Min
 
-from common.i18n_fields import translated_map
+from quizbar import i18n as quizbar_i18n
 from rooms.models import Question
 
 from . import matrix, matrix_rating, mindmap_rating
@@ -50,7 +50,7 @@ def options_with_counts(run, question):
     return [
         {
             "id": option.pk,
-            "text": translated_map(option, "text"),
+            "text": quizbar_i18n.option_map(option, question),
             **({"image": option.image} if option.image else {}),
             "is_correct": option.is_correct,
             "is_abstention": option.is_abstention,
@@ -263,7 +263,7 @@ def priority_stats(run, question):
         result.append(
             {
                 "id": option.pk,
-                "text": translated_map(option, "text"),
+                "text": quizbar_i18n.option_map(option, question),
                 **({"image": option.image} if option.image else {}),
                 "avg": round(row["avg"], 1) if row else 0,
                 "min": row["min"] if row else 0,
@@ -308,7 +308,7 @@ def ordering_stats(run, question):
         items.append(
             {
                 "id": option.pk,
-                "text": translated_map(option, "text"),
+                "text": quizbar_i18n.option_map(option, question),
                 **({"image": option.image} if option.image else {}),
                 "correct_position": option.position + 1,
                 "correct_rate": round(100.0 * c / n, 1) if n else 0,
@@ -383,7 +383,7 @@ def run_results(run):
             "kind": question.kind,
             # {de, en} map (#33 MR2), matching item["options"][].text below so
             # the /results/ API contract is uniform maps throughout.
-            "text": translated_map(question, "text"),
+            "text": quizbar_i18n.question_map(question),
             "votes": run.votes.filter(question=question).count(),
             # Recording mode (#53): how many of this question's votes came from
             # recording viewers (async), so the view can show the split.

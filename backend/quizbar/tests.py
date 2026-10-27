@@ -1124,3 +1124,143 @@ class GameTests(TestCase):
         self.assertFalse(game.enabled(clone))  # transfer helper alone: no
         resp = self.client.post(f"/api/question-sets/{self.quiz.pk}/duplicate/", {}, content_type="application/json")
         self.assertTrue(game.enabled(QuestionSet.objects.get(pk=resp.json()["id"])))
+
+
+class TranslationTests(TestCase):
+    EN = r"""#import "quizbar.typ": *
+#show: quizbar.with(title: "Waves", type: "live", lang: "en")
+#question([Speed of the wave?], kind: "SC", answers: (
+  answer(true, [6 m/s], why: [$v = lambda f$.]),
+  answer(false, [1.5 m/s], why: [That is $lambda \/ f$.]),
+), tags: ("waves",))
+#question([Which are waves?], kind: "MC", answers: (
+  answer(true, [Sound]), answer(true, [Light]), answer(false, [A stone]),
+))
+"""
+    DE = r"""#import "quizbar.typ": *
+#show: quizbar.with(title: "Waves", type: "live", lang: "de")
+#question([Wie schnell ist die Welle?], kind: "SC", answers: (
+  answer(true, [6 m/s], why: [$v = lambda f$ gilt.]),
+  answer(false, [1,5 m/s], why: [Das ist $lambda \/ f$.]),
+), tags: ("waves",))
+#question([Was sind Wellen?], kind: "MC", answers: (
+  answer(true, [Schall]), answer(true, [Licht]), answer(false, [Ein Stein]),
+))
+"""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="tri")
+        self.room = Room.objects.create(title="Physik", owner=self.owner)
+        self.room.owners.add(self.owner)
+        self.client.force_login(self.owner)
+
+    def upload(self, files):
+        import io
+        import zipfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            for name, text in files.items():
+                archive.writestr(name, text)
+        return self.client.post(
+            f"/api/quizbar/rooms/{self.room.pk}/import-typst/",
+            {"files": [SimpleUploadedFile("q.zip", buffer.getvalue())]},
+        )
+
+    def test_three_language_files_make_one_set(self):
+        from . import i18n, languages
+
+        fr = self.DE.replace('lang: "de"', 'lang: "fr"').replace("Wie schnell ist die Welle?", "Quelle vitesse ?")
+        resp = self.upload({"w.en.typ": self.EN, "w.de.typ": self.DE, "w.fr.typ": fr})
+        self.assertEqual(resp.status_code, 201, resp.content)
+        question_set = QuestionSet.objects.get(pk=resp.json()["id"])
+        self.assertEqual(question_set.title, "Waves")
+        first = question_set.questions.order_by("position").first()
+        self.assertEqual(first.text, "<p>Speed of the wave?</p>")  # the original is English
+        text = i18n.question_map(first)
+        self.assertEqual(
+            (text["en"], text["de"], text["fr"]),
+            ("<p>Speed of the wave?</p>", "<p>Wie schnell ist die Welle?</p>", "<p>Quelle vitesse ?</p>"),
+        )
+        wrong = first.options.order_by("position")[1]
+        self.assertEqual(i18n.option_map(wrong, first)["de"], "1,5 m/s")
+        # Justifications follow the room language.
+        languages.set_room_language(self.room, "de")
+        from . import justifications
+
+        self.assertEqual(justifications.for_question(first)[wrong.pk], r"Das ist $lambda \/ f$.")
+        languages.set_room_language(self.room, "en")
+        self.assertEqual(justifications.for_question(first)[wrong.pk], r"That is $lambda \/ f$.")
+        # The library shows English, and only one entry per question.
+        entries = self.client.get("/api/quizbar/library/").json()["entries"]
+        self.assertEqual(len(entries), 2)
+        self.assertIn("Speed of the wave?", entries[-1]["text"]["de"] + entries[0]["text"]["de"])
+
+    def test_mismatched_versions_are_refused(self):
+        de = self.DE.replace("answer(false, [Ein Stein]),", "")
+        resp = self.upload({"w.en.typ": self.EN, "w.de.typ": de})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Question 2 has 2 answers", resp.json()["detail"])
+        two_unmarked = self.EN.replace(', lang: "en"', "")
+        resp = self.upload({"a.typ": two_unmarked, "b.typ": two_unmarked})
+        self.assertIn("Upload one quiz at a time", resp.json()["detail"])
+
+    def test_copies_and_live_payload_keep_translations(self):
+        from . import languages
+
+        resp = self.upload({"w.en.typ": self.EN, "w.de.typ": self.DE})
+        question_set = QuestionSet.objects.get(pk=resp.json()["id"])
+        copy = duplicate_set(question_set, self.room)
+        first = copy.questions.order_by("position").first()
+        run = Run.objects.create(question_set=copy, phase=Run.Phase.OPEN, active_question=first)
+        languages.set_room_language(self.room, "de")
+        payload = build_payloads(self.room)["participant"]["question"]
+        self.assertEqual(payload["text"]["de"], "<p>Wie schnell ist die Welle?</p>")
+        self.assertEqual(payload["text"]["en"], "<p>Speed of the wave?</p>")
+        self.assertEqual(payload["options"][1]["text"]["de"], "1,5 m/s")
+        run.delete()
+
+    def test_editor_reads_and_writes_translations(self):
+        resp = self.upload({"w.en.typ": self.EN})
+        question = QuestionSet.objects.get(pk=resp.json()["id"]).questions.order_by("position").first()
+        data = self.client.get(f"/api/questions/{question.pk}/").json()
+        self.assertEqual(data["translations"], {})
+        resp = self.client.patch(
+            f"/api/questions/{question.pk}/",
+            {"translations": {"fr": {"text": "<p>Vitesse ?</p>", "options": [
+                {"text": "6 m/s", "justification": "Car v = λf."}, {"text": "1,5 m/s"},
+            ]}}},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        fr = resp.json()["translations"]["fr"]
+        self.assertEqual(fr["text"], "<p>Vitesse ?</p>")
+        self.assertEqual(fr["options"][0]["justification"], "Car v = λf.")
+        # Clearing a language removes it.
+        resp = self.client.patch(
+            f"/api/questions/{question.pk}/",
+            {"translations": {"fr": {"text": "", "options": [{}, {}]}}},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.json()["translations"], {})
+
+    def test_self_check_follows_translation_edits(self):
+        from . import selfcheck
+
+        resp = self.upload({"w.en.typ": self.EN})
+        quiz = QuestionSet.objects.get(pk=resp.json()["id"])
+        check = QuestionSet.objects.create(room=self.room, title="Check", type=QuestionSet.SetType.SELF_CHECK)
+        selfcheck.set_sources(check, [quiz])
+        first = quiz.questions.order_by("position").first()
+        self.client.patch(
+            f"/api/questions/{first.pk}/",
+            {"translations": {"de": {"text": "<p>Wie schnell?</p>", "options": []}}},
+            content_type="application/json",
+        )
+        selfcheck.ensure_synced(check)
+        copy = check.questions.order_by("position").first()
+        from . import i18n
+
+        self.assertEqual(i18n.question_map(copy)["de"], "<p>Wie schnell?</p>")

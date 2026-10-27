@@ -294,21 +294,30 @@ def listing(owner):
         qs.pk: qs
         for qs in QuestionSet.objects.filter(pk__in=set_ids).select_related("room")
     }
-    from quizbar import justifications
+    from quizbar import i18n, justifications
 
     out = []
     for entry in entries:
         master = entry.master
+        # The library speaks English: a question's English translation, if any.
+        english = i18n.english(master)
         out.append(
             {
                 "id": entry.pk,
                 "kind": master.kind,
-                "text": translated_map(master, "text"),
+                "text": _only(english["text"]) or translated_map(master, "text"),
                 "options": [
                     {
-                        "text": translated_map(option, "text"),
+                        "text": _only(english["options"][option.pk].text)
+                        if option.pk in english["options"] and english["options"][option.pk].text
+                        else translated_map(option, "text"),
                         "is_correct": option.is_correct,
-                        "justification": justifications.text_for(option),
+                        "justification": (
+                            english["options"][option.pk].justification
+                            if option.pk in english["options"]
+                            and english["options"][option.pk].justification
+                            else justifications.text_for(option)
+                        ),
                     }
                     for option in master.options.all()
                 ],
@@ -332,6 +341,11 @@ def listing(owner):
             }
         )
     return out
+
+
+def _only(text):
+    """A text as a {lang: text} map that shows the same in every language."""
+    return dict.fromkeys(("de", "en", "fr"), text) if text else None
 
 
 def tag_listing(owner):

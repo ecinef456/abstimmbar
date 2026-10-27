@@ -26,6 +26,7 @@ from django.conf import settings
 from rest_framework import serializers
 
 from common.i18n_fields import LANGS, translated_map
+from quizbar import i18n as quizbar_i18n
 from quizbar import justifications as quizbar_justifications
 from quizbar import library as quizbar_library
 
@@ -146,6 +147,7 @@ def _copy_options(source, target):
     # quizbar (fork): justifications travel with copies.
     for option, copied in zip(sources, copies, strict=True):
         quizbar_justifications.copy(option, copied)
+        quizbar_i18n.copy_option(option, copied)
 
 
 def duplicate_question(question, *, question_set, section, position):
@@ -168,6 +170,7 @@ def duplicate_question(question, *, question_set, section, position):
         section=section,
     )
     _copy_options(question, clone)
+    quizbar_i18n.copy_question(question, clone)  # quizbar (fork): translations
     # quizbar (fork): a copy belongs to its original's library entry.
     quizbar_library.join_copy(question, clone)
     return clone

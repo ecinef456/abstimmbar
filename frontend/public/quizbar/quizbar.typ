@@ -27,6 +27,13 @@
 //     shuffle: false,                      // optional: shuffle the answers live
 //   )
 //
+// Several languages: write one file per language with the same questions in
+// the same order (quiz.en.typ, quiz.de.typ, quiz.fr.typ), each with
+// `lang: "en" | "de" | "fr"` in the show rule, and import them together as one
+// .zip: abstimmbar stores each question once, in all languages (the English
+// one is the library's). Correct answers, images, tags, time limits and
+// shuffle are taken from the English file.
+//
 // What abstimmbar reads: the question text and answers (math stays Typst
 // math, *bold*, _italic_, lists and paragraphs survive; other markup is
 // kept as plain text), `why:`, `kind`, `image`, `tags`, `time-limit-s`,
@@ -36,7 +43,14 @@
 
 #let _truthy(value) = lower(str(value)) in ("true", "1", "yes", "on")
 
+#let _words = (
+  en: (question: "Question", one: "one answer", several: "multiple answers possible", solutions: "Solutions"),
+  de: (question: "Frage", one: "eine Antwort", several: "mehrere Antworten möglich", solutions: "Lösungen"),
+  fr: (question: "Question", one: "une réponse", several: "plusieurs réponses possibles", solutions: "Solutions"),
+)
+
 #let _config = state("quizbar-config", (
+  lang: "en",
   figures: "figures",
   solutions: _truthy(sys.inputs.at("solutions", default: "false")),
 ))
@@ -51,13 +65,17 @@
 #let quizbar(
   title: none,
   type: "live",
+  lang: "en",
   description: none,
   figures: "figures",
   solutions: auto,
   body,
 ) = {
   assert(type in ("live", "quiz", "self-check"), message: "type: \"live\", \"quiz\" or \"self-check\"")
+  assert(lang in _words, message: "lang: \"en\", \"de\" or \"fr\"")
+  set text(lang: lang)
   _config.update(c => (
+    lang: lang,
     figures: figures,
     solutions: if solutions == auto { c.solutions } else { solutions },
   ))
@@ -67,7 +85,7 @@
   if title != none {
     align(center, text(size: 17pt, weight: "bold", title))
     context if _config.get().solutions {
-      align(center, text(size: 9pt, fill: rgb("#b45309"), [Solutions]))
+      align(center, text(size: 9pt, fill: rgb("#b45309"), _words.at(lang).solutions))
     }
     v(0.4em)
   }
@@ -112,9 +130,10 @@
     let cfg = _config.get()
     let n = _number.get().first()
     block(breakable: false, width: 100%, above: 1.4em, below: 1.4em)[
-      #text(weight: "bold")[Question #n]
+      #let words = _words.at(cfg.lang)
+      #text(weight: "bold")[#words.question #n]
       #h(0.4em)
-      #text(size: 8.5pt, fill: luma(110))[#if kind == "MC" [multiple answers possible] else [one answer]]
+      #text(size: 8.5pt, fill: luma(110))[#if kind == "MC" { words.several } else { words.one }]
       #if cfg.solutions and (tags.len() > 0 or time-limit-s != none) {
         h(1fr)
         text(size: 8.5pt, fill: rgb("#b45309"))[

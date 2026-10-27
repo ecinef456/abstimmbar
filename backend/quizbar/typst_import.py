@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 SET_TYPES = {"live": "live_poll", "quiz": "self_paced", "self-check": "self_check"}
+LANGS = ("en", "de", "fr")
 MAX_QUESTIONS = 300
 
 
@@ -461,6 +462,7 @@ class ParsedQuiz:
     description_html: str
     figures: str
     questions: list
+    lang: str = ""
 
 
 def _find_calls(src, pattern):
@@ -500,7 +502,7 @@ def _find_calls(src, pattern):
 def parse(src):
     """Read a quizbar .typ file. Raises TypstImportError with a line number."""
     parser = Parser(src)
-    title, set_type, description, figures = "", "live", "", "figures"
+    title, set_type, description, figures, lang = "", "live", "", "figures", ""
     for pos in _find_calls(src, r"#show\s*:\s*quizbar\.with\s*(?=\()"):
         parser.i = pos
         _, named = parser.args()
@@ -513,6 +515,10 @@ def parse(src):
             description = _text_of(named["description"], "description", parser, pos)
         if isinstance(named.get("figures"), str):
             figures = named["figures"]
+        if named.get("lang") is not None:
+            lang = str(named["lang"]).lower()
+            if lang not in LANGS:
+                parser.error('lang must be "en", "de" or "fr"', pos)
         break
 
     questions = []
@@ -580,6 +586,7 @@ def parse(src):
         description_html=markup_to_html(description) if description else "",
         figures=figures,
         questions=questions,
+        lang=lang,
     )
 
 
@@ -641,10 +648,10 @@ def collect_files(uploads):
     return files
 
 
-def quiz_source(files):
-    """The quiz file: a .typ with #question( calls (not the package itself)."""
+def quiz_sources(files):
+    """The quiz files: .typ files with #question( calls (not the package)."""
     candidates = []
-    for path, data in files.items():
+    for path, data in sorted(files.items()):
         if not path.lower().endswith(".typ"):
             continue
         try:
@@ -655,10 +662,52 @@ def quiz_source(files):
             candidates.append((path, text))
     if not candidates:
         raise TypstImportError("No .typ file with #question(...) in the upload.")
-    if len(candidates) > 1:
-        names = ", ".join(sorted(path for path, _ in candidates))
-        raise TypstImportError(f"Upload one quiz at a time (found {names}).")
-    return candidates[0]
+    return candidates
+
+
+def _language_of(path, quiz):
+    if quiz.lang:
+        return quiz.lang
+    match = re.search(r"\.(en|de|fr)\.typ$", path.lower())
+    return match.group(1) if match else ""
+
+
+def language_versions(sources):
+    """[(lang, path, quiz)] of the uploaded quiz, the main version first
+    (English if there is one). Several files must be language versions of
+    the same quiz: one per language, same questions and answers."""
+    parsed = []
+    for path, text in sources:
+        try:
+            quiz = parse(text)
+        except TypstImportError as exc:
+            raise TypstImportError(f"{posixpath.basename(path)}: {exc}") from exc
+        parsed.append((_language_of(path, quiz), path, quiz))
+    if len(parsed) == 1:
+        return parsed
+    langs = [lang for lang, _, _ in parsed]
+    if "" in langs or len(set(langs)) != len(langs):
+        names = ", ".join(posixpath.basename(path) for _, path, _ in parsed)
+        raise TypstImportError(
+            f"Upload one quiz at a time (found {names}). Language versions of one quiz need "
+            'lang: "en" / "de" / "fr" in their show rule (or names like quiz.de.typ).'
+        )
+    parsed.sort(key=lambda item: LANGS.index(item[0]))
+    _, main_path, main = parsed[0]
+    for lang, path, quiz in parsed[1:]:
+        name = posixpath.basename(path)
+        if len(quiz.questions) != len(main.questions):
+            raise TypstImportError(
+                f"{name} has {len(quiz.questions)} questions, {posixpath.basename(main_path)} "
+                f"has {len(main.questions)}."
+            )
+        for number, (q, m) in enumerate(zip(quiz.questions, main.questions, strict=True), start=1):
+            if len(q.options) != len(m.options):
+                raise TypstImportError(
+                    f"Question {number} has {len(q.options)} answers in {name} but "
+                    f"{len(m.options)} in {posixpath.basename(main_path)}."
+                )
+    return parsed
 
 
 def _empty_namesake(room, title, set_type, exclude):
@@ -687,19 +736,20 @@ def import_quiz(room, user, uploads, folder=None):
     from rooms.models import UploadedImage
     from rooms.transfer import EXPORT_FORMAT, import_set
 
-    from . import folders, library
+    from . import folders, i18n, library
 
     files = collect_files(uploads)
-    path, text = quiz_source(files)
-    quiz = parse(text)
+    versions = language_versions(quiz_sources(files))
+    _, path, quiz = versions[0]
     warnings = []
     base_dir = posixpath.dirname(path)
     figures = posixpath.normpath(posixpath.join(base_dir, quiz.figures)) if base_dir else quiz.figures
 
     with transaction.atomic():
-        items = []
+        items, figure_html = [], []
         for number, question in enumerate(quiz.questions, start=1):
             html_text = question.text_html
+            figure_html.append("")
             if question.image:
                 key = find_figure(files, figures, question.image)
                 if key is None:
@@ -718,7 +768,8 @@ def import_quiz(room, user, uploads, folder=None):
                         )
                     else:
                         uploaded = UploadedImage.objects.create(uploader=user, file=normalized)
-                        html_text += f'<p><img src="{uploaded.file.url}" alt=""></p>'
+                        figure_html[-1] = f'<p><img src="{uploaded.file.url}" alt=""></p>'
+                        html_text += figure_html[-1]
             items.append(
                 {
                     "kind": question.kind,
@@ -757,11 +808,25 @@ def import_quiz(room, user, uploads, folder=None):
             question_set.delete()
             question_set, folder = target, None
         created = list(question_set.questions.order_by("position", "id"))
-        for question, parsed in zip(created, quiz.questions, strict=True):
+        for index, (question, parsed) in enumerate(zip(created, quiz.questions, strict=True)):
             if parsed.tags:
                 entry = library.entry_of(question)
                 if entry is not None:
                     library.set_tags(entry, parsed.tags)
+            # The other language versions become the question's translations.
+            i18n.save(
+                question,
+                {
+                    lang: {
+                        "text": other.questions[index].text_html + figure_html[index],
+                        "options": [
+                            {"text": o["text"], "justification": o["justification"]}
+                            for o in other.questions[index].options
+                        ],
+                    }
+                    for lang, _, other in versions[1:]
+                },
+            )
         if folder is not None:
             folders.place(question_set, folder)
     return question_set, warnings

@@ -36,12 +36,21 @@ def copy(source_option, target_option):
 
 
 def for_question(question):
-    """{option_id: text} of every non-empty justification of a question."""
-    return dict(
+    """{option_id: text} of every non-empty justification of a question, in
+    the room's language when there is a translation (quizbar/i18n.py)."""
+    from . import i18n, languages
+
+    texts = dict(
         OptionJustification.objects.filter(option__question=question)
         .exclude(text="")
         .values_list("option_id", "text")
     )
+    lang = languages.room_language(question.question_set.room)
+    if not lang:
+        return texts
+    ids = set(texts) | set(i18n._load(question)[1])
+    out = {oid: i18n.justification(oid, lang, texts.get(oid, ""), question) for oid in ids}
+    return {oid: text for oid, text in out.items() if text}
 
 
 def is_shown(run, question):
