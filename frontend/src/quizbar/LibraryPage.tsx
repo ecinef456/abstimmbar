@@ -16,7 +16,7 @@ import {
 } from "../api";
 import { Button, ConfirmDialog, Field, Select } from "../components/ui";
 import HomeCrumb from "../components/HomeCrumb";
-import { EntryContent, LibraryBrowser, TagInput, UsedIn } from "./Library";
+import { EntryContent, EntryStats, LibraryBrowser, TagInput, UsedIn } from "./Library";
 import Modal from "./Modal";
 import ExportDialog from "./ExportDialog";
 
@@ -330,6 +330,7 @@ function EntryCard({
           onChange={onTags}
           suggestions={suggestions}
         />
+        <EntryStats entry={entry} />
         <UsedIn entry={entry} />
       </div>
     </article>
@@ -341,6 +342,7 @@ export default function LibraryPage() {
   const [data, setData] = useState<LibraryData | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [insertIds, setInsertIds] = useState<number[] | null>(null);
+  const [onlySelected, setOnlySelected] = useState(false);
   const [exporting, setExporting] = useState<{ entries: number[]; label: string } | null>(null);
   const [removing, setRemoving] = useState<LibraryEntry | null>(null);
   const [bulkTags, setBulkTags] = useState<string[]>([]);
@@ -401,6 +403,7 @@ export default function LibraryPage() {
       )}
       <LibraryBrowser
         columns
+        only={onlySelected && selected.length ? selected : undefined}
         entries={data.entries}
         tags={data.tags}
         onRenameTag={async (tag, name) => {
@@ -438,6 +441,15 @@ export default function LibraryPage() {
                   : t("Select all shown")}
               </label>
               {selected.length > 0 && (
+                <Button
+                  variant={onlySelected ? "primary" : "secondary"}
+                  aria-pressed={onlySelected}
+                  onClick={() => setOnlySelected(!onlySelected)}
+                >
+                  {onlySelected ? t("Show all again") : t("Show only the selected")}
+                </Button>
+              )}
+              {selected.length > 0 && (
                 <>
                   <div className="w-64">
                     <TagInput
@@ -460,7 +472,13 @@ export default function LibraryPage() {
                     {t("Add tags")}
                   </Button>
                   <Button onClick={() => setInsertIds(selected)}>{t("Copy into a question set")}</Button>
-                  <Button variant="ghost" onClick={() => setSelected([])}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setSelected([]);
+                      setOnlySelected(false);
+                    }}
+                  >
                     {t("Clear selection")}
                   </Button>
                 </>

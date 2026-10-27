@@ -1441,3 +1441,42 @@ class ExportTests(TestCase):
 
         frontend = Path(settings.BASE_DIR).parent / "frontend" / "public" / "quizbar" / "quizbar.typ"
         self.assertEqual(export.PACKAGE.read_text(), frontend.read_text())
+
+
+class LibraryStatsTests(TestCase):
+    """Answer statistics on library cards (every copy, every run)."""
+
+    def test_stats_over_copies_and_runs(self):
+        from live.models import ParticipantToken, Vote
+
+        owner = User.objects.create_user(username="st")
+        room = Room.objects.create(title="R", owner=owner)
+        room.owners.add(owner)
+        first = QuestionSet.objects.create(room=room, title="A")
+        question = Question.objects.create(question_set=first, kind="single_choice", text="<p>Q</p>")
+        right = AnswerOption.objects.create(question=question, text="right", is_correct=True, position=0)
+        wrong1 = AnswerOption.objects.create(question=question, text="w1", position=1)
+        AnswerOption.objects.create(question=question, text="w2", position=2)
+        copy_set = duplicate_set(first, room)
+        copy = copy_set.questions.get()
+
+        def vote(q, option, run):
+            token = ParticipantToken.objects.create(room=room)
+            v = Vote.objects.create(run=run, question=q, token=token)
+            v.options.add(option)
+
+        run1 = Run.objects.create(question_set=first)
+        vote(question, right, run1)
+        vote(question, wrong1, run1)
+        run2 = Run.objects.create(question_set=copy_set)
+        vote(copy, copy.options.get(position=0), run2)
+        vote(copy, copy.options.get(position=1), run2)
+        self.client.force_login(owner)
+        entries = self.client.get("/api/quizbar/library/").json()["entries"]
+        self.assertEqual(len(entries), 1)
+        stats = entries[0]["stats"]
+        self.assertEqual(stats["runs"], 2)
+        self.assertEqual(stats["answers"], 4)
+        self.assertEqual(stats["correct"], 0.5)
+        self.assertEqual(stats["top_wrong"], 1)
+        self.assertEqual(stats["top_wrong_share"], 0.5)

@@ -294,11 +294,21 @@ def listing(owner):
         qs.pk: qs
         for qs in QuestionSet.objects.filter(pk__in=set_ids).select_related("room")
     }
-    from quizbar import i18n, justifications
+    from quizbar import i18n, justifications, stats
+
+    members = {}
+    for entry_id, question_id in QuestionLineage.objects.filter(entry__owner=owner).values_list(
+        "entry_id", "question_id"
+    ):
+        members.setdefault(entry_id, []).append(question_id)
+    answer_stats = stats.library(members)
 
     out = []
     for entry in entries:
         master = entry.master
+        numbers = answer_stats.get(entry.pk) or {}
+        positions = [option.position for option in master.options.all()]
+        top_wrong = numbers.get("top_wrong")
         # The library speaks English: a question's English translation, if any.
         english = i18n.english(master)
         out.append(
@@ -338,6 +348,14 @@ def listing(owner):
                 ],
                 "created_at": entry.created_at,
                 "updated_at": master.updated_at,
+                # answers over every copy and every run (see stats.library)
+                "stats": {
+                    "runs": numbers.get("runs", 0),
+                    "answers": numbers.get("answers", 0),
+                    "correct": numbers.get("correct"),
+                    "top_wrong": positions.index(top_wrong) if top_wrong in positions else None,
+                    "top_wrong_share": numbers.get("top_wrong_share"),
+                },
             }
         )
     return out

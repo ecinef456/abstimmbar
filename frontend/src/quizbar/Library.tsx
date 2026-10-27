@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { Check, Pencil, Search, Tag, Trash2, X } from "lucide-react";
+import { BarChart3, Check, Pencil, Search, Tag, Trash2, X } from "lucide-react";
 import { localizedText, RichText, stripHtml } from "@basicbar/ui";
 import type { LibraryEntry, LibraryTag } from "../api";
 import { Button, ConfirmDialog, Select, TextInput } from "../components/ui";
@@ -236,6 +236,7 @@ export function LibraryBrowser({
   onDeleteTag,
   allowedKinds,
   columns = false,
+  only,
 }: {
   entries: LibraryEntry[];
   tags: LibraryTag[];
@@ -249,6 +250,8 @@ export function LibraryBrowser({
   allowedKinds?: string[];
   /** Cards side by side: up to three per row on wide screens. */
   columns?: boolean;
+  /** Show just these entries (e.g. the selection), ignoring the filters. */
+  only?: number[];
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -283,13 +286,15 @@ export function LibraryBrowser({
   const kinds = useMemo(() => Array.from(new Set(usable.map((e) => e.kind))), [usable]);
   const vocabulary = useMemo(() => new Set(tags.map((tag) => tag.name)), [tags]);
   const terms = tagMode ? tagTerms(query) : [];
-  const visible = usable.filter(
-    (entry) =>
-      (tagFilter === "all" ||
-        (tagFilter === "untagged" ? !entry.tags.length : entry.tags.some((tag) => tag.id === tagFilter))) &&
-      (!kind || entry.kind === kind) &&
-      (tagMode ? entryHasTags(entry, terms, vocabulary) : entryMatches(entry, query.trim())),
-  );
+  const visible = only
+    ? usable.filter((entry) => only.includes(entry.id))
+    : usable.filter(
+        (entry) =>
+          (tagFilter === "all" ||
+            (tagFilter === "untagged" ? !entry.tags.length : entry.tags.some((tag) => tag.id === tagFilter))) &&
+          (!kind || entry.kind === kind) &&
+          (tagMode ? entryHasTags(entry, terms, vocabulary) : entryMatches(entry, query.trim())),
+      );
   // Tag mode: complete the term being typed from the existing tags.
   const typing = tagMode ? normalizeTag(query.split(",").pop() ?? "") : "";
   const completions =
@@ -534,6 +539,40 @@ export function EntryContent({ entry, compact = false }: { entry: LibraryEntry; 
         </ul>
       )}
     </div>
+  );
+}
+
+/** "2 runs · 41 answers · 63 % correct · most chosen wrong: “1.5 m/s” (24 %)". */
+export function EntryStats({ entry }: { entry: LibraryEntry }) {
+  const { t } = useTranslation();
+  const stats = entry.stats;
+  if (!stats || !stats.answers) return null;
+  const pct = (share: number) => `${Math.round(share * 100)} %`;
+  const parts = [
+    t("{{count}} runs", { count: stats.runs }),
+    t("{{count}} answers", { count: stats.answers }),
+  ];
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500 dark:text-slate-400">
+      <BarChart3 aria-hidden className="h-3.5 w-3.5" />
+      <span>{parts.join(" · ")}</span>
+      {stats.correct !== null && (
+        <span
+          className={`font-semibold ${
+            stats.correct >= 0.7 ? "text-brand-700 dark:text-brand-300" : stats.correct >= 0.4 ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-400"
+          }`}
+        >
+          {t("{{pct}} correct", { pct: pct(stats.correct) })}
+        </span>
+      )}
+      {stats.top_wrong !== null && stats.top_wrong_share !== null && (
+        <span className="min-w-0">
+          {t("most chosen wrong")}: “
+          <MathText text={stripHtml(localizedText(entry.options[stats.top_wrong]?.text)).slice(0, 60)} />” (
+          {pct(stats.top_wrong_share)})
+        </span>
+      )}
+    </p>
   );
 }
 

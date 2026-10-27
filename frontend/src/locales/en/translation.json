@@ -64,5 +64,7 @@
   "{{count}} players_one": "{{count}} player",
   "{{count}} players_other": "{{count}} players",
   "{{count}} questions_one": "{{count}} question",
-  "{{count}} questions_other": "{{count}} questions"
+  "{{count}} questions_other": "{{count}} questions",
+  "{{count}} runs_one": "{{count}} run",
+  "{{count}} runs_other": "{{count}} runs"
 }

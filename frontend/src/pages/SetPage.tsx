@@ -48,6 +48,7 @@ import { useTourSignal } from "../tour/signals";
 import SelfCheckSourcesPanel from "../quizbar/SelfCheckSources";
 import { LibraryPickerDialog } from "../quizbar/LibraryPage";
 import GameModePanel from "../quizbar/GameModePanel";
+import { MathText } from "../math";
 
 // Values are English source strings, translated with t() at each render site
 // (this Record lives at module scope, outside any component).
@@ -2136,7 +2137,8 @@ export default function SetPage() {
                         )}
                         {/* Phones (#179): two lines instead of ~12 characters. */}
                         <span className="block text-sm font-medium text-slate-900 max-sm:line-clamp-2 max-sm:[overflow-wrap:anywhere] sm:truncate dark:text-slate-100">
-                          {stripHtml(localizedText(question.text)) || (
+                          {/* quizbar (fork): math */}
+{stripHtml(localizedText(question.text)) ? <MathText text={stripHtml(localizedText(question.text))} /> : (
                             <span className="italic text-slate-400">{t("No question text")}</span>
                           )}
                         </span>
@@ -2491,7 +2493,8 @@ export default function SetPage() {
                               />
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm text-slate-900 dark:text-slate-100">
-                                  {stripHtml(localizedText(question.text)) || (
+                                  {/* quizbar (fork): math */}
+{stripHtml(localizedText(question.text)) ? <MathText text={stripHtml(localizedText(question.text))} /> : (
                                     <span className="italic text-slate-400">
                                       {t("No question text")}
                                     </span>

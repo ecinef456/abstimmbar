@@ -1403,5 +1403,11 @@
   "Export shown as PDF": "Exporter l’affichage en PDF",
   "Nothing to export: there are no single- or multiple-choice questions here.": "Rien à exporter : il n’y a pas de question à choix unique ou multiple ici.",
   "Show all": "Tout afficher",
-  "Show less": "Afficher moins"
+  "Show less": "Afficher moins",
+  "{{count}} runs_one": "{{count}} session",
+  "{{count}} runs_other": "{{count}} sessions",
+  "{{pct}} correct": "{{pct}} de bonnes réponses",
+  "most chosen wrong": "mauvaise réponse la plus choisie",
+  "Show only the selected": "Afficher seulement la sélection",
+  "Show all again": "Tout afficher à nouveau"
 }

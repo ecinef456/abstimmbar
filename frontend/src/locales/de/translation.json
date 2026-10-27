@@ -1424,5 +1424,11 @@
   "Export shown as PDF": "Angezeigte als PDF exportieren",
   "Nothing to export: there are no single- or multiple-choice questions here.": "Nichts zu exportieren: Hier gibt es keine Single- oder Multiple-Choice-Fragen.",
   "Show all": "Alles anzeigen",
-  "Show less": "Weniger anzeigen"
+  "Show less": "Weniger anzeigen",
+  "{{count}} runs_one": "{{count}} Durchführung",
+  "{{count}} runs_other": "{{count}} Durchführungen",
+  "{{pct}} correct": "{{pct}} richtig",
+  "most chosen wrong": "häufigste falsche Antwort",
+  "Show only the selected": "Nur Ausgewählte zeigen",
+  "Show all again": "Wieder alle zeigen"
 }

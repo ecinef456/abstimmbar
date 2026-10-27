@@ -556,7 +556,13 @@ export default function ResultsPage() {
                           </span>
                         )}
                         <span className="min-w-0 [overflow-wrap:anywhere]">
-                          {question.position + 1}. {stripHtml(localizedText(question.text)) || t("No question text")}
+                          {/* quizbar (fork): math in the statement too */}
+                          {question.position + 1}.{" "}
+                          {stripHtml(localizedText(question.text)) ? (
+                            <MathText text={stripHtml(localizedText(question.text))} />
+                          ) : (
+                            t("No question text")
+                          )}
                         </span>
                         <span className="whitespace-nowrap font-normal text-slate-400">
                           {total} {t("answer", { count: total })}

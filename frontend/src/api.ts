@@ -1945,6 +1945,15 @@ export interface LibraryEntry {
   }[];
   created_at: string;
   updated_at: string;
+  /** Answers over every copy and every run; `correct` is a share (0–1),
+   *  null for polls; `top_wrong` the index of the most chosen wrong option. */
+  stats?: {
+    runs: number;
+    answers: number;
+    correct: number | null;
+    top_wrong: number | null;
+    top_wrong_share: number | null;
+  };
 }
 
 /** quizbar (fork): what to export as PDF (see the export dialog). */

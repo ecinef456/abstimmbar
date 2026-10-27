@@ -146,6 +146,11 @@ Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
   (duplicating a question, set or room, inserting from the library and
   self-check copies all count as the same question). Filter by tag chip
   or type, and a **To sort** chip for questions without tags.
+- **Statistics on each card:** runs, answers and % correct over every
+  copy of the question and every run, plus the most chosen wrong answer.
+- **Selection:** ticked questions stay selected while you change the
+  search; **Show only the selected** lists exactly them (to check before
+  copying or exporting).
 - **Cards:** three per row on wide screens (two on tablets, one on
   phones); images in a card are at most 10rem high, and a long question is
   cut with **Show all** so it does not stretch its row.
