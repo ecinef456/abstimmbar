@@ -3,7 +3,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from common.i18n_fields import translated_map
@@ -11,7 +11,7 @@ from live.models import Run
 from live.state import broadcast
 from rooms.models import QuestionSet, Room
 
-from . import course, folders, justifications, library, selfcheck, typst_import
+from . import course, folders, game, justifications, library, selfcheck, typst_import
 from .models import LibraryEntry, LibraryTag, SetFolder, SetPlacement
 
 
@@ -334,3 +334,72 @@ def import_typst(request, room_id):
         {"id": question_set.pk, "questions": question_set.questions.count(), "warnings": warnings},
         status=201,
     )
+
+
+# -- game mode ---------------------------------------------------------------
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def set_game(request, set_id):
+    """GET/PUT {enabled}: game mode of a live poll."""
+    question_set = _owned_set(request.user, set_id)
+    if request.method == "PUT":
+        if question_set.type != QuestionSet.SetType.LIVE_POLL:
+            return Response({"detail": "Game mode is for live polls."}, status=400)
+        game.set_enabled(question_set, bool(request.data.get("enabled")))
+        broadcast(question_set.room)
+    return Response({"enabled": game.enabled(question_set)})
+
+
+def _player(request, code):
+    from live.models import ParticipantToken
+
+    room = get_object_or_404(Room, code=(code or "").strip().lower())
+    token = ParticipantToken.objects.filter(room=room, key=request.data.get("token") or "").first()
+    if token is None:
+        return room, None, None
+    run_id = request.data.get("run")
+    run = game.latest_game_run(room, run_id if isinstance(run_id, int) else None)
+    return room, token, run
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def game_me(request, code):
+    """Phone: {token, run?} → own nickname, score, rank (token-scoped)."""
+    _, token, run = _player(request, code)
+    if token is None:
+        return Response({"detail": "Unknown participant token."}, status=403)
+    if run is None:
+        return Response({"game": False})
+    return Response(game.me(run, token))
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def game_enter(request, code):
+    """Phone: {token, run, nickname} → play this run under a nickname."""
+    room, token, run = _player(request, code)
+    if token is None:
+        return Response({"detail": "Unknown participant token."}, status=403)
+    if run is None or not run.is_active:
+        return Response({"detail": "No game running."}, status=409)
+    _, error = game.enter(run, token, request.data.get("nickname"))
+    if error:
+        return Response({"error": error}, status=409 if error == "taken" else 400)
+    broadcast(room)
+    return Response(game.me(run, token), status=201)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def game_leaderboard(request, run_id):
+    """Beamer: the leaderboard of a game run (top 10; ?final=1 for the
+    podium: every question counts)."""
+    run = get_object_or_404(
+        Run.objects.select_related("question_set__room", "active_question"), pk=run_id
+    )
+    if not _owner(request.user, run.question_set.room):
+        raise Http404
+    return Response(game.leaderboard(run, final=request.query_params.get("final") == "1"))

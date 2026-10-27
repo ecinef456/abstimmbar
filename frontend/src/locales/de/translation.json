@@ -1377,5 +1377,18 @@
   "Tags, separated by commas: waves, week-3": "Tags, durch Kommas getrennt: waves, week-3",
   "Search by tags": "Nach Tags suchen",
   "Ticked: find questions that have all the tags you type. Unticked: search the text of questions and answers.": "Angehakt: Fragen mit allen eingegebenen Tags finden. Nicht angehakt: im Text der Fragen und Antworten suchen.",
-  "Matching tags": "Passende Tags"
+  "Matching tags": "Passende Tags",
+  "Sound off (M)": "Ton aus (M)",
+  "Sound on (M)": "Ton an (M)",
+  "{{count}} players_one": "{{count}} Spieler:in",
+  "{{count}} players_other": "{{count}} Spieler:innen",
+  "Leaderboard": "Rangliste",
+  "No players yet.": "Noch keine Spieler:innen.",
+  "P or click closes": "P oder Klick schließt",
+  "Thanks for playing!": "Danke fürs Mitspielen!",
+  "Podium": "Siegertreppchen",
+  "{{points}} points": "{{points}} Punkte",
+  "quizbar_leaderboard_hint_p": "Rangliste mit <1>P</1>",
+  "Game mode": "Spielmodus",
+  "Students play under a nickname. A correct answer earns 500–1000 points (faster = more); P shows the leaderboard, the end shows the podium. Your own sounds play if you added them (M mutes).": "Die Studierenden spielen unter einem Spielnamen. Eine richtige Antwort bringt 500–1000 Punkte (schneller = mehr); P zeigt die Rangliste, am Ende kommt das Siegertreppchen. Eigene Sounds werden abgespielt, falls hinterlegt (M schaltet stumm)."
 }

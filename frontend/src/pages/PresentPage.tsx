@@ -46,6 +46,7 @@ import MindmapModerationList from "../results/MindmapModerationList";
 import { Footer, FooterIconButton, buildViewSegments, type ViewSegment } from "./presenter/footer";
 import HelpOverlay from "./presenter/HelpOverlay";
 import MatrixPanel from "./presenter/MatrixPanel";
+import { GameLobby, LeaderboardOverlay, MuteBadge, Podium, useGameSounds } from "../quizbar/Game";
 import { INK, evalColor, categoryColor, categoryDeep, categoryHue, termColor } from "../results/palette";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -548,6 +549,29 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   }, [activeKind, runId, activeId, expert]);
 
   const phase = state?.phase ?? "lobby";
+  // quizbar (fork): game mode — leaderboard (P), podium, the teacher's sounds.
+  const game = state?.game;
+  const [boardOpen, setBoardOpen] = useState(false);
+  const gameRunRef = useRef<number | null>(null);
+  if (game && runId) gameRunRef.current = runId;
+  const sounds = useGameSounds(Boolean(game) || (ended && gameRunRef.current !== null));
+  const soundPhaseRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (ended) return; // the podium runs its own sounds
+    if (!game) {
+      sounds.loop(null);
+      return;
+    }
+    sounds.loop(phase === "lobby" ? "lobby" : phase === "open" ? "question" : null);
+    if (phase === "results" && soundPhaseRef.current !== "results") sounds.play("reveal");
+    if (phase === "open") setBoardOpen(false);
+    soundPhaseRef.current = phase;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, Boolean(game), ended]);
+  useEffect(() => {
+    if (boardOpen) sounds.play("leaderboard");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardOpen]);
 
   // Matrix / mind map on a closed vote (Stop, the timer, ✕ and re-entering
   // the presentation): the board / map stays on the beamer, like a closed
@@ -1503,7 +1527,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       // On the closing slide (#32) any key ends and leaves — except "←",
       // which goes back to the last question while the run isn't finished.
       if (ended) {
-        if (key === "n" && nextQuiz) void goNextQuiz();
+        if (key === "m" && gameRunRef.current !== null) sounds.toggleMute();
+        else if (key === "n" && nextQuiz) void goNextQuiz();
         else if (key === "arrowleft" && pendingFinish) backFromClosing();
         else if (!["shift", "control", "alt", "meta", "tab", "capslock"].includes(key)) void finishAndLeave();
         return;
@@ -1541,6 +1566,19 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         setShowJoin((v) => !v);
         return;
       }
+      // quizbar (fork): game mode — P leaderboard, M sound on/off.
+      if (game && key === "p" && runId && phase !== "lobby") {
+        setBoardOpen((v) => !v);
+        return;
+      }
+      if (game && key === "m") {
+        sounds.toggleMute();
+        return;
+      }
+      if (boardOpen && key === "escape") {
+        setBoardOpen(false);
+        return;
+      }
       if (key === "arrowright") advanceNext();
       else if (key === "arrowleft") goPrev();
       else if (advance) {
@@ -1568,7 +1606,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         void leave();
       }
     },
-    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, toggleJustification, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave, nextQuiz, goNextQuiz],
+    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, toggleJustification, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave, nextQuiz, goNextQuiz, game, sounds, boardOpen],
   );
 
   useEffect(() => {
@@ -1746,9 +1784,16 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     return (
       <Shell logo={beamerLogo}>
         <div className="ab-fade-in flex min-h-full flex-col items-center justify-center gap-6 text-center">
-          <div className="text-7xl" aria-hidden>✅</div>
-          <h1 className="text-5xl font-bold">{t("The survey has ended")}</h1>
-          <p className="text-2xl text-slate-500">{t("Thanks for taking part!")}</p>
+          {gameRunRef.current !== null ? (
+            // quizbar (fork): game mode ends on the podium.
+            <Podium runId={gameRunRef.current} sounds={sounds} />
+          ) : (
+            <>
+              <div className="text-7xl" aria-hidden>✅</div>
+              <h1 className="text-5xl font-bold">{t("The survey has ended")}</h1>
+              <p className="text-2xl text-slate-500">{t("Thanks for taking part!")}</p>
+            </>
+          )}
           <div className="mt-4 flex items-center gap-3">
             {pendingFinish && (
               <button
@@ -2049,6 +2094,11 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         />
       }
     >
+      {/* quizbar (fork): game mode leaderboard (P) and sound switch (M). */}
+      {boardOpen && game && runId && (
+        <LeaderboardOverlay runId={runId} onClose={() => setBoardOpen(false)} />
+      )}
+      {game && <MuteBadge muted={sounds.muted} onToggle={sounds.toggleMute} />}
       {showHelp && (
         <HelpOverlay
           views={viewSegments}
@@ -2127,6 +2177,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               connected · First question with <Kbd>S</Kbd> or <Kbd>→</Kbd>
             </Trans>
           </p>
+          {/* quizbar (fork): game mode — who is in. */}
+          {game && <GameLobby players={game.players} />}
           {/* Recording mode (#53): enabled on the set page; just confirm here. */}
           {state.recording_token && (
             <p className="text-sm font-semibold text-brand-700">
@@ -2462,6 +2514,13 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 <p className="pt-2 text-sm text-slate-400">
                   <Trans i18nKey="quizbar_justification_hint_j">
                     Explain the answers with <Kbd>J</Kbd>
+                  </Trans>
+                </p>
+              )}
+              {game && (
+                <p className="pt-2 text-sm text-slate-400">
+                  <Trans i18nKey="quizbar_leaderboard_hint_p">
+                    Leaderboard with <Kbd>P</Kbd>
                   </Trans>
                 </p>
               )}

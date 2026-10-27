@@ -12,7 +12,7 @@ from rooms.models import QuestionSet, Room
 from rooms.naming import unique_title
 from rooms.transfer import _lang_columns, duplicate_set
 
-from . import folders, languages, selfcheck
+from . import folders, game, languages, selfcheck
 from .models import SelfCheckSource, SetFolder, SetPlacement
 
 CANONICAL = settings.MODELTRANSLATION_DEFAULT_LANGUAGE
@@ -106,6 +106,7 @@ def duplicate_room(room, user, title=None):
     for question_set in room.question_sets.all().order_by("id"):
         title_now = _lang_columns(question_set, "title")[f"title_{CANONICAL}"] or question_set.title
         clone = duplicate_set(question_set, copy, title=title_now)
+        game.copy_setting(question_set, clone)
         if question_set.qb_sources.exists():
             selfcheck.strip_synced_copy(question_set, clone)
         set_map[question_set.pk] = clone

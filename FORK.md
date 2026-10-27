@@ -217,6 +217,34 @@ The package lives in `frontend/public/quizbar/` (`quizbar.typ`, `example.typ`,
 Code: `quizbar/typst_import.py` (parser + import), endpoint
 `/api/quizbar/rooms/<id>/import-typst/`, menu item in `RoomPage.tsx`.
 
+### Game mode (Kahoot style)
+
+- **Switch it on** per live poll: set page → *Game mode*. Duplicated sets
+  and rooms keep it.
+- **Phones:** in the lobby each student picks a nickname (nothing else;
+  the last one is suggested next time). A pill at the bottom shows
+  nickname, points and rank. Once the solution is shown (L, or the results
+  when the set reveals "immediately"), the phone shows "+850 points ·
+  Rank 3 of 25" or "No points this time". When the run ends: the final
+  place (🥇🥈🥉).
+- **Points:** single and multiple choice questions with a correct answer
+  only (multiple choice: exactly the right choices). Correct = 500–1000
+  points, 1000 at once, 500 at the time limit (no limit: a 20 s window).
+  Points of the open question never appear before its solution is shown.
+- **Beamer:** the lobby lists the players; **P** shows the leaderboard (top
+  5 with this question's points); the closing slide becomes the **podium**
+  (3rd, 2nd, drum roll, 1st, then places 4–9). **M** mutes.
+- **Sounds:** your own MP3 files in `frontend/public/quizbar/sounds/`
+  (`lobby`, `question`, `reveal`, `leaderboard`, `drumroll`, `podium`).
+  They are git-ignored, so each server keeps its own; see the README in
+  that folder. Missing files stay silent.
+
+Code: `quizbar/game.py` (tables `SetGame`, `GameEntry`, `GameQuestion`;
+Run signal in `quizbar/apps.py`), `quizbar/templates/quizbar/game_participant.html`
+(included by the participant page), `frontend/src/quizbar/Game.tsx`,
+`GameModePanel.tsx`; hooks in `live/state.py`, `participant.html` (one
+event), `PresentPage.tsx`, `SetPage.tsx`, `rooms/views.py` (duplicate).
+
 ### A–Z as the default sort
 
 Rooms and question sets open sorted by title; numbers sort naturally

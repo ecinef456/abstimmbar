@@ -28,4 +28,14 @@ class QuizbarConfig(AppConfig):
             library.rescue(instance, origin=origin)
 
         post_save.connect(created, sender=Question, dispatch_uid="quizbar_library_created")
+
+        from live.models import Run
+
+        from . import game
+
+        def run_saved(sender, instance, raw=False, **kwargs):
+            if not raw:
+                game.on_run_saved(instance)
+
+        post_save.connect(run_saved, sender=Run, dispatch_uid="quizbar_game_run")
         pre_delete.connect(deleting, sender=Question, dispatch_uid="quizbar_library_rescue")

@@ -2672,6 +2672,8 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
       lastSeen = Date.now();
       state = JSON.parse(event.data);
       render();
+      // quizbar (fork): game mode listens (quizbar/game_participant.html).
+      window.dispatchEvent(new CustomEvent("quizbar-state", { detail: state }));
     };
     es.addEventListener("ping", () => {
       lastSeen = Date.now();
@@ -5062,4 +5064,6 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   schedule();
 })();
 </script>
+{# quizbar (fork): game mode — nickname, points, final placement. #}
+{% if not check_token %}{% include "quizbar/game_participant.html" %}{% endif %}
 {% endblock %}

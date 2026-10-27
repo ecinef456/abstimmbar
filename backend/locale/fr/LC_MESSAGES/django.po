@@ -641,3 +641,51 @@ msgstr ""
 #: live/templates/live/participant.html
 msgid "Only one point per card."
 msgstr "Un seul point par carte."
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Choose a nickname"
+msgstr "Choisissez un pseudo"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Nickname"
+msgstr "Pseudo"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Play!"
+msgstr "C’est parti !"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Close"
+msgstr "Fermer"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "This nickname is already taken."
+msgstr "Ce pseudo est déjà pris."
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Please enter a nickname."
+msgstr "Veuillez entrer un pseudo."
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "{n} points"
+msgstr "{n} points"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "+{n} points"
+msgstr "+{n} points"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "No points this time"
+msgstr "Pas de points cette fois"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "No answer"
+msgstr "Pas de réponse"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Rank {rank} of {players}"
+msgstr "Rang {rank} sur {players}"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "You finished #{rank} of {players}"
+msgstr "Vous terminez {rank}e sur {players} !"

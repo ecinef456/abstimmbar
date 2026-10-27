@@ -640,3 +640,51 @@ msgstr "Die Bewertung läuft – jetzt können keine Karten hinzugefügt oder en
 #: live/templates/live/participant.html
 msgid "Only one point per card."
 msgstr "Nur ein Punkt pro Karte."
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Choose a nickname"
+msgstr "Wählen Sie einen Spielnamen"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Nickname"
+msgstr "Spielname"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Play!"
+msgstr "Los geht’s!"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Close"
+msgstr "Schließen"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "This nickname is already taken."
+msgstr "Dieser Spielname ist schon vergeben."
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Please enter a nickname."
+msgstr "Bitte geben Sie einen Spielnamen ein."
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "{n} points"
+msgstr "{n} Punkte"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "+{n} points"
+msgstr "+{n} Punkte"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "No points this time"
+msgstr "Diesmal keine Punkte"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "No answer"
+msgstr "Keine Antwort"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Rank {rank} of {players}"
+msgstr "Platz {rank} von {players}"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "You finished #{rank} of {players}"
+msgstr "Sie sind auf Platz {rank} von {players}!"

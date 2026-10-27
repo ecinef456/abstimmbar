@@ -1209,6 +1209,8 @@ export interface LiveState {
   revealed?: boolean;
   /** quizbar (fork): J pressed — the beamer shows the justifications. */
   justification_shown?: boolean;
+  /** quizbar (fork): game mode — the nicknames that joined this run. */
+  game?: { players: string[] };
   ends_at?: string;
   participants?: number;
   /** Recording mode (#53): the run's deep-link token (present when recording
@@ -1885,6 +1887,13 @@ export interface SelfCheckSources {
 }
 
 /** quizbar (fork): this fork's own endpoints (backend app `quizbar`). */
+/** quizbar (fork): game mode leaderboard. */
+export interface GameLeaderboard {
+  players: number;
+  questions: number;
+  leaderboard: { rank: number; nickname: string; score: number; last: number | null }[];
+}
+
 /** quizbar (fork): question library. */
 export interface QuestionLibraryInfo {
   in_library: boolean;
@@ -1988,6 +1997,15 @@ export const quizbar = {
     }),
   duplicateRoom: (roomId: number) =>
     request<{ id: number }>(`/api/quizbar/rooms/${roomId}/duplicate/`, { method: "POST", body: "{}" }),
+  /** Game mode (Kahoot style) of a live poll. */
+  game: (setId: number) => request<{ enabled: boolean }>(`/api/quizbar/sets/${setId}/game/`),
+  setGame: (setId: number, enabled: boolean) =>
+    request<{ enabled: boolean }>(`/api/quizbar/sets/${setId}/game/`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
+  leaderboard: (runId: number, final = false) =>
+    request<GameLeaderboard>(`/api/quizbar/game/runs/${runId}/leaderboard/${final ? "?final=1" : ""}`),
   /** Presenter key J: show/hide the active question's justifications. */
   justification: (runId: number, show: boolean) =>
     request<{ status: string; shown: boolean }>(`/api/quizbar/runs/${runId}/justification/`, {

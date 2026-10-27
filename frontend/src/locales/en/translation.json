@@ -60,5 +60,7 @@
   "{{count}} questions copied from the library._one": "{{count}} question copied from the library.",
   "{{count}} questions copied from the library._other": "{{count}} questions copied from the library.",
   "{{count}} selected_one": "{{count}} selected",
-  "{{count}} selected_other": "{{count}} selected"
+  "{{count}} selected_other": "{{count}} selected",
+  "{{count}} players_one": "{{count}} player",
+  "{{count}} players_other": "{{count}} players"
 }

@@ -1,6 +1,6 @@
 # Abstimmbar — open-source audience response system for universities
 
-> **This is a fork** of [virtUOS/abstimmbar](https://github.com/virtUOS/abstimmbar) with **Typst/LaTeX math** in questions and answers, **justifications** for every answer (key J), one **content language per room** (no DE/EN tabs), a **French** interface, **folders** of question sets with a numbered order and a **"Next quiz"** button, **self-checks filled automatically** from other sets, **course rooms** (week folders), **room duplication**, a tagged **question library**, quizzes written in **Typst** (PDF + import), **centred question images** and A–Z sorting. See [FORK.md](FORK.md) for details and how to run it; the changes live on the `custom` branch.
+> **This is a fork** of [virtUOS/abstimmbar](https://github.com/virtUOS/abstimmbar) with **Typst/LaTeX math** in questions and answers, **justifications** for every answer (key J), one **content language per room** (no DE/EN tabs), a **French** interface, **folders** of question sets with a numbered order and a **"Next quiz"** button, **self-checks filled automatically** from other sets, **course rooms** (week folders), **room duplication**, a tagged **question library**, quizzes written in **Typst** (PDF + import), a Kahoot-style **game mode** (nicknames, points, leaderboard, podium, your own sounds), **centred question images** and A–Z sorting. See [FORK.md](FORK.md) for details and how to run it; the changes live on the `custom` branch.
 
 **Abstimmbar** is an open-source audience response system (ARS): lecturers
 run live quizzes and polls in class, students answer anonymously on their
@@ -34,6 +34,8 @@ sharing its design language and stack. Released under the
   <br>
   <em>Presenter view — a live question with real-time results on the beamer.</em>
 </p>
+
+> Game-mode sounds are your own files and are not in git: see [frontend/public/quizbar/sounds/README.md](frontend/public/quizbar/sounds/README.md).
 
 ## Highlights
 

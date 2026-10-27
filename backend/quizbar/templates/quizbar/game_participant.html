@@ -1,0 +1,209 @@
+{% load i18n %}
+{# quizbar (fork): game mode on the phone. Listens to the page's "quizbar-state" events; talks to /api/quizbar/game/<code>/… with the participant token. #}
+<style>
+  #qb-nick { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex;
+             align-items: center; justify-content: center; padding: 24px; }
+  #qb-nick form { width: 100%; max-width: 360px; text-align: center; }
+  #qb-nick .big { font-size: 56px; line-height: 1; margin-bottom: 10px; }
+  #qb-nick h2 { margin: 0 0 18px; font-size: 24px; }
+  #qb-nick input { width: 100%; box-sizing: border-box; font-size: 20px; padding: 14px 16px; text-align: center;
+                   border: 2px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); }
+  #qb-nick input:focus { outline: none; border-color: var(--brand-strong); }
+  #qb-nick button { margin-top: 12px; font-size: 18px; }
+  #qb-nick .err { color: #b91c1c; min-height: 1.4em; margin: 8px 0 0; font-size: 14px; }
+  #qb-pill { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 30;
+             background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 999px;
+             padding: 8px 16px; font-size: 15px; font-weight: 600; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+             white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
+  #qb-pill .pts { color: var(--brand-strong); }
+  #qb-toast { position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); z-index: 30; min-width: 220px;
+              text-align: center; border-radius: 18px; padding: 14px 22px; box-shadow: 0 10px 28px rgba(0,0,0,.18);
+              animation: qb-pop .35s ease-out; }
+  #qb-toast.right { background: #16a34a; color: #fff; }
+  #qb-toast.wrong { background: #475569; color: #fff; }
+  #qb-toast .main { font-size: 26px; font-weight: 800; white-space: nowrap; }
+  #qb-toast .sub { font-size: 15px; opacity: .9; margin-top: 2px; }
+  #qb-final { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex; flex-direction: column;
+              align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 8px; }
+  #qb-final .big { font-size: 80px; line-height: 1; animation: qb-pop .5s ease-out; }
+  #qb-final .rank { font-size: 30px; font-weight: 800; }
+  #qb-final .score { font-size: 20px; color: var(--ink-soft); }
+  #qb-final button { margin-top: 18px; width: auto; padding: 10px 22px; }
+  @keyframes qb-pop { from { transform: translateX(-50%) scale(.7); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+  #qb-final .big { animation-name: qb-pop-plain; }
+  @keyframes qb-pop-plain { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+</style>
+<div id="qb-nick" hidden>
+  <form id="qb-nick-form" autocomplete="off">
+    <div class="big" aria-hidden="true">🎮</div>
+    <h2>{% trans "Choose a nickname" %}</h2>
+    <input id="qb-nick-input" maxlength="20" autocapitalize="off" spellcheck="false"
+           aria-label="{% trans 'Nickname' %}" placeholder="{% trans 'Nickname' %}">
+    <button class="primary" type="submit">{% trans "Play!" %}</button>
+    <p class="err" id="qb-nick-err" role="alert"></p>
+  </form>
+</div>
+<div id="qb-toast" hidden role="status"><div class="main"></div><div class="sub"></div></div>
+<div id="qb-pill" hidden></div>
+<div id="qb-final" hidden>
+  <div class="big" aria-hidden="true"></div>
+  <div class="rank"></div>
+  <div class="score"></div>
+  <button type="button" id="qb-final-close">{% trans "Close" %}</button>
+</div>
+<script>
+(() => {
+  const CODE = "{{ room.code|escapejs }}";
+  if (!CODE) return;
+  const TOKEN_KEY = "abstimmbar_token_" + CODE;
+  const T = {
+    taken: "{% trans 'This nickname is already taken.' %}",
+    empty: "{% trans 'Please enter a nickname.' %}",
+    failed: "{% trans 'That did not work. Please try again.' %}",
+    points: "{% trans '{n} points' %}",
+    plus: "{% trans '+{n} points' %}",
+    noPoints: "{% trans 'No points this time' %}",
+    noAnswer: "{% trans 'No answer' %}",
+    place: "{% trans 'Rank {rank} of {players}' %}",
+    finished: "{% trans 'You finished #{rank} of {players}' %}",
+  };
+  const $ = (id) => document.getElementById(id);
+  const nick = $("qb-nick"), pill = $("qb-pill"), toast = $("qb-toast"), final = $("qb-final");
+  let runId = null, me = null, lastKey = "", lastState = null, finalShownFor = null, inflight = false;
+
+  function fmt(text, values) {
+    return text.replace(/\{(\w+)\}/g, (_, key) => (key in values ? values[key] : ""));
+  }
+  function num(n) { return Number(n || 0).toLocaleString(document.documentElement.lang || undefined); }
+  function csrf() {
+    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+  async function call(action, body) {
+    const response = await fetch(`/api/quizbar/game/${CODE}/${action}/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
+      body: JSON.stringify({ token: localStorage.getItem(TOKEN_KEY) || "", ...body }),
+    });
+    let data = {};
+    try { data = await response.json(); } catch { /* empty */ }
+    return { status: response.status, data };
+  }
+
+  function paint() {
+    const g = lastState && lastState.game;
+    const playing = g && me && me.game && me.run === g.run;
+    // Nickname gate: in a game run, before choosing a nickname.
+    const needNick = playing && !me.nickname && lastState.phase !== "finished";
+    if (needNick && nick.hidden) {
+      nick.hidden = false;
+      const input = $("qb-nick-input");
+      if (!input.value) input.value = me.suggested || "";
+      input.focus();
+    } else if (!needNick) {
+      nick.hidden = true;
+    }
+    // Score pill.
+    // Keep the page's last button clear of the pill.
+    document.body.style.paddingBottom = playing && me.nickname ? "64px" : "";
+    if (playing && me.nickname) {
+      pill.hidden = false;
+      pill.innerHTML = "";
+      const name = document.createElement("span");
+      name.textContent = me.nickname + " · ";
+      const pts = document.createElement("span");
+      pts.className = "pts";
+      pts.textContent = fmt(T.points, { n: num(me.score) });
+      const rank = document.createElement("span");
+      rank.textContent = me.players ? " · #" + me.rank : "";
+      pill.append(name, pts, rank);
+    } else {
+      pill.hidden = true;
+    }
+    // Points for the question whose solution is now shown.
+    const showToast =
+      playing && me.nickname && g.revealed && g.question && me.last && me.last.question === g.question;
+    if (showToast) {
+      const right = me.last.points > 0;
+      toast.className = right ? "right" : "wrong";
+      toast.querySelector(".main").textContent = right
+        ? "✓ " + fmt(T.plus, { n: num(me.last.points) })
+        : (me.last.answered ? "✗ " + T.noPoints : T.noAnswer);
+      toast.querySelector(".sub").textContent = fmt(T.place, { rank: me.rank, players: me.players });
+      toast.hidden = false;
+    } else {
+      toast.hidden = true;
+    }
+  }
+
+  function showFinal(data) {
+    if (!data || !data.nickname || !data.players) return;
+    final.querySelector(".big").textContent =
+      data.rank === 1 ? "🥇" : data.rank === 2 ? "🥈" : data.rank === 3 ? "🥉" : "🏁";
+    final.querySelector(".rank").textContent = fmt(T.finished, { rank: data.rank, players: data.players });
+    final.querySelector(".score").textContent = fmt(T.points, { n: num(data.score) });
+    final.hidden = false;
+  }
+  $("qb-final-close").addEventListener("click", () => { final.hidden = true; });
+
+  async function refresh() {
+    if (inflight) return;
+    inflight = true;
+    try {
+      const { status, data } = await call("me", { run: runId });
+      if (status === 200) me = data;
+    } finally {
+      inflight = false;
+    }
+    paint();
+  }
+
+  window.addEventListener("quizbar-state", (event) => {
+    const s = event.detail;
+    lastState = s;
+    const g = s.game;
+    if (g) {
+      if (runId !== g.run) {
+        runId = g.run;
+        me = null;
+        final.hidden = true;
+      }
+      const key = [g.run, s.phase, g.question, g.revealed].join(":");
+      if (key !== lastKey) {
+        lastKey = key;
+        void refresh();
+      } else {
+        paint();
+      }
+      return;
+    }
+    // The game run just ended: show the final placement once.
+    if (runId && finalShownFor !== runId && (s.phase === "finished" || s.phase === "idle")) {
+      const ended = runId;
+      finalShownFor = ended;
+      void call("me", { run: ended }).then(({ status, data }) => {
+        if (status === 200) showFinal(data);
+      });
+    }
+    runId = null;
+    me = null;
+    lastKey = "";
+    paint();
+  });
+
+  $("qb-nick-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const err = $("qb-nick-err");
+    const nickname = $("qb-nick-input").value.trim();
+    if (!nickname) { err.textContent = T.empty; return; }
+    err.textContent = "";
+    const { status, data } = await call("enter", { run: runId, nickname });
+    if (status === 201) {
+      me = data;
+      paint();
+    } else {
+      err.textContent = data.error === "taken" ? T.taken : data.error === "empty" ? T.empty : T.failed;
+    }
+  });
+})();
+</script>

@@ -872,3 +872,140 @@ class TypstImportTests(TestCase):
         if not example.exists():
             self.skipTest("frontend not next to backend")
         self.assertEqual(len(parse(example.read_text()).questions), 3)
+
+
+class GameTests(TestCase):
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        self.timedelta, self.now = timedelta, timezone.now
+        self.owner = User.objects.create_user(username="game")
+        self.room = Room.objects.create(title="Physics", owner=self.owner)
+        self.room.owners.add(self.owner)
+        self.quiz = QuestionSet.objects.create(room=self.room, title="Quiz 1")
+        self.sc = Question.objects.create(
+            question_set=self.quiz, kind="single_choice", text="SC", position=0, time_limit=10
+        )
+        self.sc_right = AnswerOption.objects.create(question=self.sc, text="a", is_correct=True)
+        self.sc_wrong = AnswerOption.objects.create(question=self.sc, text="b")
+        self.mc = Question.objects.create(
+            question_set=self.quiz, kind="multiple_choice", text="MC", position=1
+        )
+        self.mc_a = AnswerOption.objects.create(question=self.mc, text="a", is_correct=True)
+        self.mc_b = AnswerOption.objects.create(question=self.mc, text="b", is_correct=True)
+        AnswerOption.objects.create(question=self.mc, text="c")
+        self.client.force_login(self.owner)
+        resp = self.client.put(
+            f"/api/quizbar/sets/{self.quiz.pk}/game/", {"enabled": True},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.json(), {"enabled": True})
+        self.run = Run.objects.create(question_set=self.quiz, phase=Run.Phase.LOBBY)
+
+    def player(self, nickname):
+        from live.models import ParticipantToken
+
+        token = ParticipantToken.objects.create(room=self.room)
+        resp = self.client.post(
+            f"/api/quizbar/game/{self.room.code}/enter/",
+            {"token": token.key, "run": self.run.pk, "nickname": nickname},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        return token
+
+    def open(self, question):
+        self.run.active_question = question
+        self.run.phase = Run.Phase.OPEN
+        self.run.opened_at = self.now()
+        self.run.answers_revealed = False
+        self.run.save()
+
+    def vote(self, token, question, options, after):
+        from live.models import Vote
+
+        vote = Vote.objects.create(run=self.run, question=question, token=token)
+        vote.options.set(options)
+        Vote.objects.filter(pk=vote.pk).update(created_at=self.run.opened_at + self.timedelta(seconds=after))
+
+    def me(self, token):
+        return self.client.post(
+            f"/api/quizbar/game/{self.room.code}/me/", {"token": token.key},
+            content_type="application/json",
+        ).json()
+
+    def test_points_rank_and_hidden_until_revealed(self):
+        from . import game
+
+        ada, bob, cyd = self.player("Ada"), self.player("Bob"), self.player("Cyd")
+        self.open(self.sc)
+        self.vote(ada, self.sc, [self.sc_right], after=0)  # 1000
+        self.vote(bob, self.sc, [self.sc_right], after=5)  # 750
+        self.vote(cyd, self.sc, [self.sc_wrong], after=1)  # 0
+        # Before E: the phone's points would give the answer away.
+        self.assertEqual(self.me(ada)["score"], 0)
+        self.run.answers_revealed = True
+        self.run.save()
+        mine = self.me(bob)
+        self.assertEqual((mine["score"], mine["rank"], mine["players"]), (750, 2, 3))
+        self.assertEqual(mine["last"]["points"], 750)
+        # Multiple choice: all right choices, nothing else; no limit = 20 s window.
+        self.open(self.mc)
+        self.vote(ada, self.mc, [self.mc_a], after=1)  # incomplete → 0
+        self.vote(bob, self.mc, [self.mc_a, self.mc_b], after=20)  # 500
+        self.run.phase = Run.Phase.FINISHED
+        self.run.save()
+        board = self.client.get(f"/api/quizbar/game/runs/{self.run.pk}/leaderboard/").json()
+        self.assertEqual(
+            [(r["rank"], r["nickname"], r["score"], r["last"]) for r in board["leaderboard"]],
+            [(1, "Bob", 1250, 500), (2, "Ada", 1000, 0), (3, "Cyd", 0, None)],
+        )
+        self.assertEqual(game.points_for(2.5, 10), 875)
+        # The podium counts the last question even if its solution was not shown.
+        self.run.phase = Run.Phase.CLOSED
+        self.run.answers_revealed = False
+        self.run.save()
+        hidden = self.client.get(f"/api/quizbar/game/runs/{self.run.pk}/leaderboard/").json()
+        final = self.client.get(f"/api/quizbar/game/runs/{self.run.pk}/leaderboard/?final=1").json()
+        self.assertEqual(hidden["leaderboard"][0]["nickname"], "Ada")
+        self.assertEqual(final["leaderboard"][0]["nickname"], "Bob")
+
+    def test_nicknames_unique_per_run_and_suggested_next_time(self):
+        from live.models import ParticipantToken
+
+        ada = self.player("Ada")
+        other = ParticipantToken.objects.create(room=self.room)
+        resp = self.client.post(
+            f"/api/quizbar/game/{self.room.code}/enter/",
+            {"token": other.key, "run": self.run.pk, "nickname": " ada "},
+            content_type="application/json",
+        )
+        self.assertEqual((resp.status_code, resp.json()), (409, {"error": "taken"}))
+        self.run.phase = Run.Phase.FINISHED
+        self.run.save()
+        self.run = Run.objects.create(question_set=self.quiz, phase=Run.Phase.LOBBY)
+        mine = self.me(ada)
+        self.assertEqual((mine["nickname"], mine["suggested"]), (None, "Ada"))
+
+    def test_payloads(self):
+        self.player("Ada")
+        payloads = build_payloads(self.room)
+        self.assertEqual(
+            payloads["participant"]["game"], {"run": self.run.pk, "question": None, "revealed": False}
+        )
+        self.assertEqual(payloads["presenter"]["game"], {"players": ["Ada"]})
+        self.client.put(
+            f"/api/quizbar/sets/{self.quiz.pk}/game/", {"enabled": False},
+            content_type="application/json",
+        )
+        self.assertNotIn("game", build_payloads(self.room)["participant"])
+
+    def test_duplicate_keeps_game_mode(self):
+        from . import game
+
+        clone = duplicate_set(self.quiz, self.room)
+        self.assertFalse(game.enabled(clone))  # transfer helper alone: no
+        resp = self.client.post(f"/api/question-sets/{self.quiz.pk}/duplicate/", {}, content_type="application/json")
+        self.assertTrue(game.enabled(QuestionSet.objects.get(pk=resp.json()["id"])))

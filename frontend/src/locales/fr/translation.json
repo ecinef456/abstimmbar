@@ -1356,5 +1356,18 @@
   "Tags, separated by commas: waves, week-3": "Étiquettes, séparées par des virgules : waves, week-3",
   "Search by tags": "Rechercher par étiquettes",
   "Ticked: find questions that have all the tags you type. Unticked: search the text of questions and answers.": "Cochée : trouver les questions qui ont toutes les étiquettes saisies. Décochée : chercher dans le texte des questions et des réponses.",
-  "Matching tags": "Étiquettes correspondantes"
+  "Matching tags": "Étiquettes correspondantes",
+  "Sound off (M)": "Son coupé (M)",
+  "Sound on (M)": "Son activé (M)",
+  "{{count}} players_one": "{{count}} joueur",
+  "{{count}} players_other": "{{count}} joueurs",
+  "Leaderboard": "Classement",
+  "No players yet.": "Pas encore de joueurs.",
+  "P or click closes": "P ou un clic ferme",
+  "Thanks for playing!": "Merci d’avoir joué !",
+  "Podium": "Podium",
+  "{{points}} points": "{{points}} points",
+  "quizbar_leaderboard_hint_p": "Classement avec <1>P</1>",
+  "Game mode": "Mode jeu",
+  "Students play under a nickname. A correct answer earns 500–1000 points (faster = more); P shows the leaderboard, the end shows the podium. Your own sounds play if you added them (M mutes).": "Les étudiants jouent sous un pseudo. Une bonne réponse rapporte 500 à 1000 points (plus elle est rapide, plus elle rapporte) ; P affiche le classement, la fin affiche le podium. Vos propres sons sont joués si vous les avez ajoutés (M coupe le son)."
 }

@@ -13,6 +13,7 @@ import nh3
 from django.db.models import Count
 
 from common.i18n_fields import translated_map
+from quizbar import game as quizbar_game
 from quizbar import justifications as quizbar_justifications
 from quizbar import languages as quizbar_languages
 from rooms.models import Question
@@ -313,6 +314,8 @@ def build_payloads(room):
                 if before_q.kind == Question.Kind.LIKERT:
                     before["likert"] = likert_summary(before_results)
                 presenter["before"] = before
+    # quizbar (fork): game mode — nickname gate on phones, players on the beamer.
+    quizbar_game.attach(run, participant, presenter)
     return {"participant": participant, "presenter": presenter}
 
 

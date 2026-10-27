@@ -31,6 +31,7 @@ from common import documents
 from common.i18n_fields import resolve_translated_text, translated_map
 from live.models import MatrixCard, MindmapContribution, MindmapNode, Vote
 from quizbar import folders as quizbar_folders
+from quizbar import game as quizbar_game
 
 from . import ai_generate, ai_prompts, generation, set_types
 from .images import InvalidImageError, normalize_image
@@ -507,6 +508,7 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
         clone = duplicate_set(question_set, target, title=title)
         # quizbar (fork): a copy in the same room joins the original's folder.
         quizbar_folders.follow_original(question_set, clone)
+        quizbar_game.copy_setting(question_set, clone)
         serializer = self.get_serializer(clone)
         data = dict(serializer.data)
         data["question_count"] = clone.questions.count()

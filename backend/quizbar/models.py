@@ -203,3 +203,46 @@ class LibraryVault(models.Model):
     question_set = models.OneToOneField(
         "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_library_vault"
     )
+
+
+class SetGame(models.Model):
+    """Game mode (Kahoot style) for a live poll: nicknames, points for fast
+    correct answers, leaderboard and podium."""
+
+    question_set = models.OneToOneField(
+        "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_game"
+    )
+    enabled = models.BooleanField(default=True)
+
+
+class GameEntry(models.Model):
+    """A participant playing one run under a nickname."""
+
+    run = models.ForeignKey("live.Run", on_delete=models.CASCADE, related_name="qb_players")
+    token = models.ForeignKey(
+        "live.ParticipantToken", on_delete=models.CASCADE, related_name="qb_games"
+    )
+    nickname = models.CharField(max_length=20)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("joined_at", "id")
+        constraints = (
+            models.UniqueConstraint(fields=("run", "token"), name="qb_one_entry_per_token"),
+            models.UniqueConstraint(Lower("nickname"), "run", name="qb_unique_nickname"),
+        )
+
+
+class GameQuestion(models.Model):
+    """When a question of a game run was first opened (basis of the speed
+    points)."""
+
+    run = models.ForeignKey("live.Run", on_delete=models.CASCADE, related_name="qb_game_questions")
+    question = models.ForeignKey("rooms.Question", on_delete=models.CASCADE, related_name="+")
+    opened_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ("opened_at", "id")
+        constraints = (
+            models.UniqueConstraint(fields=("run", "question"), name="qb_game_question_once"),
+        )
