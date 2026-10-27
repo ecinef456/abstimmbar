@@ -901,7 +901,12 @@ class GameTests(TestCase):
             f"/api/quizbar/sets/{self.quiz.pk}/game/", {"enabled": True},
             content_type="application/json",
         )
-        self.assertEqual(resp.json(), {"enabled": True})
+        # Nicknames and avatars are off unless switched on.
+        self.assertEqual(resp.json(), {"enabled": True, "nicknames": False, "avatars": False})
+        self.client.put(
+            f"/api/quizbar/sets/{self.quiz.pk}/game/", {"nicknames": True, "avatars": True},
+            content_type="application/json",
+        )
         self.run = Run.objects.create(question_set=self.quiz, phase=Run.Phase.LOBBY)
 
     def player(self, nickname, avatar=""):
@@ -1003,16 +1008,19 @@ class GameTests(TestCase):
         self.assertNotIn("game", build_payloads(self.room)["participant"])
 
     def test_avatars(self):
-        from .avatars import SLUGS
+        from .avatars import slugs
         from .models import GameEntry
 
         curie = self.player("Ada", "curie")
         self.player("Bob", "not-a-physicist")
         avatars = dict(GameEntry.objects.values_list("nickname", "avatar"))
         self.assertEqual(avatars["Ada"], "curie")
-        self.assertIn(avatars["Bob"], SLUGS - {"curie"})  # a free one instead
+        self.assertIn(avatars["Bob"], set(slugs()) - {"curie"})  # a free one instead
         board = self.client.get(f"/api/quizbar/game/runs/{self.run.pk}/leaderboard/").json()
         self.assertEqual({r["avatar"] for r in board["leaderboard"]}, set(avatars.values()))
+        ada = next(r for r in board["leaderboard"] if r["nickname"] == "Ada")
+        self.assertEqual(ada["avatar_icon"], "/static/quizbar/avatars/curie.svg")
+        self.assertIsNone(ada["avatar_full"])
         # Next run: the phone suggests the same avatar again.
         self.run.phase = Run.Phase.FINISHED
         self.run.save()
@@ -1020,11 +1028,90 @@ class GameTests(TestCase):
         mine = self.me(curie)
         self.assertEqual(mine["suggested_avatar"], "curie")
         self.assertEqual(len(mine["avatars"]), 30)
+        self.assertEqual(mine["needs"], {"nickname": True, "avatar": True})
+
+    def test_defaults_random_names_no_avatars_no_join_screen(self):
+        from live.models import ParticipantToken
+
+        from . import funny_names
+        from .models import GameEntry
+
+        self.client.put(
+            f"/api/quizbar/sets/{self.quiz.pk}/game/", {"nicknames": False, "avatars": False},
+            content_type="application/json",
+        )
+        token = ParticipantToken.objects.create(room=self.room)
+        mine = self.me(token)  # joins at once, no join screen
+        name = funny_names.for_token(token.key)
+        self.assertEqual((mine["nickname"], mine["avatar"]), (name, ""))
+        self.assertEqual(len(name.split()), 2)
+        # A typed nickname or avatar is ignored.
+        resp = self.client.post(
+            f"/api/quizbar/game/{self.room.code}/enter/",
+            {"token": token.key, "run": self.run.pk, "nickname": "Hacker", "avatar": "curie"},
+            content_type="application/json",
+        )
+        self.assertEqual((resp.json()["nickname"], resp.json()["avatar"]), (name, ""))
+        # Same phone, next game: same name.
+        self.run.phase = Run.Phase.FINISHED
+        self.run.save()
+        self.run = Run.objects.create(question_set=self.quiz, phase=Run.Phase.LOBBY)
+        self.assertEqual(self.me(token)["nickname"], name)
+        self.assertEqual(GameEntry.objects.filter(run=self.run).count(), 1)
+
+    def test_random_names_never_clash(self):
+        from . import funny_names
+
+        first = funny_names.for_token("abc")
+        self.assertNotEqual(funny_names.for_token("abc", taken=[first]), first)
+
+    def test_avatar_only(self):
+        from live.models import ParticipantToken
+
+        from . import funny_names
+
+        self.client.put(
+            f"/api/quizbar/sets/{self.quiz.pk}/game/", {"nicknames": False, "avatars": True},
+            content_type="application/json",
+        )
+        token = ParticipantToken.objects.create(room=self.room)
+        mine = self.me(token)
+        self.assertIsNone(mine["nickname"])
+        self.assertEqual(mine["needs"], {"nickname": False, "avatar": True})
+        self.assertEqual(mine["name"], funny_names.for_token(token.key))
+        resp = self.client.post(
+            f"/api/quizbar/game/{self.room.code}/enter/",
+            {"token": token.key, "run": self.run.pk, "avatar": "tesla"},
+            content_type="application/json",
+        ).json()
+        self.assertEqual((resp["nickname"], resp["avatar"]), (mine["name"], "tesla"))
+
+    def test_own_pictures(self):
+        import shutil
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from . import avatars
+
+        folder = Path(tempfile.mkdtemp())
+        try:
+            shutil.copy(avatars.FOLDER / "newton.svg", folder / "newton.svg")
+            (folder / "newton-full.png").write_bytes(b"png")
+            (folder / "ada-lovelace.png").write_bytes(b"png")
+            with mock.patch.object(avatars, "FOLDER", folder), mock.patch.dict(avatars._cache, {"key": None}):
+                found = {a["slug"]: a for a in avatars.available()}
+            self.assertEqual(found["newton"]["full"], "/static/quizbar/avatars/newton-full.png")
+            self.assertEqual(found["ada-lovelace"]["name"], "Ada Lovelace")
+            self.assertEqual(found["ada-lovelace"]["icon"], "/static/quizbar/avatars/ada-lovelace.png")
+            self.assertNotIn("einstein", found)  # no picture in that folder
+        finally:
+            shutil.rmtree(folder)
 
     def test_avatar_files_exist(self):
         from pathlib import Path
 
-        from .avatars import AVATARS
+        from .avatar_list import AVATARS
 
         folder = Path(__file__).parent / "static/quizbar/avatars"
         for slug, _ in AVATARS:

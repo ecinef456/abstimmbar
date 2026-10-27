@@ -42,3 +42,9 @@ docs/superpowers/
 # quizbar (fork): your own game-mode sounds (see frontend/public/quizbar/sounds/README.md)
 /frontend/public/quizbar/sounds/*
 !/frontend/public/quizbar/sounds/README.md
+# quizbar (fork): your own avatar pictures (see backend/quizbar/static/quizbar/avatars/README.md)
+/backend/quizbar/static/quizbar/avatars/*.png
+/backend/quizbar/static/quizbar/avatars/*.webp
+/backend/quizbar/static/quizbar/avatars/*.jpg
+/backend/quizbar/static/quizbar/avatars/*.jpeg
+/backend/quizbar/static/quizbar/avatars/*-full.svg

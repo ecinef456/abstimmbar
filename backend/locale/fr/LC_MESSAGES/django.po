@@ -697,3 +697,11 @@ msgstr "Choisissez un personnage et un pseudo"
 #: quizbar/templates/quizbar/game_participant.html
 msgid "Avatar"
 msgstr "Avatar"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "Pick a physicist"
+msgstr "Choisissez un personnage"
+
+#: quizbar/templates/quizbar/game_participant.html
+msgid "You play as {name}"
+msgstr "Vous jouez en tant que {name}"

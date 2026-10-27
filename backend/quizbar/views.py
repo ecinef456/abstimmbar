@@ -342,14 +342,14 @@ def import_typst(request, room_id):
 @api_view(["GET", "PUT"])
 @permission_classes([IsAuthenticated])
 def set_game(request, set_id):
-    """GET/PUT {enabled}: game mode of a live poll."""
+    """GET / PUT {enabled?, nicknames?, avatars?}: game mode of a live poll."""
     question_set = _owned_set(request.user, set_id)
     if request.method == "PUT":
         if question_set.type != QuestionSet.SetType.LIVE_POLL:
             return Response({"detail": "Game mode is for live polls."}, status=400)
-        game.set_enabled(question_set, bool(request.data.get("enabled")))
+        game.set_options(question_set, **{k: request.data.get(k) for k in game.OPTIONS})
         broadcast(question_set.room)
-    return Response({"enabled": game.enabled(question_set)})
+    return Response(game.options(question_set))
 
 
 def _player(request, code):
@@ -373,6 +373,8 @@ def game_me(request, code):
         return Response({"detail": "Unknown participant token."}, status=403)
     if run is None:
         return Response({"game": False})
+    if game.auto_enter(run, token):
+        broadcast(run.question_set.room)
     return Response(game.me(run, token))
 
 

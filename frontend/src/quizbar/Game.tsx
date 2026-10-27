@@ -11,15 +11,23 @@ import { useTranslation } from "react-i18next";
 import { Trophy, Volume2, VolumeX } from "lucide-react";
 import { API_BASE_URL, quizbar, type GameLeaderboard, type GamePlayer } from "../api";
 
-/** A physicist avatar (served by Django: quizbar/static/quizbar/avatars). */
-export function Avatar({ slug, className = "" }: { slug?: string; className?: string }) {
-  if (!slug) return null;
+/** An avatar picture (served by Django under /static/quizbar/avatars/). */
+export function Avatar({
+  src,
+  className = "",
+  round = true,
+}: {
+  src?: string | null;
+  className?: string;
+  round?: boolean;
+}) {
+  if (!src) return null;
   return (
     <img
-      src={`${API_BASE_URL}/static/quizbar/avatars/${slug}.svg`}
+      src={src.startsWith("/") ? `${API_BASE_URL}${src}` : src}
       alt=""
       aria-hidden
-      className={`shrink-0 rounded-full ${className}`}
+      className={`shrink-0 ${round ? "rounded-full" : "object-contain"} ${className}`}
     />
   );
 }
@@ -141,7 +149,7 @@ export function GameLobby({ players }: { players: GamePlayer[] }) {
             key={player.nickname}
             className="ab-fade-in inline-flex items-center gap-2 rounded-full bg-brand-50 py-1 pl-1 pr-4 text-lg font-semibold text-brand-800"
           >
-            <Avatar slug={player.avatar} className="h-9 w-9" />
+            <Avatar src={player.avatar_icon} className="h-9 w-9" />
             {player.nickname}
           </span>
         ))}
@@ -195,7 +203,7 @@ export function LeaderboardOverlay({ runId, onClose }: { runId: number; onClose:
                     style={{ width: `${Math.max(8, (row.score / best) * 100)}%` }}
                   />
                   <span className="relative flex h-full items-center gap-3 px-2 text-2xl font-bold text-slate-900">
-                    <Avatar slug={row.avatar} className="h-11 w-11" />
+                    <Avatar src={row.avatar_icon} className="h-11 w-11" />
                     {row.nickname}
                   </span>
                 </div>
@@ -274,17 +282,21 @@ export function Podium({
                 }`}
               >
                 <div className="relative mx-auto w-fit">
-                  {row.avatar ? (
-                    <Avatar slug={row.avatar} className="h-28 w-28 shadow-lg" />
+                  {/* Full body if there is a picture for it, else the head; no
+                      avatar (switched off): just the medal. */}
+                  {row.avatar_full ? (
+                    <Avatar src={row.avatar_full} round={false} className="h-56 w-auto" />
+                  ) : row.avatar_icon ? (
+                    <Avatar src={row.avatar_icon} className="h-28 w-28 shadow-lg" />
                   ) : null}
                   <span
-                    className={row.avatar ? "absolute -bottom-2 -right-3 text-5xl" : "text-6xl"}
+                    className={row.avatar_icon ? "absolute -bottom-2 -right-3 text-5xl" : "text-6xl"}
                     aria-hidden
                   >
                     {MEDAL[place]}
                   </span>
                 </div>
-                <div className="mt-2 max-w-[15rem] truncate text-3xl font-extrabold text-slate-900">{row.nickname}</div>
+                <div className="mt-2 max-w-[15rem] break-words text-2xl font-extrabold leading-tight text-slate-900">{row.nickname}</div>
                 <div className="text-xl font-semibold tabular-nums text-slate-500">
                   {t("{{points}} points", { points: row.score.toLocaleString() })}
                 </div>

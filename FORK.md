@@ -224,12 +224,19 @@ Code: `quizbar/typst_import.py` (parser + import), endpoint
 
 - **Switch it on** per live poll: set page → *Game mode*. Duplicated sets
   and rooms keep it.
-- **Phones:** in the lobby each student picks a nickname (nothing else;
-  the last one is suggested next time). A pill at the bottom shows
-  nickname, points and rank. Once the solution is shown (L, or the results
-  when the set reveals "immediately"), the phone shows "+850 points ·
-  Rank 3 of 25" or "No points this time". When the run ends: the final
-  place (🥇🥈🥉).
+- **Options** (under the switch, both off by default):
+  - *Students choose a nickname* — else every phone plays under a random
+    funny name ("Chaotic Capybara", "Relativistic Beaver"; 68 adjectives ×
+    63 animals), derived from the phone's anonymous token, so the same phone
+    keeps its name; never twice in one game.
+  - *Students choose an avatar* — else no avatars anywhere; the podium shows
+    the medals only.
+  With both off there is no join screen at all: phones are in as soon as they
+  open the page.
+- **Phones:** a pill at the bottom shows name, points and rank. Once the
+  solution is shown (L, or the results when the set reveals "immediately"),
+  "+850 points · Rank 3 of 25" or "No points this time". When the run ends:
+  the final place (🥇🥈🥉).
 - **Points:** single and multiple choice questions with a correct answer
   only (multiple choice: exactly the right choices). Correct = 500–1000
   points, 1000 at once, 500 at the time limit (no limit: a 20 s window).
@@ -237,19 +244,18 @@ Code: `quizbar/typst_import.py` (parser + import), endpoint
 - **Beamer:** the lobby lists the players; **P** shows the leaderboard (top
   5 with this question's points); the closing slide becomes the **podium**
   (3rd, 2nd, drum roll, 1st, then places 4–9). **M** mutes.
-- **Avatars:** next to the nickname each player picks one of 30 cartoon
-  physicists (Newton with his apple, Einstein in sunglasses, Curie with a
-  glowing flask, Schrödinger with his box …; a free one is preselected,
-  last time's next time). They show on the phone, in the lobby, on the
-  leaderboard and on the podium. Drawn by `fork/avatars/generate.py`
-  (SVG, `backend/quizbar/static/quizbar/avatars/`): edit and rerun it to
-  change or add one.
+- **Avatars:** the 30 built-in physicists (`<slug>.svg`, drawn by
+  `fork/avatars/generate.py`). Your own pictures go into
+  `backend/quizbar/static/quizbar/avatars/` (git-ignored; README there):
+  `newton.png` replaces an icon, `ada-lovelace.png` adds an avatar,
+  `newton-full.png` adds a **full-body** picture — shown big on the phone
+  once chosen, on the phone's final screen and on the podium.
 - **Sounds:** your own MP3 files in `frontend/public/quizbar/sounds/`
   (`lobby`, `question`, `reveal`, `leaderboard`, `drumroll`, `podium`).
   They are git-ignored, so each server keeps its own; see the README in
   that folder. Missing files stay silent.
 
-Code: `quizbar/game.py`, `quizbar/avatars.py` (tables `SetGame`, `GameEntry`, `GameQuestion`;
+Code: `quizbar/game.py`, `quizbar/avatars.py`, `quizbar/funny_names.py` (tables `SetGame`, `GameEntry`, `GameQuestion`;
 Run signal in `quizbar/apps.py`), `quizbar/templates/quizbar/game_participant.html`
 (included by the participant page), `frontend/src/quizbar/Game.tsx`,
 `GameModePanel.tsx`; hooks in `live/state.py`, `participant.html` (one

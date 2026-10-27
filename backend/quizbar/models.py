@@ -213,6 +213,10 @@ class SetGame(models.Model):
         "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_game"
     )
     enabled = models.BooleanField(default=True)
+    # Players type a nickname (else: a random "Chaotic Capybara").
+    nicknames = models.BooleanField(default=False)
+    # Players pick an avatar (else: none, medals only on the podium).
+    avatars = models.BooleanField(default=False)
 
 
 class GameEntry(models.Model):
@@ -222,7 +226,8 @@ class GameEntry(models.Model):
     token = models.ForeignKey(
         "live.ParticipantToken", on_delete=models.CASCADE, related_name="qb_games"
     )
-    nickname = models.CharField(max_length=20)
+    # Typed nicknames are at most 20 characters, random names a bit longer.
+    nickname = models.CharField(max_length=40)
     # A physicist (quizbar/avatars.py); "" = none.
     avatar = models.CharField(max_length=30, blank=True, default="")
     joined_at = models.DateTimeField(auto_now_add=True)

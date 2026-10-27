@@ -1,4 +1,4 @@
-{% load i18n static %}
+{% load i18n %}
 {# quizbar (fork): game mode on the phone. Listens to the page's "quizbar-state" events; talks to /api/quizbar/game/<code>/… with the participant token. #}
 <style>
   #qb-nick { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex;
@@ -15,6 +15,9 @@
   #qb-avatars img { width: 100%; height: 100%; display: block; }
   #qb-pill img { width: 24px; height: 24px; border-radius: 50%; vertical-align: -7px; margin: -4px 6px -4px -8px; }
   #qb-final .face { width: 120px; height: 120px; border-radius: 50%; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+  #qb-nick .me.full, #qb-final .face.full { width: auto; height: 220px; max-width: 80%; border-radius: 0; box-shadow: none; }
+  #qb-nick .you { font-size: 16px; margin: 0 0 12px; }
+  #qb-nick .you b { color: var(--brand-strong); }
   #qb-final .medal { font-size: 44px; line-height: 1; margin-top: -30px; }
   #qb-nick input { width: 100%; box-sizing: border-box; font-size: 20px; padding: 14px 16px; text-align: center;
                    border: 2px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); }
@@ -45,9 +48,10 @@
 </style>
 <div id="qb-nick" hidden>
   <form id="qb-nick-form" autocomplete="off">
-    <h2>{% trans "Pick a physicist and a nickname" %}</h2>
-    <img class="me" id="qb-me" alt="" src="">
-    <p class="who" id="qb-who"></p>
+    <h2 id="qb-nick-title"></h2>
+    <p class="you" id="qb-you" hidden></p>
+    <img class="me" id="qb-me" alt="" src="" hidden>
+    <p class="who" id="qb-who" hidden></p>
     <input id="qb-nick-input" maxlength="20" autocapitalize="off" spellcheck="false"
            aria-label="{% trans 'Nickname' %}" placeholder="{% trans 'Nickname' %}">
     <div id="qb-avatars" role="group" aria-label="{% trans 'Avatar' %}"></div>
@@ -69,9 +73,12 @@
   const CODE = "{{ room.code|escapejs }}";
   if (!CODE) return;
   const TOKEN_KEY = "abstimmbar_token_" + CODE;
-  const AVATAR_BASE = "{% static 'quizbar/avatars/' %}";
   let chosenAvatar = "";
   const T = {
+    titleBoth: "{% trans 'Pick a physicist and a nickname' %}",
+    titleNick: "{% trans 'Choose a nickname' %}",
+    titleAvatar: "{% trans 'Pick a physicist' %}",
+    youAre: "{% trans 'You play as {name}' %}",
     taken: "{% trans 'This nickname is already taken.' %}",
     empty: "{% trans 'Please enter a nickname.' %}",
     failed: "{% trans 'That did not work. Please try again.' %}",
@@ -108,13 +115,29 @@
   function paint() {
     const g = lastState && lastState.game;
     const playing = g && me && me.game && me.run === g.run;
-    // Nickname gate: in a game run, before choosing a nickname.
-    const needNick = playing && !me.nickname && lastState.phase !== "finished";
+    // Join screen: in a game run that asks for a nickname and/or an avatar.
+    const needs = (me && me.needs) || {};
+    const needNick = playing && !me.nickname && (needs.nickname || needs.avatar) && lastState.phase !== "finished";
     if (needNick && nick.hidden) {
       nick.hidden = false;
+      $("qb-nick-title").textContent =
+        needs.nickname && needs.avatar ? T.titleBoth : needs.nickname ? T.titleNick : T.titleAvatar;
       const input = $("qb-nick-input");
-      if (!input.value) input.value = me.suggested || "";
-      buildAvatars(me.avatars || [], chosenAvatar || me.suggested_avatar);
+      input.hidden = !needs.nickname;
+      if (needs.nickname && !input.value) input.value = me.suggested || "";
+      const you = $("qb-you");
+      you.hidden = Boolean(needs.nickname);
+      if (!needs.nickname) {
+        you.innerHTML = "";
+        const parts = T.youAre.split("{name}");
+        const b = document.createElement("b");
+        b.textContent = me.name || "";
+        you.append(parts[0], b, parts[1] || "");
+      }
+      $("qb-avatars").hidden = !needs.avatar;
+      $("qb-me").hidden = !needs.avatar;
+      $("qb-who").hidden = !needs.avatar;
+      if (needs.avatar) buildAvatars(me.avatars || [], chosenAvatar || me.suggested_avatar);
     } else if (!needNick) {
       nick.hidden = true;
     }
@@ -124,9 +147,9 @@
     if (playing && me.nickname) {
       pill.hidden = false;
       pill.innerHTML = "";
-      if (me.avatar) {
+      if (me.avatar_icon) {
         const face = document.createElement("img");
-        face.src = AVATAR_BASE + me.avatar + ".svg";
+        face.src = me.avatar_icon;
         face.alt = "";
         pill.append(face);
       }
@@ -167,7 +190,7 @@
       button.setAttribute("aria-label", avatar.name);
       button.dataset.slug = avatar.slug;
       const img = document.createElement("img");
-      img.src = AVATAR_BASE + avatar.slug + ".svg";
+      img.src = avatar.icon;
       img.alt = "";
       img.loading = "lazy";
       button.append(img);
@@ -182,15 +205,19 @@
       button.setAttribute("aria-pressed", String(button.dataset.slug === slug));
     }
     const found = list.find((a) => a.slug === slug);
-    $("qb-me").src = slug ? AVATAR_BASE + slug + ".svg" : "";
+    // The full-body picture once chosen, if there is one; else the head.
+    const picture = $("qb-me");
+    picture.src = found ? found.full || found.icon : "";
+    picture.classList.toggle("full", Boolean(found && found.full));
     $("qb-who").textContent = found ? found.name : "";
   }
 
   function showFinal(data) {
     if (!data || !data.nickname || !data.players) return;
     const face = final.querySelector(".face");
-    face.hidden = !data.avatar;
-    if (data.avatar) face.src = AVATAR_BASE + data.avatar + ".svg";
+    face.hidden = !data.avatar_icon;
+    if (data.avatar_icon) face.src = data.avatar_full || data.avatar_icon;
+    face.classList.toggle("full", Boolean(data.avatar_full));
     final.querySelector(".medal").textContent =
       data.rank === 1 ? "🥇" : data.rank === 2 ? "🥈" : data.rank === 3 ? "🥉" : "🏁";
     final.querySelector(".rank").textContent = fmt(T.finished, { rank: data.rank, players: data.players });
@@ -248,7 +275,7 @@
     event.preventDefault();
     const err = $("qb-nick-err");
     const nickname = $("qb-nick-input").value.trim();
-    if (!nickname) { err.textContent = T.empty; return; }
+    if (me && me.needs && me.needs.nickname && !nickname) { err.textContent = T.empty; return; }
     err.textContent = "";
     const { status, data } = await call("enter", { run: runId, nickname, avatar: chosenAvatar });
     if (status === 201) {

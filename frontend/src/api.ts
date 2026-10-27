@@ -1890,13 +1890,22 @@ export interface SelfCheckSources {
 /** quizbar (fork): game mode. */
 export interface GamePlayer {
   nickname: string;
-  /** A physicist avatar slug ("" = none). */
+  /** Avatar slug ("" = none: avatars switched off) and its pictures. */
   avatar: string;
+  avatar_icon: string | null;
+  avatar_full: string | null;
+}
+export interface GameOptions {
+  enabled: boolean;
+  /** Players type a nickname (else a random "Chaotic Capybara"). */
+  nicknames: boolean;
+  /** Players pick an avatar (else none; medals only on the podium). */
+  avatars: boolean;
 }
 export interface GameLeaderboard {
   players: number;
   questions: number;
-  leaderboard: { rank: number; nickname: string; avatar: string; score: number; last: number | null }[];
+  leaderboard: (GamePlayer & { rank: number; score: number; last: number | null })[];
 }
 
 /** quizbar (fork): question library. */
@@ -2003,11 +2012,11 @@ export const quizbar = {
   duplicateRoom: (roomId: number) =>
     request<{ id: number }>(`/api/quizbar/rooms/${roomId}/duplicate/`, { method: "POST", body: "{}" }),
   /** Game mode (Kahoot style) of a live poll. */
-  game: (setId: number) => request<{ enabled: boolean }>(`/api/quizbar/sets/${setId}/game/`),
-  setGame: (setId: number, enabled: boolean) =>
-    request<{ enabled: boolean }>(`/api/quizbar/sets/${setId}/game/`, {
+  game: (setId: number) => request<GameOptions>(`/api/quizbar/sets/${setId}/game/`),
+  setGame: (setId: number, changes: Partial<GameOptions>) =>
+    request<GameOptions>(`/api/quizbar/sets/${setId}/game/`, {
       method: "PUT",
-      body: JSON.stringify({ enabled }),
+      body: JSON.stringify(changes),
     }),
   leaderboard: (runId: number, final = false) =>
     request<GameLeaderboard>(`/api/quizbar/game/runs/${runId}/leaderboard/${final ? "?final=1" : ""}`),

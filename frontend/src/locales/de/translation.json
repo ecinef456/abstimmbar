@@ -1392,5 +1392,10 @@
   "Game mode": "Spielmodus",
   "Students play under a nickname. A correct answer earns 500–1000 points (faster = more); P shows the leaderboard, the end shows the podium. Your own sounds play if you added them (M mutes).": "Die Studierenden spielen unter einem Spielnamen. Eine richtige Antwort bringt 500–1000 Punkte (schneller = mehr); P zeigt die Rangliste, am Ende kommt das Siegertreppchen. Eigene Sounds werden abgespielt, falls hinterlegt (M schaltet stumm).",
   "One language per room": "Eine Sprache pro Raum",
-  "Questions are written in one language. Set it per room (⋮ → Settings): the beamer and the phones switch to it.": "Fragen werden in einer Sprache geschrieben. Legen Sie sie pro Raum fest (⋮ → Einstellungen): Beamer und Smartphones wechseln in diese Sprache."
+  "Questions are written in one language. Set it per room (⋮ → Settings): the beamer and the phones switch to it.": "Fragen werden in einer Sprache geschrieben. Legen Sie sie pro Raum fest (⋮ → Einstellungen): Beamer und Smartphones wechseln in diese Sprache.",
+  "Students choose a nickname": "Studierende wählen einen Spielnamen",
+  "Otherwise each phone gets a random funny name, like “Chaotic Capybara”.": "Sonst bekommt jedes Smartphone einen lustigen Zufallsnamen, z. B. „Chaotic Capybara“.",
+  "Students choose an avatar": "Studierende wählen einen Avatar",
+  "Otherwise no avatars: the podium shows the medals only.": "Sonst keine Avatare: Auf dem Siegertreppchen stehen nur die Medaillen.",
+  "Game mode: points for fast correct answers, leaderboard (P) and podium at the end. Your own sounds play if you added them (M mutes).": "Spielmodus: Punkte für schnelle richtige Antworten, Rangliste (P) und Siegertreppchen am Ende. Eigene Sounds werden abgespielt, falls hinterlegt (M schaltet stumm)."
 }
