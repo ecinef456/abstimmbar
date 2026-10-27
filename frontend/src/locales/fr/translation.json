@@ -1401,5 +1401,7 @@
   "Export PDF": "Exporter en PDF",
   "Export selection as PDF": "Exporter la sélection en PDF",
   "Export shown as PDF": "Exporter l’affichage en PDF",
-  "Nothing to export: there are no single- or multiple-choice questions here.": "Rien à exporter : il n’y a pas de question à choix unique ou multiple ici."
+  "Nothing to export: there are no single- or multiple-choice questions here.": "Rien à exporter : il n’y a pas de question à choix unique ou multiple ici.",
+  "Show all": "Tout afficher",
+  "Show less": "Afficher moins"
 }

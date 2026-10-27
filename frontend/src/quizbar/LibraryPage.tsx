@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /** quizbar (fork): the question library page (/library) and the dialogs to
  *  copy library questions into a set. */
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { CopyPlus, FileDown, Library, Pencil, Trash2 } from "lucide-react";
@@ -221,6 +221,44 @@ export function LibraryPickerDialog({
   );
 }
 
+/** A card's question and answers, cut at a fixed height (so a long question
+ *  does not stretch its whole row), with "Show all" when cut. */
+function ClampedContent({ entry }: { entry: LibraryEntry }) {
+  const { t } = useTranslation();
+  const box = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [cut, setCut] = useState(false);
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (!element) return;
+    const measure = () => setCut(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    // Math and images change the height after the first paint.
+    const observer = new ResizeObserver(measure);
+    for (const child of Array.from(element.children)) observer.observe(child);
+    return () => observer.disconnect();
+  }, [entry, open]);
+  return (
+    <div className="min-w-0 flex-1">
+      <div ref={box} className={`relative ${open ? "" : "max-h-72 overflow-hidden"}`}>
+        <EntryContent entry={entry} />
+        {cut && !open && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white dark:from-slate-950" />
+        )}
+      </div>
+      {(cut || open) && (
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="mt-1 text-xs font-medium text-brand-700 hover:underline dark:text-brand-300"
+        >
+          {open ? t("Show less") : t("Show all")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function EntryCard({
   entry,
   selected,
@@ -241,24 +279,21 @@ function EntryCard({
   const { t } = useTranslation();
   return (
     <article
-      className={`grid gap-3 rounded-2xl border p-4 ${
+      className={`flex h-full flex-col gap-3 rounded-2xl border p-4 ${
         selected
           ? "border-brand-600 bg-brand-50/40 dark:bg-brand-950/20"
           : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
       }`}
     >
-      <div className="flex items-start gap-3">
+      <div className="-my-1 flex items-center gap-1">
         <input
           type="checkbox"
           checked={selected}
           onChange={(event) => onSelect(event.target.checked)}
           aria-label={t("Select")}
-          className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 accent-brand-600"
+          className="h-4 w-4 shrink-0 rounded border-slate-300 accent-brand-600"
         />
-        <div className="min-w-0 flex-1">
-          <EntryContent entry={entry} />
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           {entry.master_set !== null && (
             <Link
               to={`/sets/${entry.master_set}/questions/${entry.master}`}
@@ -287,7 +322,8 @@ function EntryCard({
           </Button>
         </div>
       </div>
-      <div className="grid gap-2 pl-7">
+      <ClampedContent entry={entry} />
+      <div className="grid gap-2">
         <TagInput
           idPrefix={`qb-entry-${entry.id}`}
           tags={entry.tags.map((tag) => tag.name)}
@@ -364,6 +400,7 @@ export default function LibraryPage() {
         </p>
       )}
       <LibraryBrowser
+        columns
         entries={data.entries}
         tags={data.tags}
         onRenameTag={async (tag, name) => {

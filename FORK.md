@@ -146,6 +146,9 @@ Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
   (duplicating a question, set or room, inserting from the library and
   self-check copies all count as the same question). Filter by tag chip
   or type, and a **To sort** chip for questions without tags.
+- **Cards:** three per row on wide screens (two on tablets, one on
+  phones); images in a card are at most 10rem high, and a long question is
+  cut with **Show all** so it does not stretch its row.
 - **Search:** with **Tags** ticked (default) type tags separated by commas
   (`waves, week-3`): questions with *all* of them are shown; a partial
   tag (`week`) matches every tag starting with it, and matching tags are

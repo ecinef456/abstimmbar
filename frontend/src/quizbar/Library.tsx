@@ -235,6 +235,7 @@ export function LibraryBrowser({
   onRenameTag,
   onDeleteTag,
   allowedKinds,
+  columns = false,
 }: {
   entries: LibraryEntry[];
   tags: LibraryTag[];
@@ -246,6 +247,8 @@ export function LibraryBrowser({
   onDeleteTag?: (tag: LibraryTag) => Promise<void>;
   /** Picker: entries of other kinds are hidden. */
   allowedKinds?: string[];
+  /** Cards side by side: up to three per row on wide screens. */
+  columns?: boolean;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -479,9 +482,11 @@ export function LibraryBrowser({
             : t("No question matches.")}
         </p>
       ) : (
-        <ul className="grid gap-3">
+        <ul className={`grid gap-3 ${columns ? "sm:grid-cols-2 lg:grid-cols-3" : ""}`}>
           {visible.map((entry) => (
-            <li key={entry.id}>{renderEntry(entry)}</li>
+            <li key={entry.id} className="min-w-0">
+              {renderEntry(entry)}
+            </li>
           ))}
         </ul>
       )}
@@ -498,7 +503,9 @@ export function EntryContent({ entry, compact = false }: { entry: LibraryEntry; 
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {t(KIND_LABEL_KEYS[entry.kind] ?? entry.kind)}
       </p>
-      <div className={`text-slate-800 dark:text-slate-100 ${compact ? "line-clamp-3" : ""}`}>
+      <div
+        className={`text-slate-800 dark:text-slate-100 [&_img]:mx-auto [&_img]:max-h-40 [&_img]:w-auto [&_img]:max-w-full ${compact ? "line-clamp-3" : ""}`}
+      >
         {stripHtml(html) || html.includes("<img") ? (
           <RichText html={mathHtml(html)} />
         ) : (
