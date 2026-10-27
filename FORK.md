@@ -141,13 +141,20 @@ Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
 - **Library** (book icon in the header, `/library`): every question you
   write in your rooms appears here **once**, however often it is copied
   (duplicating a question, set or room, inserting from the library and
-  self-check copies all count as the same question). Search, filter by
-  tag or type, and a **To sort** chip for questions without tags.
-- **Tags:** in the question editor ("Keep this question in my library",
-  ticked by default for new questions; untick to leave one out) or
-  directly on the library page. Select several and add tags at once;
-  rename or delete a tag from its chip (renaming onto an existing tag
-  merges them).
+  self-check copies all count as the same question). Filter by tag chip
+  or type, and a **To sort** chip for questions without tags.
+- **Search:** with **Tags** ticked (default) type tags separated by commas
+  (`waves, week-3`): questions with *all* of them are shown; a partial
+  tag (`week`) matches every tag starting with it, and matching tags are
+  offered to click. Untick **Tags** to search the text of questions,
+  answers and tags instead.
+- **Tags:** one spelling, lower case with dashes (`Week 3` → `week-3`),
+  everywhere: editor, library page, Typst import. Set them in the question
+  editor ("Keep this question in my library", ticked by default for new
+  questions; untick to leave one out) or directly on the library page.
+  Select several and add tags at once; rename or delete a tag from its
+  chip (renaming onto an existing tag merges them). Tags made before this
+  rule were converted (and merged) by migration `quizbar 0006`.
 - **Reuse:** "From library" on a set page, or "Copy into a question set"
   on the library page. The copy is independent: change it freely in its
   set. The library keeps showing the original; the pencil edits that one.
@@ -187,7 +194,7 @@ The package lives in `frontend/public/quizbar/` (`quizbar.typ`, `example.typ`,
     answer(false, [1.5 m/s], why: [That is $lambda \/ f$.]),
   ),
   image: "wave.png",                            // optional, in figures/
-  tags: ("Waves", "Week 3"),                    // optional
+  tags: ("waves", "week-3"),                    // optional
   time-limit-s: 60,                             // optional
   shuffle: false,                               // default
 )

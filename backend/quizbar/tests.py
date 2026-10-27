@@ -542,7 +542,7 @@ class LibraryTests(TestCase):
     def test_new_question_joins_library_with_tags(self):
         question, data = self.new_question(in_library=True, tags=["Energy", " energy ", "Week 1"])
         self.assertTrue(data["library"]["in_library"])
-        self.assertEqual(data["library"]["tags"], ["Energy", "Week 1"])
+        self.assertEqual(data["library"]["tags"], ["energy", "week-1"])
         [entry] = self.entries()
         self.assertEqual(entry["master"], question.pk)
         self.assertEqual(entry["used_in"][0]["set"], self.quiz.pk)
@@ -557,7 +557,7 @@ class LibraryTests(TestCase):
             {"library": {"in_library": True, "tags": ["Optics"]}},
             content_type="application/json",
         )
-        self.assertEqual(resp.json()["library"]["tags"], ["Optics"])
+        self.assertEqual(resp.json()["library"]["tags"], ["optics"])
         self.assertEqual(len(self.entries()), 1)
 
     def test_copies_do_not_add_entries(self):
@@ -591,7 +591,7 @@ class LibraryTests(TestCase):
         [entry] = self.entries()
         self.assertIsNone(entry["master_set"])
         self.assertEqual(entry["used_in"], [])
-        self.assertEqual(entry["tags"], [{"id": entry["tags"][0]["id"], "name": "Mechanics"}])
+        self.assertEqual(entry["tags"], [{"id": entry["tags"][0]["id"], "name": "mechanics"}])
         self.assertEqual(entry["options"][0]["text"]["de"], "E=mc^2")
         # The vault room is never listed, not even in the staff-wide list.
         rooms = self.client.get("/api/rooms/?all=1").json()
@@ -659,14 +659,38 @@ class LibraryTests(TestCase):
             content_type="application/json",
         )
         tags = {t["name"]: t["id"] for t in self.client.get("/api/quizbar/library/").json()["tags"]}
-        self.assertEqual(set(tags), {"optics", "Week 3"})
+        self.assertEqual(set(tags), {"optics", "week-3"})
         self.client.patch(
             f"/api/quizbar/library/tags/{tags['optics']}/", {"name": "week 3"},
             content_type="application/json",
         )
         data = self.client.get("/api/quizbar/library/").json()
-        self.assertEqual([t["name"] for t in data["tags"]], ["Week 3"])
+        self.assertEqual([t["name"] for t in data["tags"]], ["week-3"])
         self.assertTrue(all(len(e["tags"]) == 1 for e in data["entries"]))
+
+    def test_tag_spelling_is_normalized(self):
+        self.assertEqual(
+            self.library.clean_tag_names(["Week 3", " week   3 ", "Thermo, Gas", "--A--B--", ""]),
+            ["week-3", "thermo-gas", "a-b"],
+        )
+
+    def test_migration_merges_old_spellings(self):
+        import importlib
+
+        from django.apps import apps
+
+        from .models import LibraryEntry, LibraryTag
+
+        migration = importlib.import_module("quizbar.migrations.0006_normalize_tags")
+        first = LibraryEntry.objects.create(owner=self.owner)
+        second = LibraryEntry.objects.create(owner=self.owner)
+        a = LibraryTag.objects.create(owner=self.owner, name="Week 3")
+        b = LibraryTag.objects.create(owner=self.owner, name="week-3")
+        first.tags.add(a)
+        second.tags.add(b)
+        migration.forwards(apps, None)
+        self.assertEqual(list(LibraryTag.objects.values_list("name", flat=True)), ["week-3"])
+        self.assertEqual(LibraryTag.objects.get().entries.count(), 2)
 
     def test_backfill_merges_identical_questions(self):
         from .models import LibraryEntry, QuestionLineage
@@ -798,7 +822,7 @@ class TypstImportTests(TestCase):
         self.assertEqual(
             justifications.text_for(first.options.order_by("position")[1]), r"That is $lambda \/ f$."
         )
-        self.assertEqual(sorted(t.name for t in first.qb_lineage.entry.tags.all()), ["Waves", "Week 3"])
+        self.assertEqual(sorted(t.name for t in first.qb_lineage.entry.tags.all()), ["waves", "week-3"])
         self.assertTrue(second.shuffle_options)
 
     def test_import_fills_the_empty_set_of_a_course_room(self):

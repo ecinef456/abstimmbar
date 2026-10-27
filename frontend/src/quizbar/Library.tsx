@@ -35,6 +35,19 @@ const CHIP_OFF =
 const TAG_PILL =
   "inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200";
 
+/** One spelling per tag: lower case, spaces (and commas) become "-".
+ *  "Week 3" → "week-3". Same rule as the server (library.normalize_tag). */
+export function normalizeTag(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[\s,]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/, "");
+}
+
 function sortTags<T extends { name: string }>(tags: T[]): T[] {
   return [...tags].sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
@@ -63,12 +76,10 @@ export function TagInput({
   const listId = `${idPrefix}-suggestions`;
 
   function add(raw: string) {
-    const name = raw.replace(/,/g, " ").split(/\s+/).filter(Boolean).join(" ").slice(0, 60);
+    const name = normalizeTag(raw);
     setDraft("");
-    if (!name || tags.some((tag) => tag.toLowerCase() === name.toLowerCase())) return;
-    // Reuse the existing spelling of a known tag.
-    const known = suggestions.find((s) => s.toLowerCase() === name.toLowerCase());
-    onChange([...tags, known ?? name]);
+    if (!name || tags.includes(name)) return;
+    onChange([...tags, name]);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -164,7 +175,8 @@ export function LibraryField({
               ? t("Tags belong to the library entry and are shared by its {{count}} copies.", {
                   count: copies,
                 })
-              : t("Without a tag, the question is listed under “To sort”.")}
+              : t("Without a tag, the question is listed under “To sort”.")}{" "}
+            {t("Tags are written in lower case with dashes: “Week 3” becomes “week-3”.")}
           </p>
         </>
       )}
@@ -173,6 +185,29 @@ export function LibraryField({
 }
 
 export type TagFilter = "all" | "untagged" | number;
+
+/** The tag search: comma-separated tags, all required. A term matches a tag
+ *  of exactly that name, or — if there is none — every tag starting with it
+ *  ("week" finds week-1, week-2 …). */
+export function tagTerms(query: string): string[] {
+  return query.split(",").map(normalizeTag).filter(Boolean);
+}
+
+export function entryHasTags(entry: LibraryEntry, terms: string[], vocabulary: Set<string>): boolean {
+  return terms.every((term) =>
+    entry.tags.some((tag) => (vocabulary.has(term) ? tag.name === term : tag.name.startsWith(term))),
+  );
+}
+
+const TAG_MODE_KEY = "quizbar.library.tagSearch";
+
+function readTagMode(): boolean {
+  try {
+    return window.localStorage.getItem(TAG_MODE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
 
 export function entryMatches(entry: LibraryEntry, query: string): boolean {
   if (!query) return true;
@@ -213,6 +248,16 @@ export function LibraryBrowser({
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
+  // Tag search (default) or full text over questions, answers and tags.
+  const [tagMode, setTagModeState] = useState(readTagMode);
+  const setTagMode = (on: boolean) => {
+    setTagModeState(on);
+    try {
+      window.localStorage.setItem(TAG_MODE_KEY, on ? "1" : "0");
+    } catch {
+      // Private mode: the choice just isn't remembered.
+    }
+  };
   const [tagFilter, setTagFilter] = useState<TagFilter>("all");
   const [kind, setKind] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -232,13 +277,26 @@ export function LibraryBrowser({
     return { byTag, untagged };
   }, [usable]);
   const kinds = useMemo(() => Array.from(new Set(usable.map((e) => e.kind))), [usable]);
+  const vocabulary = useMemo(() => new Set(tags.map((tag) => tag.name)), [tags]);
+  const terms = tagMode ? tagTerms(query) : [];
   const visible = usable.filter(
     (entry) =>
       (tagFilter === "all" ||
         (tagFilter === "untagged" ? !entry.tags.length : entry.tags.some((tag) => tag.id === tagFilter))) &&
       (!kind || entry.kind === kind) &&
-      entryMatches(entry, query.trim()),
+      (tagMode ? entryHasTags(entry, terms, vocabulary) : entryMatches(entry, query.trim())),
   );
+  // Tag mode: complete the term being typed from the existing tags.
+  const typing = tagMode ? normalizeTag(query.split(",").pop() ?? "") : "";
+  const completions =
+    typing && !vocabulary.has(typing)
+      ? sortTags(tags.filter((tag) => tag.name.includes(typing))).slice(0, 10)
+      : [];
+  function complete(name: string) {
+    const parts = query.split(",");
+    parts[parts.length - 1] = ` ${name}`;
+    setQuery(`${parts.join(",").replace(/^\s+/, "")}, `);
+  }
   const currentTag = typeof tagFilter === "number" ? tags.find((tag) => tag.id === tagFilter) : undefined;
   useEffect(() => {
     // A deleted or merged tag falls back to "All".
@@ -253,11 +311,25 @@ export function LibraryBrowser({
           <TextInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("Search questions, answers and tags")}
-            aria-label={t("Search questions, answers and tags")}
+            placeholder={
+              tagMode ? t("Tags, separated by commas: waves, week-3") : t("Search questions, answers and tags")
+            }
+            aria-label={tagMode ? t("Search by tags") : t("Search questions, answers and tags")}
             className="!pl-9"
           />
         </div>
+        <label
+          className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
+          title={t("Ticked: find questions that have all the tags you type. Unticked: search the text of questions and answers.")}
+        >
+          <input
+            type="checkbox"
+            checked={tagMode}
+            onChange={(event) => setTagMode(event.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+          />
+          {t("Tags")}
+        </label>
         {kinds.length > 1 && (
           <Select
             value={kind}
@@ -274,6 +346,21 @@ export function LibraryBrowser({
           </Select>
         )}
       </div>
+
+      {completions.length > 0 && (
+        <div className="-mt-1 flex flex-wrap items-center gap-1.5" aria-label={t("Matching tags")}>
+          {completions.map((tag) => (
+            <button
+              key={tag.id}
+              type="button"
+              onClick={() => complete(tag.name)}
+              className="rounded-full border border-dashed border-slate-300 px-2.5 py-0.5 text-xs text-slate-600 hover:border-brand-500 hover:text-brand-700 dark:border-slate-700 dark:text-slate-300"
+            >
+              {tag.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2" aria-label={t("Tags")}>
         <button

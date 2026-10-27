@@ -21,7 +21,8 @@
 //       answer(false, [1.5 m/s], why: [That is $lambda \/ f$.]),
 //     ),
 //     image: "wave.png",                   // optional, in the figures folder
-//     tags: ("Waves", "Week 3"),           // optional, for the library
+//     tags: ("waves", "week-3"),           // optional, for the library (stored
+//                                          // lower case, spaces → "-")
 //     time-limit-s: 60,                    // optional
 //     shuffle: false,                      // optional: shuffle the answers live
 //   )

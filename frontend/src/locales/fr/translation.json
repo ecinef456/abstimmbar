@@ -1351,5 +1351,10 @@
   "Imported, with these notes:": "Importé, avec ces remarques :",
   "Writing quizzes in Typst? Download": "Vous rédigez vos quiz en Typst ? Téléchargez",
   "and its figure": "et sa figure",
-  "then import the quiz in a room: ⋮ → Import Typst quiz.": "puis importez le quiz dans une salle : ⋮ → Importer un quiz Typst."
+  "then import the quiz in a room: ⋮ → Import Typst quiz.": "puis importez le quiz dans une salle : ⋮ → Importer un quiz Typst.",
+  "Tags are written in lower case with dashes: “Week 3” becomes “week-3”.": "Les étiquettes s’écrivent en minuscules avec des tirets : « Week 3 » devient « week-3 ».",
+  "Tags, separated by commas: waves, week-3": "Étiquettes, séparées par des virgules : waves, week-3",
+  "Search by tags": "Rechercher par étiquettes",
+  "Ticked: find questions that have all the tags you type. Unticked: search the text of questions and answers.": "Cochée : trouver les questions qui ont toutes les étiquettes saisies. Décochée : chercher dans le texte des questions et des réponses.",
+  "Matching tags": "Étiquettes correspondantes"
 }

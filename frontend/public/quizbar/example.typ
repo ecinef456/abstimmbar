@@ -15,7 +15,7 @@
     answer(false, [0.67 m/s], why: [That is $f \/ lambda$.]),
   ),
   image: "wave.png",
-  tags: ("Waves", "Week 3"),
+  tags: ("waves", "week-3"),
   time-limit-s: 60,
 )
 
@@ -28,7 +28,7 @@
     answer(true, [The period $T = 2 pi sqrt(m \/ k)$], why: [It does not depend on the amplitude.]),
     answer(false, [The momentum $p = m v$], why: [The spring force changes it all the time.]),
   ),
-  tags: ("Oscillations", "Week 3"),
+  tags: ("oscillations", "week-3"),
   shuffle: true,
 )
 
@@ -39,5 +39,5 @@
     answer(true, [$1 \/ sqrt(2)$], why: [$f prop 1 \/ sqrt(m)$.]),
     answer(false, [$1 \/ 2$], why: [The square root is missing.]),
   ),
-  tags: "Oscillations",
+  tags: "oscillations",
 )

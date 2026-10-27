@@ -14,6 +14,7 @@
 Imports of rooms.transfer / rooms.serializers are local: both modules import
 this one for their hooks.
 """
+import re
 from functools import partial
 
 from django.contrib.auth import get_user_model
@@ -145,12 +146,18 @@ def settle(entry_id):
 # -- editing -----------------------------------------------------------------
 
 
+def normalize_tag(raw):
+    """One spelling per tag: lower case, spaces (and commas) become "-".
+    "Week 3" → "week-3". The frontend's normalizeTag does the same."""
+    name = re.sub(r"[\s,]+", "-", str(raw).strip().lower())
+    return re.sub(r"-{2,}", "-", name).strip("-")[:TAG_MAX].strip("-")
+
+
 def clean_tag_names(names):
-    out, seen = [], set()
+    out = []
     for raw in names or []:
-        name = " ".join(str(raw).split())[:TAG_MAX]
-        if name and name.lower() not in seen:
-            seen.add(name.lower())
+        name = normalize_tag(raw)
+        if name and name not in out:
             out.append(name)
     return out
 

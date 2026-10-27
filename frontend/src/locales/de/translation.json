@@ -1372,5 +1372,10 @@
   "Imported, with these notes:": "Importiert, mit diesen Hinweisen:",
   "Writing quizzes in Typst? Download": "Quizze in Typst schreiben? Laden Sie",
   "and its figure": "und die zugehörige Abbildung herunter:",
-  "then import the quiz in a room: ⋮ → Import Typst quiz.": "dann importieren Sie das Quiz in einem Raum: ⋮ → Typst-Quiz importieren."
+  "then import the quiz in a room: ⋮ → Import Typst quiz.": "dann importieren Sie das Quiz in einem Raum: ⋮ → Typst-Quiz importieren.",
+  "Tags are written in lower case with dashes: “Week 3” becomes “week-3”.": "Tags werden klein und mit Bindestrichen geschrieben: aus „Week 3“ wird „week-3“.",
+  "Tags, separated by commas: waves, week-3": "Tags, durch Kommas getrennt: waves, week-3",
+  "Search by tags": "Nach Tags suchen",
+  "Ticked: find questions that have all the tags you type. Unticked: search the text of questions and answers.": "Angehakt: Fragen mit allen eingegebenen Tags finden. Nicht angehakt: im Text der Fragen und Antworten suchen.",
+  "Matching tags": "Passende Tags"
 }
