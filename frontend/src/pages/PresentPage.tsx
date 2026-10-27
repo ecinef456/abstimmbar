@@ -1434,6 +1434,15 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     void quizbar.justification(runId, !justificationShown);
   }, [runId, hasJustification, phase, justificationShown]);
 
+  // quizbar (fork), key D: peer instruction — keep vote 1 of this question,
+  // the class discusses and votes again (results then show both votes).
+  const peer = state?.qb_peer;
+  const startPeer = useCallback(() => {
+    if (!runId || !peer?.available) return;
+    if (phase !== "open" && phase !== "closed" && phase !== "results") return;
+    void quizbar.peerStart(runId);
+  }, [runId, peer?.available, phase]);
+
   // Memoized so the keydown effect (which lists it as a dependency) doesn't
   // re-register the window listener on every render — including the live
   // path's frequent SSE-driven re-renders (#75). Declared before onKey, which
@@ -1602,11 +1611,13 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         toggleSolution();
       } else if (key === "j") {
         toggleJustification();
+      } else if (key === "d") {
+        startPeer();
       } else if (key === "escape") {
         void leave();
       }
     },
-    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, toggleJustification, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave, nextQuiz, goNextQuiz, game, sounds, boardOpen],
+    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, toggleJustification, startPeer, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave, nextQuiz, goNextQuiz, game, sounds, boardOpen],
   );
 
   useEffect(() => {
@@ -2221,6 +2232,12 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
               html={mathHtml(localizedText(question.text))}
             />
           )}
+          {/* quizbar (fork): peer instruction — this is the second vote. */}
+          {peer?.round === 2 && (phase === "open" || phase === "closed") && (
+            <p className="mt-3 self-start rounded-full bg-brand-100 px-4 py-1 text-lg font-bold text-brand-800">
+              {t("Vote 2 — after the discussion")}
+            </p>
+          )}
 
           {/* Mindmap: the shared tree, live while open and on "Ergebnis"
               (compact / detailed from the footer view picker). */}
@@ -2493,6 +2510,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                       state={barState}
                       animate
                       before={before ? { count: beforeCount, pct: beforePercent } : null}
+                      beforeLabels={peer?.round === 2 ? [t("Vote 1"), t("Vote 2")] : undefined}
                     />
                     {/* quizbar (fork): J — why this answer is right/wrong. */}
                     {justificationShown && option.justification && (
@@ -2507,6 +2525,23 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
                 <p className="pt-2 text-sm text-slate-400">
                   <Trans i18nKey="present_reveal_hint_l">
                     Reveal correct answer with <Kbd>L</Kbd>
+                  </Trans>
+                </p>
+              )}
+              {/* quizbar (fork): how sure the class was, and peer instruction. */}
+              {state.qb_confidence && state.qb_confidence.average !== null && (
+                <p className="pt-2 text-lg text-slate-500">
+                  {t("How sure (0–10): average {{avg}}", { avg: state.qb_confidence.average })}
+                  {state.qb_confidence.right !== null &&
+                    ` · ${t("right answers {{avg}}", { avg: state.qb_confidence.right })}`}
+                  {state.qb_confidence.wrong !== null &&
+                    ` · ${t("wrong answers {{avg}}", { avg: state.qb_confidence.wrong })}`}
+                </p>
+              )}
+              {peer?.available && (
+                <p className="pt-2 text-sm text-slate-400">
+                  <Trans i18nKey="quizbar_peer_hint_d">
+                    Discuss in pairs, then vote again with <Kbd>D</Kbd>
                   </Trans>
                 </p>
               )}

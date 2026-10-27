@@ -9,6 +9,7 @@ from collections import Counter
 from django.db.models import Avg, Count, Max, Min
 
 from quizbar import i18n as quizbar_i18n
+from quizbar import peer as quizbar_peer
 from rooms.models import Question
 
 from . import matrix, matrix_rating, mindmap_rating
@@ -420,6 +421,8 @@ def run_results(run):
             item["options"] = options_with_counts(run, question)
             if question.kind == Question.Kind.LIKERT:
                 item["likert"] = likert_summary(item["options"])
+            # quizbar (fork): peer instruction's vote 1, confidence.
+            quizbar_peer.results_item(run, question, item)
         items.append(item)
     return {
         "run": run.pk,

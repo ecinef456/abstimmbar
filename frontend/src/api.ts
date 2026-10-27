@@ -1213,6 +1213,11 @@ export interface LiveState {
   justification_shown?: boolean;
   /** quizbar (fork): game mode — the players that joined this run. */
   game?: { players: GamePlayer[] };
+  /** quizbar (fork): peer instruction — vote 1 or 2 of the active question;
+   *  `available`: D may start the second vote. */
+  qb_peer?: { round: number; available: boolean };
+  /** quizbar (fork): how sure the class is (0–10), when the set asks. */
+  qb_confidence?: { answers: number; average: number | null; right: number | null; wrong: number | null } | null;
   ends_at?: string;
   participants?: number;
   /** Recording mode (#53): the run's deep-link token (present when recording
@@ -1503,6 +1508,11 @@ export interface RunResults {
     mindmap?: LiveMindmap;
     /** Matrix: the whole board (hidden cards flagged) and its settings. */
     matrix?: MatrixBoard;
+    /** quizbar (fork): peer instruction — vote 1 (counts in option order);
+     *  `options`/`votes` are then vote 2. */
+    qb_peer?: { votes: number; counts: number[] };
+    /** quizbar (fork): how sure (0–10) the class was. */
+    qb_confidence?: { answers: number; average: number | null; right: number | null; wrong: number | null };
     matrix_settings?: MatrixSettingsPayload;
   }[];
 }
@@ -2070,6 +2080,15 @@ export const quizbar = {
   leaderboard: (runId: number, final = false) =>
     request<GameLeaderboard>(`/api/quizbar/game/runs/${runId}/leaderboard/${final ? "?final=1" : ""}`),
   /** Presenter key J: show/hide the active question's justifications. */
+  /** Peer instruction (key D): keep vote 1, let the class vote again. */
+  peerStart: (runId: number) =>
+    request<{ status: string }>(`/api/quizbar/runs/${runId}/peer/`, { method: "POST" }),
+  confidence: (setId: number) => request<{ enabled: boolean }>(`/api/quizbar/sets/${setId}/confidence/`),
+  setConfidence: (setId: number, enabled: boolean) =>
+    request<{ enabled: boolean }>(`/api/quizbar/sets/${setId}/confidence/`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
   justification: (runId: number, show: boolean) =>
     request<{ status: string; shown: boolean }>(`/api/quizbar/runs/${runId}/justification/`, {
       method: "POST",

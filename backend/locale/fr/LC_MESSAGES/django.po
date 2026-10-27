@@ -705,3 +705,27 @@ msgstr "Choisissez un personnage"
 #: quizbar/templates/quizbar/game_participant.html
 msgid "You play as {name}"
 msgstr "Vous jouez en tant que {name}"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "Vote 2"
+msgstr "Vote 2"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "You discussed it — now vote again."
+msgstr "Vous en avez discuté – votez à nouveau."
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "How sure are you? (optional)"
+msgstr "Êtes-vous sûr·e ? (facultatif)"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "guessing"
+msgstr "au hasard"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "sure"
+msgstr "sûr·e"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "Thanks!"
+msgstr "Merci !"

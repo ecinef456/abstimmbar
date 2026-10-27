@@ -293,6 +293,23 @@ Code: `quizbar/export.py`, endpoint `POST /api/quizbar/export/`, dialog
 `backend/quizbar/typst/quizbar.typ` for the server); a test checks they are
 identical.
 
+### Peer instruction (key D) and confidence 0–10
+
+- **Peer instruction:** on a single- or multiple-choice question of a live
+  poll, after the class voted, press **D**: the first vote is kept, the
+  question opens again and phones show "Vote 2" with a fresh form. The
+  beamer's results (and the stored results) show **Vote 1** above
+  **Vote 2** for every answer. Once per question; not in game mode.
+- **Confidence:** set page → *Ask how sure students are* (off by default).
+  After answering, phones show an optional, light grey row 0–10 (guessing …
+  sure) under the answer. Results show the average, separately for right
+  and wrong answers ("wrong but sure" = a misconception).
+
+Code: `quizbar/peer.py` (models `PeerRound`, `SetConfidence`,
+`VoteConfidence`), phone part `quizbar/templates/quizbar/peer_participant.html`,
+hooks in `live/state.py` and `live/results.py`; the phone's vote marker gets
+a round suffix (`participant.html`).
+
 ### Game mode (Kahoot style)
 
 - **Switch it on** per live poll: set page → *Game mode*. Duplicated sets

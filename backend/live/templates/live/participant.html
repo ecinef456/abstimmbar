@@ -736,8 +736,10 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
   // The "already voted" marker is scoped to the run: a fresh Durchführung
   // (re-run / archive restart) reopens the same questions and must let the
   // participant vote again (server allows it — one vote per run/question).
+  // quizbar (fork): peer instruction's second vote is a fresh vote (":r2").
+  const qbRound = (q) => (q && q.qb_round > 1 ? ":r" + q.qb_round : "");
   const voteMark = () =>
-    state && state.question ? (state.run_id ?? "") + ":" + state.question.id : "";
+    state && state.question ? (state.run_id ?? "") + ":" + state.question.id + qbRound(state.question) : "";
   const votedFor = () => sessionStorage.getItem(VOTED_KEY);
 
   // Re-opened question (presenter goes back within the same run): VOTED_KEY
@@ -1610,7 +1612,7 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
     // run+question (#67/#72, #179). Same guard as the word-cloud chips above.
     const keepsState = q.kind === "priorities" || q.kind === "ordering"
       || q.kind === "likert" || !!q.multiple;
-    const priKeyNow = keepsState ? (state.run_id ?? "") + ":" + q.id : null;
+    const priKeyNow = keepsState ? (state.run_id ?? "") + ":" + q.id + qbRound(q) : null;
     const holder = q.kind === "likert" ? document.getElementById("likert") : optionsBox;
     if (priKeyNow && priKey === priKeyNow && holder.children.length) return;
     // We fall through to (re)build the DOM below, so keep the guard key in sync
@@ -5066,4 +5068,6 @@ anyone else's cards (the board lives on the beamer). Script: the mx* block.
 </script>
 {# quizbar (fork): game mode — nickname, points, final placement. #}
 {% if not check_token %}{% include "quizbar/game_participant.html" %}{% endif %}
+{# quizbar (fork): peer instruction ("Vote 2") and how sure (0–10). #}
+{% if not check_token %}{% include "quizbar/peer_participant.html" %}{% endif %}
 {% endblock %}

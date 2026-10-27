@@ -589,6 +589,9 @@ export default function ResultsPage() {
                               {question.options.map((option, i) => {
                                 const count = option.count ?? 0;
                                 const percent = total ? Math.round((count / total) * 100) : 0;
+                                // quizbar (fork): peer instruction — vote 1 over vote 2.
+                                const first = question.qb_peer;
+                                const firstCount = first?.counts[i] ?? 0;
                                 return (
                                   <div key={option.id}>
                                     <ResultBar
@@ -598,6 +601,15 @@ export default function ResultsPage() {
                                       pct={percent}
                                       state={hasCorrect ? (option.is_correct ? "correct" : "wrong") : "neutral"}
                                       size="compact"
+                                      before={
+                                        first
+                                          ? {
+                                              count: firstCount,
+                                              pct: first.votes ? Math.round((firstCount / first.votes) * 100) : 0,
+                                            }
+                                          : null
+                                      }
+                                      beforeLabels={first ? [t("Vote 1"), t("Vote 2")] : undefined}
                                     />
                                     {/* Recording split (#53): on-site vs async. */}
                                     {run.recording_votes > 0 && (
@@ -609,6 +621,15 @@ export default function ResultsPage() {
                                 );
                               })}
                             </div>
+                          )}
+                          {question.qb_confidence && question.qb_confidence.average !== null && (
+                            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                              {t("How sure (0–10): average {{avg}}", { avg: question.qb_confidence.average })}
+                              {question.qb_confidence.right !== null &&
+                                ` · ${t("right answers {{avg}}", { avg: question.qb_confidence.right })}`}
+                              {question.qb_confidence.wrong !== null &&
+                                ` · ${t("wrong answers {{avg}}", { avg: question.qb_confidence.wrong })}`}
+                            </p>
                           )}
                           {question.priorities && question.kind === "priorities" && (
                             <div className="space-y-2">

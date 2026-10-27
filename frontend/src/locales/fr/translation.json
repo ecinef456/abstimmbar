@@ -1409,5 +1409,14 @@
   "{{pct}} correct": "{{pct}} de bonnes réponses",
   "most chosen wrong": "mauvaise réponse la plus choisie",
   "Show only the selected": "Afficher seulement la sélection",
-  "Show all again": "Tout afficher à nouveau"
+  "Show all again": "Tout afficher à nouveau",
+  "Vote 1": "Vote 1",
+  "Vote 2": "Vote 2",
+  "Vote 2 — after the discussion": "Vote 2 – après la discussion",
+  "How sure (0–10): average {{avg}}": "Certitude (0–10) : moyenne {{avg}}",
+  "right answers {{avg}}": "bonnes réponses {{avg}}",
+  "wrong answers {{avg}}": "mauvaises réponses {{avg}}",
+  "quizbar_peer_hint_d": "Discuter à deux, puis revoter avec <1>D</1>",
+  "Ask how sure students are": "Demander aux étudiant·e·s leur degré de certitude",
+  "After answering, phones show an optional row 0–10 (guessing … sure). The results show the average, separately for right and wrong answers. Peer instruction: press D on a question to let the class discuss and vote again.": "Après la réponse, les téléphones affichent une rangée facultative 0–10 (au hasard … sûr·e). Les résultats montrent la moyenne, séparément pour les bonnes et les mauvaises réponses. Peer instruction : appuyez sur D sur une question pour que la classe discute et revote."
 }

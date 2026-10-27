@@ -286,3 +286,41 @@ class OptionTranslation(models.Model):
         constraints = (
             models.UniqueConstraint(fields=("option", "lang"), name="qb_one_option_translation"),
         )
+
+
+class SetConfidence(models.Model):
+    """Phones ask "How sure are you? 0–10" after each choice answer (optional
+    for the students). Off unless switched on for the set."""
+
+    question_set = models.OneToOneField(
+        "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_confidence"
+    )
+    enabled = models.BooleanField(default=False)
+
+
+class VoteConfidence(models.Model):
+    """How sure a participant was of one answer (0 = guessing, 10 = sure)."""
+
+    vote = models.OneToOneField("live.Vote", on_delete=models.CASCADE, related_name="qb_confidence")
+    value = models.PositiveSmallIntegerField()
+
+
+class PeerRound(models.Model):
+    """Peer instruction: the first vote on a question, kept when the
+    presenter starts the second vote (key D). The live Vote rows then hold
+    the second vote."""
+
+    run = models.ForeignKey("live.Run", on_delete=models.CASCADE, related_name="qb_peer_rounds")
+    question = models.ForeignKey("rooms.Question", on_delete=models.CASCADE, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    # {option id (str): count}, number of voters, and per participant token
+    # {token id (str): [option ids]} / {token id (str): confidence}.
+    counts = models.JSONField(default=dict)
+    votes = models.PositiveIntegerField(default=0)
+    answers = models.JSONField(default=dict)
+    confidence = models.JSONField(default=dict)
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(fields=("run", "question"), name="qb_one_peer_round"),
+        )

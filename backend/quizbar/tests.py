@@ -1480,3 +1480,81 @@ class LibraryStatsTests(TestCase):
         self.assertEqual(stats["correct"], 0.5)
         self.assertEqual(stats["top_wrong"], 1)
         self.assertEqual(stats["top_wrong_share"], 0.5)
+
+
+class PeerConfidenceTests(TestCase):
+    """Peer instruction (key D) and the 0–10 confidence row."""
+
+    def setUp(self):
+        from live.models import ParticipantToken
+
+        self.owner = User.objects.create_user(username="pi")
+        self.room = Room.objects.create(title="R", owner=self.owner)
+        self.room.owners.add(self.owner)
+        self.set = QuestionSet.objects.create(room=self.room, title="S")
+        self.q = Question.objects.create(question_set=self.set, kind="single_choice", text="<p>Q</p>")
+        self.right = AnswerOption.objects.create(question=self.q, text="r", is_correct=True, position=0)
+        self.wrong = AnswerOption.objects.create(question=self.q, text="w", position=1)
+        self.run = Run.objects.create(question_set=self.set, phase="open", active_question=self.q)
+        self.tokens = [ParticipantToken.objects.create(room=self.room) for _ in range(3)]
+
+    def vote(self, token, option):
+        from live.models import Vote
+
+        vote = Vote.objects.create(run=self.run, question=self.q, token=token)
+        vote.options.add(option)
+        return vote
+
+    def test_second_vote(self):
+        from .models import PeerRound
+
+        self.vote(self.tokens[0], self.right)
+        self.vote(self.tokens[1], self.wrong)
+        self.vote(self.tokens[2], self.wrong)
+        self.client.force_login(self.owner)
+        response = self.client.post(f"/api/quizbar/runs/{self.run.pk}/peer/")
+        self.assertEqual(response.status_code, 200)
+        first = PeerRound.objects.get(run=self.run, question=self.q)
+        self.assertEqual(first.votes, 3)
+        self.assertEqual(first.counts[str(self.wrong.pk)], 2)
+        self.assertEqual(first.answers[str(self.tokens[0].pk)], [self.right.pk])
+        self.assertFalse(self.run.votes.exists())
+        self.run.refresh_from_db()
+        self.assertEqual(self.run.phase, "open")
+        # only once per question
+        self.assertEqual(self.client.post(f"/api/quizbar/runs/{self.run.pk}/peer/").status_code, 409)
+
+        payloads = build_payloads(self.room)
+        self.assertEqual(payloads["participant"]["question"]["qb_round"], 2)
+        self.vote(self.tokens[1], self.right)
+        self.run.phase = "results"
+        self.run.save()
+        presenter = build_payloads(self.room)["presenter"]
+        self.assertEqual(presenter["qb_peer"]["round"], 2)
+        self.assertEqual(presenter["before"]["votes"], 3)
+        counts = {row["id"]: row["count"] for row in presenter["before"]["results"]}
+        self.assertEqual(counts[self.wrong.pk], 2)
+        results = self.client.get(f"/api/question-sets/{self.set.pk}/results/")
+        item = results.json()["results"][0]["questions"][0]
+        self.assertEqual(item["qb_peer"]["votes"], 3)
+
+    def test_confidence(self):
+        self.client.force_login(self.owner)
+        self.assertFalse(self.client.get(f"/api/quizbar/sets/{self.set.pk}/confidence/").json()["enabled"])
+        url = f"/api/quizbar/confidence/{self.room.code}/"
+        body = {"token": self.tokens[0].key, "question": self.q.pk, "value": 8}
+        self.vote(self.tokens[0], self.right)
+        self.assertEqual(self.client.post(url, body, content_type="application/json").status_code, 400)
+        self.client.put(
+            f"/api/quizbar/sets/{self.set.pk}/confidence/", {"enabled": True}, content_type="application/json"
+        )
+        self.assertEqual(build_payloads(self.room)["participant"]["question"]["qb_confidence"], True)
+        self.assertEqual(self.client.post(url, body, content_type="application/json").status_code, 200)
+        self.vote(self.tokens[1], self.wrong)
+        self.client.post(
+            url, {"token": self.tokens[1].key, "question": self.q.pk, "value": 2}, content_type="application/json"
+        )
+        bad = {"token": self.tokens[2].key, "question": self.q.pk, "value": 5}  # did not answer
+        self.assertEqual(self.client.post(url, bad, content_type="application/json").status_code, 400)
+        summary = build_payloads(self.room)["presenter"]["qb_confidence"]
+        self.assertEqual(summary, {"answers": 2, "average": 5.0, "right": 8.0, "wrong": 2.0})

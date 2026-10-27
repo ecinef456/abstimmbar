@@ -11,7 +11,7 @@ from live.models import Run
 from live.state import broadcast
 from rooms.models import QuestionSet, Room
 
-from . import course, export, folders, game, justifications, library, selfcheck, typst_import
+from . import course, export, folders, game, justifications, library, peer, selfcheck, typst_import
 from .models import LibraryEntry, LibraryTag, SetFolder, SetPlacement
 
 
@@ -372,6 +372,60 @@ def export_pdf(request):
     response["Content-Disposition"] = f'attachment; filename="{name}"'
     response["Access-Control-Expose-Headers"] = "Content-Disposition"  # dev: other port
     return response
+
+
+# -- peer instruction and confidence ------------------------------------------
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def peer_start(request, run_id):
+    """Presenter (key D): keep the first vote of the active question and
+    let the class vote on it again."""
+    run = get_object_or_404(Run.objects.select_related("question_set__room"), pk=run_id)
+    room = run.question_set.room
+    if not _owner(request.user, room):
+        raise Http404
+    try:
+        peer.start(run)
+    except peer.PeerError as exc:
+        return Response({"detail": str(exc)}, status=409)
+    broadcast(room)
+    return Response({"status": "ok"})
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def set_confidence(request, set_id):
+    """GET / PUT {enabled}: phones ask how sure students are (default off)."""
+    question_set = _owned_set(request.user, set_id)
+    if request.method == "PUT":
+        peer.set_confidence_enabled(question_set, request.data.get("enabled"))
+        broadcast(question_set.room)
+    return Response({"enabled": peer.confidence_enabled(question_set)})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def confidence(request, code):
+    """Phone: {token, question, value 0–10} for the answer just given."""
+    from live.models import ParticipantToken
+    from live.state import active_run
+
+    room = get_object_or_404(Room, code=(code or "").strip().lower())
+    token = ParticipantToken.objects.filter(room=room, key=request.data.get("token") or "").first()
+    run = active_run(room)
+    if token is None or run is None:
+        return Response({"detail": "No running poll."}, status=409)
+    question = run.active_question
+    if question is None or question.pk != request.data.get("question"):
+        return Response({"detail": "This question is no longer open."}, status=409)
+    try:
+        peer.save_confidence(run, question, token, request.data.get("value"))
+    except peer.PeerError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    broadcast(room, debounce=True)
+    return Response({"status": "ok"})
 
 
 # -- game mode ---------------------------------------------------------------

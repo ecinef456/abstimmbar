@@ -38,6 +38,7 @@ export default function ResultBar({
   letter,
   color,
   before,
+  beforeLabels,
 }: {
   index: number;
   label: React.ReactNode;
@@ -50,6 +51,8 @@ export default function ResultBar({
   letter?: string | null;
   color?: string;
   before?: { count: number; pct: number } | null;
+  /** quizbar (fork): other labels for the two bars (e.g. "Vote 1" / "Vote 2"). */
+  beforeLabels?: [string, string];
 }) {
   const { t } = useTranslation();
   const reduced = useReducedMotion();
@@ -123,7 +126,7 @@ export default function ResultBar({
         <div className="space-y-1.5">
           <div className="flex items-center gap-3">
             <span className="w-24 shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-400">
-              {t("Before")}
+              {beforeLabels?.[0] ?? t("Before")}
             </span>
             {track(before.pct, tint, d)}
             <span className={`w-28 text-right tabular-nums text-slate-500${darkText}`}>
@@ -132,7 +135,7 @@ export default function ResultBar({
           </div>
           <div className="flex items-center gap-3">
             <span className="w-24 shrink-0 text-sm font-semibold uppercase tracking-wide text-slate-400">
-              {t("After")}
+              {beforeLabels?.[1] ?? t("After")}
             </span>
             {track(pct, fill, anim && !settled ? d + 450 : 0)}
             <span className={`w-28 text-right tabular-nums text-slate-500${darkText}`}>

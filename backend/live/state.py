@@ -17,6 +17,7 @@ from quizbar import game as quizbar_game
 from quizbar import i18n as quizbar_i18n
 from quizbar import justifications as quizbar_justifications
 from quizbar import languages as quizbar_languages
+from quizbar import peer as quizbar_peer
 from rooms.models import Question
 
 from . import (
@@ -318,6 +319,8 @@ def build_payloads(room):
                 presenter["before"] = before
     # quizbar (fork): game mode — nickname gate on phones, players on the beamer.
     quizbar_game.attach(run, participant, presenter)
+    # quizbar (fork): peer instruction (vote 1 / vote 2) and confidence.
+    quizbar_peer.attach(run, participant, presenter)
     return {"participant": participant, "presenter": presenter}
 
 

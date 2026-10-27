@@ -1,0 +1,99 @@
+{% load i18n %}
+{# quizbar (fork): on the phone — the "Vote 2" banner of peer instruction, and the optional "How sure are you?" row (0–10) under the answer just given. Listens to the page's "quizbar-state" events. #}
+<style>
+  #qb-round { margin: 0 0 10px; padding: 8px 12px; border-radius: 12px; background: var(--brand-soft);
+              color: var(--brand-strong); font-weight: 700; font-size: 15px; text-align: center; }
+  #qb-round small { display: block; font-weight: 400; font-size: 13px; color: var(--ink-soft); }
+  #qb-conf { margin: 18px auto 0; max-width: 380px; opacity: .8; }
+  #qb-conf p { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); }
+  #qb-conf .row { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; }
+  #qb-conf .row button { margin: 0; min-height: 0; padding: 7px 0; font-size: 13px; border-radius: 8px;
+                         border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); }
+  #qb-conf .row button[aria-pressed="true"] { background: var(--brand-strong); border-color: var(--brand-strong);
+                                             color: var(--bg); font-weight: 700; }
+  #qb-conf .ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
+  #qb-conf .thanks { font-size: 12px; min-height: 1.2em; margin-top: 4px; }
+</style>
+<script>
+(() => {
+  const CODE = "{{ room.code|escapejs }}";
+  if (!CODE) return;
+  const TOKEN_KEY = "abstimmbar_token_" + CODE;
+  const SURE_KEY = "abstimmbar_sure_" + CODE;
+  const T = {
+    vote2: "{% trans 'Vote 2' %}",
+    vote2Hint: "{% trans 'You discussed it — now vote again.' %}",
+    sure: "{% trans 'How sure are you? (optional)' %}",
+    guess: "{% trans 'guessing' %}",
+    certain: "{% trans 'sure' %}",
+    thanks: "{% trans 'Thanks!' %}",
+  };
+  const question = document.getElementById("question");
+  const done = document.getElementById("done");
+  if (!question || !done) return;
+
+  const banner = document.createElement("p");
+  banner.id = "qb-round";
+  banner.hidden = true;
+  banner.innerHTML = `${T.vote2}<small>${T.vote2Hint}</small>`;
+  question.prepend(banner);
+
+  const box = document.createElement("div");
+  box.id = "qb-conf";
+  box.hidden = true;
+  box.innerHTML = `<p>${T.sure}</p><div class="row" role="group" aria-label="${T.sure}"></div>
+    <div class="ends"><span>0 · ${T.guess}</span><span>${T.certain} · 10</span></div>
+    <p class="thanks" aria-live="polite"></p>`;
+  done.appendChild(box);
+  const row = box.querySelector(".row");
+  const thanks = box.querySelector(".thanks");
+
+  let saved = {};
+  try { saved = JSON.parse(sessionStorage.getItem(SURE_KEY)) || {}; } catch { saved = {}; }
+  let mark = "", questionId = null;
+
+  for (let value = 0; value <= 10; value++) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = String(value);
+    button.addEventListener("click", () => send(value));
+    row.appendChild(button);
+  }
+  function paint() {
+    for (const button of row.children) {
+      button.setAttribute("aria-pressed", String(saved[mark] === Number(button.textContent)));
+    }
+  }
+  async function send(value) {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token || questionId === null) return;
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content ?? "";
+    const response = await fetch(`/api/quizbar/confidence/${CODE}/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+      body: JSON.stringify({ token, question: questionId, value }),
+    }).catch(() => null);
+    if (!response || !response.ok) return;
+    saved[mark] = value;
+    try { sessionStorage.setItem(SURE_KEY, JSON.stringify(saved)); } catch { /* ignore */ }
+    paint();
+    thanks.textContent = T.thanks;
+  }
+
+  window.addEventListener("quizbar-state", (event) => {
+    const state = event.detail || {};
+    const q = state.phase === "open" ? state.question : null;
+    banner.hidden = !(q && q.qb_round === 2);
+    const asked = !!(q && q.qb_confidence);
+    box.hidden = !asked;
+    if (!asked) return;
+    const next = `${state.run_id ?? ""}:${q.id}:${q.qb_round || 1}`;
+    if (next !== mark) {
+      mark = next;
+      questionId = q.id;
+      thanks.textContent = "";
+    }
+    paint();
+  });
+})();
+</script>

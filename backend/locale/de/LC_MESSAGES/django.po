@@ -704,3 +704,27 @@ msgstr "Wählen Sie eine Figur"
 #: quizbar/templates/quizbar/game_participant.html
 msgid "You play as {name}"
 msgstr "Sie spielen als {name}"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "Vote 2"
+msgstr "Abstimmung 2"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "You discussed it — now vote again."
+msgstr "Sie haben diskutiert – stimmen Sie jetzt noch einmal ab."
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "How sure are you? (optional)"
+msgstr "Wie sicher sind Sie? (freiwillig)"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "guessing"
+msgstr "geraten"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "sure"
+msgstr "sicher"
+
+#: quizbar/templates/quizbar/peer_participant.html
+msgid "Thanks!"
+msgstr "Danke!"

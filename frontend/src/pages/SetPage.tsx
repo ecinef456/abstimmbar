@@ -48,6 +48,7 @@ import { useTourSignal } from "../tour/signals";
 import SelfCheckSourcesPanel from "../quizbar/SelfCheckSources";
 import { LibraryPickerDialog } from "../quizbar/LibraryPage";
 import GameModePanel from "../quizbar/GameModePanel";
+import ConfidencePanel from "../quizbar/ConfidencePanel";
 import { MathText } from "../math";
 
 // Values are English source strings, translated with t() at each render site
@@ -1617,6 +1618,7 @@ export default function SetPage() {
 
       {/* quizbar (fork): game mode (Kahoot style) for live polls. */}
       {set.type === "live_poll" && <GameModePanel setId={id} />}
+      {set.type === "live_poll" && <ConfidencePanel setId={id} />}
 
       {/* quizbar (fork): fill this self-check from other sets automatically. */}
       {set.type === "self_check" && selfCheckSources && (
