@@ -124,6 +124,11 @@ services:
       CONTENT_TRANSLATION_PROVIDER: ${CONTENT_TRANSLATION_PROVIDER:-none}
       LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL:-}
       LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
+      # quizbar (fork): "Translate" in the question editor's translation
+      # panel — a DeepL key, or the libretranslate service below.
+      QUIZBAR_DEEPL_KEY: ${QUIZBAR_DEEPL_KEY:-}
+      QUIZBAR_LIBRETRANSLATE_URL: ${QUIZBAR_LIBRETRANSLATE_URL:-}
+      QUIZBAR_LIBRETRANSLATE_KEY: ${QUIZBAR_LIBRETRANSLATE_KEY:-}
     volumes:
       - static_data:/app/staticfiles
       - media_data:/app/media
@@ -159,6 +164,20 @@ services:
     depends_on:
       - app
 
+  # quizbar (fork): optional self-hosted machine translation (EN/DE/FR only).
+  # Starts only with COMPOSE_PROFILES=translate in .env; then set
+  # QUIZBAR_LIBRETRANSLATE_URL=http://libretranslate:5000. Not published to
+  # the outside; the first start downloads the language models.
+  libretranslate:
+    image: libretranslate/libretranslate:v1.7.3
+    profiles: ["translate"]
+    restart: unless-stopped
+    environment:
+      LT_LOAD_ONLY: en,de,fr
+      LT_DISABLE_WEB_UI: "true"
+    volumes:
+      - libretranslate_models:/home/libretranslate/.local
+
 volumes:
   postgres_data:
   static_data:
@@ -166,3 +185,4 @@ volumes:
   frontend_data:
   caddy_data:
   caddy_config:
+  libretranslate_models:

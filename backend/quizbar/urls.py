@@ -20,6 +20,7 @@ urlpatterns = [
     path("library/insert/", views.library_insert),
     path("rooms/<int:room_id>/import-typst/", views.import_typst),
     path("export/", views.export_pdf),
+    path("translate/", views.translate_question),
     path("rooms/<int:room_id>/stats/", views.room_stats),
     path("rooms/<int:room_id>/stats/csv/", views.room_stats_csv),
     path("rooms/<int:room_id>/stats/pdf/", views.room_stats_pdf),

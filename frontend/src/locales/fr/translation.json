@@ -1436,5 +1436,13 @@
   "PDF report": "Rapport PDF",
   "Nothing to report yet: no answers to single- or multiple-choice questions here.": "Rien à rapporter : pas encore de réponses à des questions à choix unique ou multiple ici.",
   "Exam versions A and B": "Versions d’examen A et B",
-  "Same questions, answers in a different order in B, plus an answer key for both": "Mêmes questions, réponses dans un autre ordre en B, avec un corrigé pour les deux"
+  "Same questions, answers in a different order in B, plus an answer key for both": "Mêmes questions, réponses dans un autre ordre en B, avec un corrigé pour les deux",
+  "The translation failed.": "La traduction a échoué.",
+  "Translate from": "Traduire depuis",
+  "the original": "l’original",
+  "into the other languages": "vers les autres langues",
+  "replace what is already there": "remplacer l’existant",
+  "Translate": "Traduire",
+  "A draft: check it before saving. Math stays as it is.": "Un brouillon : vérifiez-le avant d’enregistrer. Les formules restent inchangées.",
+  "No translation service is set up.": "Aucun service de traduction n’est configuré."
 }

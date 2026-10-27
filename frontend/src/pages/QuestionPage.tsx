@@ -2209,6 +2209,7 @@ export default function QuestionPage() {
           value={trans}
           onChange={setTrans}
           options={OPTIONLESS_TRANSLATION.includes(question.kind) ? [] : filledOptions}
+          originalText={canonicalHtml}
         />
 
         <LibraryField

@@ -3,13 +3,13 @@
  *
  *  The question's own text stays the original; a translation is shown when
  *  the room (or the viewer) uses that language. Collapsed by default. */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Languages } from "lucide-react";
+import { Languages, Loader2, Sparkles } from "lucide-react";
 import { RichTextEditor } from "@basicbar/ui/rich-text-editor";
 import { localizedText, stripHtml, type LocalizedText } from "@basicbar/ui";
-import { api, type QuestionTranslations } from "../api";
-import { TextInput } from "../components/ui";
+import { api, quizbar, requestDetail, type QuestionTranslations } from "../api";
+import { Button, TextInput } from "../components/ui";
 
 export const TRANSLATION_LANGS = ["en", "de", "fr"] as const;
 export type TranslationLang = (typeof TRANSLATION_LANGS)[number];
@@ -64,19 +64,92 @@ function filled(state: TranslationState, lang: TranslationLang) {
     Object.values(item.options).some((o) => o.text.trim() || o.justification.trim());
 }
 
+let translateStatus: Promise<boolean> | null = null;
+
+/** Is a translation service set up on the server? (asked once per page) */
+function useTranslateEnabled() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  useEffect(() => {
+    translateStatus ??= quizbar.translateStatus().then(
+      (data) => data.enabled,
+      () => false,
+    );
+    void translateStatus.then(setEnabled);
+  }, []);
+  return enabled;
+}
+
+const clean = (html: string) => stripHtml(html).replace(/\s+/g, " ").trim();
+
 export default function TranslationsPanel({
   value,
   onChange,
   options,
+  originalText,
 }: {
   value: TranslationState;
   onChange: (next: TranslationState) => void;
   /** The question's answer options (none for free-text kinds). */
-  options: { clientId: number; text: LocalizedText }[];
+  options: { clientId: number; text: LocalizedText; justification?: string }[];
+  /** The question's own text (HTML), the source for "Translate". */
+  originalText?: string;
 }) {
   const { t } = useTranslation();
   const present = TRANSLATION_LANGS.filter((lang) => filled(value, lang));
   const [open, setOpen] = useState(false);
+  const autoEnabled = useTranslateEnabled();
+  const [from, setFrom] = useState<"original" | TranslationLang>("original");
+  const [overwrite, setOverwrite] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [autoError, setAutoError] = useState("");
+
+  async function translateAll() {
+    const ids = options.map((o) => o.clientId);
+    const source =
+      from === "original"
+        ? {
+            text: originalText ?? "",
+            options: options.map((o) => ({ text: localizedText(o.text), justification: o.justification ?? "" })),
+          }
+        : {
+            text: value[from].text,
+            options: ids.map((id, i) => ({
+              text: value[from].options[id]?.text || localizedText(options[i].text),
+              justification: value[from].options[id]?.justification ?? "",
+            })),
+          };
+    const targets = TRANSLATION_LANGS.filter((lang) => lang !== from);
+    setBusy(true);
+    setAutoError("");
+    try {
+      const result = await quizbar.translate({ source: from === "original" ? "" : from, targets, ...source });
+      const next: TranslationState = { ...value };
+      for (const lang of targets) {
+        const item = result[lang];
+        // Same text back = the source was already in this language.
+        if (!item || (from === "original" && clean(item.text) === clean(source.text))) continue;
+        const current = next[lang];
+        const optionsNext = { ...current.options };
+        ids.forEach((id, i) => {
+          const before = optionsNext[id] ?? { text: "", justification: "" };
+          const got = item.options[i] ?? { text: "", justification: "" };
+          optionsNext[id] = {
+            text: overwrite || !before.text.trim() ? got.text : before.text,
+            justification: overwrite || !before.justification.trim() ? got.justification : before.justification,
+          };
+        });
+        next[lang] = {
+          text: overwrite || !clean(current.text) ? item.text : current.text,
+          options: optionsNext,
+        };
+      }
+      onChange(next);
+    } catch (err) {
+      setAutoError(requestDetail(err) ?? t("The translation failed."));
+    } finally {
+      setBusy(false);
+    }
+  }
   const [lang, setLang] = useState<TranslationLang>(present[0] ?? "en");
   const current = value[lang];
 
@@ -107,6 +180,52 @@ export default function TranslationsPanel({
             "The text above is the original. A translation is shown instead when the room is set to that language; empty fields fall back to the original.",
           )}
         </p>
+        {autoEnabled && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+            <Sparkles aria-hidden className="h-4 w-4 text-brand-700" />
+            <span>{t("Translate from")}</span>
+            <select
+              value={from}
+              onChange={(event) => setFrom(event.target.value as "original" | TranslationLang)}
+              aria-label={t("Translate from")}
+              className="rounded-md border border-field bg-white px-2 py-1 text-sm dark:bg-slate-900"
+            >
+              <option value="original">{t("the original")}</option>
+              {TRANSLATION_LANGS.filter((lang) => filled(value, lang)).map((lang) => (
+                <option key={lang} value={lang}>
+                  {LANG_NAMES[lang]}
+                </option>
+              ))}
+            </select>
+            <span>{t("into the other languages")}</span>
+            <label className="flex items-center gap-1.5 text-xs text-slate-500">
+              <input
+                type="checkbox"
+                checked={overwrite}
+                onChange={(event) => setOverwrite(event.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300 accent-brand-600"
+              />
+              {t("replace what is already there")}
+            </label>
+            <Button
+              variant="secondary"
+              className="ml-auto inline-flex items-center gap-1.5"
+              disabled={busy}
+              onClick={() => void translateAll()}
+            >
+              {busy && <Loader2 aria-hidden className="h-4 w-4 animate-spin" />}
+              {busy ? t("Translating…") : t("Translate")}
+            </Button>
+            {autoError && (
+              <p role="alert" className="w-full text-xs text-red-700 dark:text-red-400">
+                {autoError}
+              </p>
+            )}
+            <p className="w-full text-xs text-slate-500">
+              {t("A draft: check it before saving. Math stays as it is.")}
+            </p>
+          </div>
+        )}
         <div className="flex gap-1.5" role="tablist">
           {TRANSLATION_LANGS.map((code) => (
             <button

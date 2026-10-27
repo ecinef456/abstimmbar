@@ -207,6 +207,29 @@ Code: `quizbar/i18n.py` (tables `QuestionTranslation`, `OptionTranslation`),
 `live/results.py`, `quizbar/justifications.py`, `rooms/transfer.py`,
 `rooms/serializers.py` (`translations` field), `QuestionPage.tsx`.
 
+### Automatic translation in the editor (DeepL or LibreTranslate)
+
+The translation panel of the question editor gets a **Translate** row:
+"Translate from [the original | English | Deutsch | Français] into the
+other languages". It fills the empty fields of the other two languages
+(question, answers, justifications); tick *replace what is already there*
+to overwrite. Math (`$…$`, `\(…\)`) is never sent to the translator and
+comes back unchanged. It is a draft: check it, then save.
+
+Set up one service in the server's `.env` (then `fork/deploy.sh`):
+
+- **DeepL** (best quality): `QUIZBAR_DEEPL_KEY=…` — a DeepL API key; free
+  keys end in `:fx` (500,000 characters a month).
+- **LibreTranslate** (free, private, runs on the server, weaker):
+  `COMPOSE_PROFILES=translate` and
+  `QUIZBAR_LIBRETRANSLATE_URL=http://libretranslate:5000`. The container
+  (only EN/DE/FR) is part of `docker-compose.prod.yml`; the first start
+  downloads its models (a few GB, a few minutes).
+
+Without either, the row does not appear. Independent of upstream's own
+de/en translation switch. Code: `quizbar/translate.py`, endpoint
+`/api/quizbar/translate/`, `frontend/src/quizbar/Translations.tsx`.
+
 ### Quizzes written in Typst (quizbar.typ)
 
 The package lives in `frontend/public/quizbar/` (`quizbar.typ`, `example.typ`,

@@ -22,6 +22,7 @@ from . import (
     report,
     selfcheck,
     stats,
+    translate,
     typst_import,
 )
 from .models import LibraryEntry, LibraryTag, SetFolder, SetPlacement
@@ -452,6 +453,27 @@ def room_stats_pdf(request, room_id):
     response["Content-Disposition"] = f'attachment; filename="{name}"'
     response["Access-Control-Expose-Headers"] = "Content-Disposition"
     return response
+
+
+# -- automatic translation -------------------------------------------------------
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def translate_question(request):
+    """GET: is a translation service set up? POST {source ("" = detect),
+    targets: [...], text: html, options: [{text, justification}]} →
+    {lang: {text, options}} — a draft for the editor's translation panel."""
+    if request.method == "GET":
+        return Response({"enabled": bool(translate.provider()), "provider": translate.provider()})
+    data = request.data
+    source = data.get("source") or ""
+    targets = data.get("targets") if isinstance(data.get("targets"), list) else []
+    try:
+        result = translate.question(source, targets, str(data.get("text") or ""), data.get("options"))
+    except translate.TranslateError as exc:
+        return Response({"detail": str(exc)}, status=502)
+    return Response(result)
 
 
 # -- peer instruction and confidence ------------------------------------------

@@ -2153,6 +2153,18 @@ export const quizbar = {
     fetchFile(`/api/quizbar/rooms/${roomId}/stats/csv/?folder=${encodeURIComponent(folder)}&lang=${lang}`, "statistics.csv"),
   statsPdf: (roomId: number, folder: string, lang: string) =>
     fetchFile(`/api/quizbar/rooms/${roomId}/stats/pdf/?folder=${encodeURIComponent(folder)}&lang=${lang}`, "statistics.pdf"),
+  translateStatus: () => request<{ enabled: boolean; provider: string }>("/api/quizbar/translate/"),
+  /** Machine translation of a question: source "" = detect. */
+  translate: (data: {
+    source: string;
+    targets: string[];
+    text: string;
+    options: { text: string; justification: string }[];
+  }) =>
+    request<Record<string, { text: string; options: { text: string; justification: string }[] }>>(
+      "/api/quizbar/translate/",
+      { method: "POST", body: JSON.stringify(data) },
+    ),
   /** Peer instruction (key D): keep vote 1, let the class vote again. */
   peerStart: (runId: number) =>
     request<{ status: string }>(`/api/quizbar/runs/${runId}/peer/`, { method: "POST" }),

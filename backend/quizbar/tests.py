@@ -1646,3 +1646,65 @@ class RoomStatsTests(TestCase):
         empty = Room.objects.create(title="Empty", owner=self.owner)
         empty.owners.add(self.owner)
         self.assertEqual(self.client.get(f"/api/quizbar/rooms/{empty.pk}/stats/pdf/").status_code, 400)
+
+
+class TranslateTests(TestCase):
+    """Machine translation for the editor (DeepL / LibreTranslate), mocked."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="tr")
+        self.client.force_login(self.owner)
+
+    def test_off_without_service(self):
+        from unittest import mock
+
+        with mock.patch.dict("os.environ", {}, clear=False):
+            import os
+
+            os.environ.pop("QUIZBAR_DEEPL_KEY", None)
+            os.environ.pop("QUIZBAR_LIBRETRANSLATE_URL", None)
+            self.assertFalse(self.client.get("/api/quizbar/translate/").json()["enabled"])
+            response = self.client.post(
+                "/api/quizbar/translate/", {"targets": ["en"], "text": "<p>Hallo</p>"}, content_type="application/json"
+            )
+            self.assertEqual(response.status_code, 502)
+
+    def test_deepl_keeps_math(self):
+        from unittest import mock
+
+        from . import translate
+
+        seen = {}
+
+        def fake_post(url, payload, headers):
+            seen["url"], seen["payload"] = url, payload
+            # "translate": upper-case everything outside the math markers
+            out = []
+            for text in payload["text"]:
+                out.append(re.sub(r"(?<=>)([^<§]+)(?=<)|^([^<]+)", lambda m: m.group(0).upper(), text))
+            return {"translations": [{"text": t} for t in out]}
+
+        import re
+
+        with mock.patch.dict("os.environ", {"QUIZBAR_DEEPL_KEY": "abc:fx"}), mock.patch.object(
+            translate, "_post", side_effect=fake_post
+        ):
+            response = self.client.post(
+                "/api/quizbar/translate/",
+                {
+                    "source": "de",
+                    "targets": ["en", "fr", "de"],
+                    "text": "<p>Welle mit $lambda = 2$ m</p>",
+                    "options": [{"text": "a < b und $x < y$", "justification": ""}],
+                },
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(set(data), {"en", "fr"})  # never into the source language
+        self.assertIn("api-free.deepl.com", seen["url"])
+        self.assertEqual(seen["payload"]["target_lang"], "FR")
+        self.assertIn("$lambda = 2$", data["en"]["text"])
+        self.assertNotIn("$lambda", seen["payload"]["text"][0])  # math never sent
+        self.assertIn("$x < y$", data["en"]["options"][0]["text"])
+        self.assertEqual(data["en"]["options"][0]["justification"], "")
