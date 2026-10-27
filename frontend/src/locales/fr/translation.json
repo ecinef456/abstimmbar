@@ -1434,5 +1434,7 @@
   "The statistics could not be loaded.": "Les statistiques n’ont pas pu être chargées.",
   "Loading statistics …": "Chargement des statistiques …",
   "PDF report": "Rapport PDF",
-  "Nothing to report yet: no answers to single- or multiple-choice questions here.": "Rien à rapporter : pas encore de réponses à des questions à choix unique ou multiple ici."
+  "Nothing to report yet: no answers to single- or multiple-choice questions here.": "Rien à rapporter : pas encore de réponses à des questions à choix unique ou multiple ici.",
+  "Exam versions A and B": "Versions d’examen A et B",
+  "Same questions, answers in a different order in B, plus an answer key for both": "Mêmes questions, réponses dans un autre ordre en B, avec un corrigé pour les deux"
 }

@@ -376,7 +376,11 @@ def export_pdf(request):
     langs = data.get("langs") if isinstance(data.get("langs"), list) else []
     try:
         name, content_type, payload = export.build(
-            document, langs, bool(data.get("solutions")), bool(data.get("blank"))
+            document,
+            langs,
+            bool(data.get("solutions")),
+            bool(data.get("blank")),
+            versions=bool(data.get("versions")),
         )
     except export.ExportError as exc:
         return Response({"detail": str(exc)}, status=400)

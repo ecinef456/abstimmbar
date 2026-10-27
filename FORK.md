@@ -279,6 +279,11 @@ original). One language and one version → one PDF; otherwise a zip:
 <name>/de/…  <name>/fr/…
 ```
 
+**Exam versions A and B** (checkbox in the dialog): the same questions,
+version A in the written answer order, version B with the answers in
+another (fixed) order, plus `<name>-key.pdf`, a one-page answer key with
+the correct letters of both versions, set by set.
+
 The `.typ` files use the same `quizbar.typ` package (with `#section(...)`
 headings) and can be edited and recompiled:
 `typst compile --root . en/<name>.typ` (add `--input solutions=true`).

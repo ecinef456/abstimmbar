@@ -2038,6 +2038,8 @@ export type ExportRequest = {
   langs: string[];
   solutions: boolean;
   blank: boolean;
+  /** Exam: versions A and B (answers in another order) and an answer key. */
+  versions?: boolean;
 };
 
 export const quizbar = {

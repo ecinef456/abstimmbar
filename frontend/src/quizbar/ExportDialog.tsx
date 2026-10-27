@@ -46,10 +46,12 @@ export default function ExportDialog({
   const [langs, setLangs] = useState<TranslationLang[]>([initial]);
   const [blank, setBlank] = useState(true);
   const [solutions, setSolutions] = useState(true);
+  const [versions, setVersions] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const files = langs.length * (Number(blank) + Number(solutions));
+  const variants = Number(blank) + Number(solutions);
+  const files = variants ? langs.length * (variants * (versions ? 2 : 1) + (versions ? 1 : 0)) : 0;
   const toggle = (lang: TranslationLang) =>
     setLangs((current) =>
       current.includes(lang) ? current.filter((l) => l !== lang) : TRANSLATION_LANGS.filter((l) => l === lang || current.includes(l)),
@@ -59,7 +61,7 @@ export default function ExportDialog({
     setBusy(true);
     setError("");
     try {
-      const { blob, filename } = await quizbar.exportPdf({ ...target, langs, blank, solutions });
+      const { blob, filename } = await quizbar.exportPdf({ ...target, langs, blank, solutions, versions });
       download(blob, filename);
       onClose();
     } catch (err) {
@@ -109,6 +111,20 @@ export default function ExportDialog({
           <span>
             {t("With solutions")}
             <span className="block text-xs text-slate-500">{t("Correct answers marked, with the explanation of every answer")}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 border-t border-slate-200 pt-2 text-sm dark:border-slate-800">
+          <input
+            type="checkbox"
+            className={`${box} mt-0.5`}
+            checked={versions}
+            onChange={(e) => setVersions(e.target.checked)}
+          />
+          <span>
+            {t("Exam versions A and B")}
+            <span className="block text-xs text-slate-500">
+              {t("Same questions, answers in a different order in B, plus an answer key for both")}
+            </span>
           </span>
         </label>
       </fieldset>

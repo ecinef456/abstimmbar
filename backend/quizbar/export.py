@@ -43,9 +43,12 @@ MAX_QUESTIONS = 3000
 PACKAGE = Path(__file__).resolve().parent / "typst" / "quizbar.typ"
 
 WORDS = {
-    "en": {"library": "Question library", "other": "Other quizzes", "tags": "Tags"},
-    "de": {"library": "Fragenbibliothek", "other": "Weitere Quiz", "tags": "Tags"},
-    "fr": {"library": "Bibliothèque de questions", "other": "Autres quiz", "tags": "Tags"},
+    "en": {"library": "Question library", "other": "Other quizzes", "tags": "Tags",
+           "version": "Version", "key": "Answer key", "question": "Question"},
+    "de": {"library": "Fragenbibliothek", "other": "Weitere Quiz", "tags": "Tags",
+           "version": "Version", "key": "Lösungsschlüssel", "question": "Frage"},
+    "fr": {"library": "Bibliothèque de questions", "other": "Autres quiz", "tags": "Tags",
+           "version": "Version", "key": "Corrigé", "question": "Question"},
 }
 
 # Text area of an A4 page with quizbar.typ's margins (cm).
@@ -590,8 +593,23 @@ def _pick(value, lang):
     return value or ""
 
 
-def _question(renderer, question, lang, tags):
-    options = question.qb_export_options
+def option_order(question, version):
+    """The answer options in the order of exam ``version``: A keeps the
+    written order, B (C, …) a fixed shuffle that differs from it."""
+    options = list(question.qb_export_options)
+    if version in (None, "A") or len(options) < 2:
+        return options
+    import random
+
+    shuffled = options[:]
+    random.Random(f"{question.pk}-{version}").shuffle(shuffled)
+    if shuffled == options:
+        shuffled = shuffled[1:] + shuffled[:1]
+    return shuffled
+
+
+def _question(renderer, question, lang, tags, version=None):
+    options = option_order(question, version)
     right = sum(1 for o in options if o.is_correct)
     kind = "MC" if question.kind == "multiple_choice" or right > 1 else "SC"
     lines = ["#question(", "  [", renderer.html(i18n.text_in(lang, question)), "  ],", f'  kind: "{kind}",']
@@ -615,8 +633,11 @@ def _question(renderer, question, lang, tags):
     return "\n".join(lines)
 
 
-def _source(document, renderer, lang, tags, stem):
+def _source(document, renderer, lang, tags, stem, version=None):
     title = renderer.plain(_pick(document.title, lang))
+    if version:
+        title += f" · {WORDS[lang]['version']} {version}"
+        stem = f"{stem}-{version}"
     description = renderer.plain(_pick(document.description, lang))
     stamp = timezone.localdate().isoformat()
     head = [
@@ -638,7 +659,7 @@ def _source(document, renderer, lang, tags, stem):
             heading = renderer.plain(_pick(item[1], lang))
             body.append(f"#section([{heading}], level: {item[2]})\n")
         else:
-            body.append(_question(renderer, item[1], lang, tags.get(item[1].pk)) + "\n")
+            body.append(_question(renderer, item[1], lang, tags.get(item[1].pk), version) + "\n")
     return "\n".join(head + body)
 
 
@@ -661,8 +682,42 @@ the pictures are in figures/.
 """
 
 
-def build(document, langs, solutions, blank):
-    """Compile ``document``. Returns (file name, content type, bytes)."""
+def _key_source(document, renderer, lang, versions):
+    """Typst source of the answer key: correct letters per version."""
+    words = WORDS[lang]
+    head = [f"[*{words['question']}*]"] + [f"[*{words['version']} {v}*]" for v in versions]
+    rows, number = [], 0
+    for item in document.items:
+        if item[0] == "section":
+            number = 0
+            title = renderer.plain(_pick(item[1], lang))
+            rows.append(f"  table.cell(colspan: {len(versions) + 1}, fill: luma(240))[*{title}*],")
+            continue
+        number += 1
+        letters = []
+        for version in versions:
+            order = option_order(item[1], version)
+            letters.append(", ".join(chr(65 + i) for i, o in enumerate(order) if o.is_correct) or "–")
+        rows.append("  " + ", ".join([f"[{number}]"] + [f"[{x}]" for x in letters]) + ",")
+    title = renderer.plain(_pick(document.title, lang))
+    return "\n".join(
+        [
+            '#set page(margin: 2cm, numbering: "1")',
+            f'#set text(size: 11pt, lang: "{lang}")',
+            f'#align(center, text(size: 17pt, weight: "bold")[{title} · {words["key"]}])',
+            "#v(0.6em)",
+            f"#table(columns: (auto,{' 1fr,' * len(versions)}), inset: 6pt, stroke: 0.5pt + luma(200),",
+            "  " + ", ".join(head) + ",",
+            *rows,
+            ")",
+        ]
+    )
+
+
+def build(document, langs, solutions, blank, versions=False):
+    """Compile ``document``. Returns (file name, content type, bytes).
+    ``versions``: two exam versions A and B (answers in another order) and
+    an answer key."""
     import typst
 
     langs = [lang for lang in LANGS if lang in langs]
@@ -677,32 +732,52 @@ def build(document, langs, solutions, blank):
     i18n.preload(questions)
     tags = _tags(questions)
     stem = _stem(document.name)
+    exam = ["A", "B"] if versions else [None]
+
+    def name_of(version):
+        return f"{stem}-{version}" if version else stem
 
     with tempfile.TemporaryDirectory(prefix="qb-export-") as tmp:
         folder = Path(tmp)
         shutil.copyfile(PACKAGE, folder / "quizbar.typ")
         renderer = Renderer(folder)
-        sources = {lang: _source(document, renderer, lang, tags, stem) for lang in langs}
+        sources = {
+            (lang, version): _source(document, renderer, lang, tags, stem, version)
+            for lang in langs
+            for version in exam
+        }
+        keys = {lang: _key_source(document, renderer, lang, exam) for lang in langs} if versions else {}
         compiler = typst.Compiler(root=str(folder), ignore_system_fonts=True)
         renderer.check_math(compiler)
-        pdfs = {}
-        for lang in langs:
-            (folder / lang).mkdir()
-            path = folder / lang / f"{stem}.typ"
-            path.write_text(renderer.finish(sources[lang]))
-            for variant in variants:
-                try:
-                    pdfs[(lang, variant)] = compiler.compile(
-                        input=str(path),
-                        format="pdf",
-                        sys_inputs={"solutions": "true" if variant == "solutions" else "false"},
-                    )
-                except typst.TypstError as error:
-                    raise ExportError(f"Typst could not compile the export: {error.message}") from error
+        pdfs = {}  # path in the zip (below <stem>/) → bytes
+        typ_files = []
+        try:
+            for lang in langs:
+                (folder / lang).mkdir()
+                for version in exam:
+                    path = folder / lang / f"{name_of(version)}.typ"
+                    path.write_text(renderer.finish(sources[(lang, version)]))
+                    typ_files.append(f"{lang}/{name_of(version)}.typ")
+                    for variant in variants:
+                        suffix = "-solutions" if variant == "solutions" else ""
+                        pdfs[f"{lang}/{name_of(version)}{suffix}.pdf"] = compiler.compile(
+                            input=str(path),
+                            format="pdf",
+                            sys_inputs={"solutions": "true" if variant == "solutions" else "false"},
+                        )
+                if versions:
+                    path = folder / lang / f"{stem}-key.typ"
+                    path.write_text(renderer.finish(keys[lang]))
+                    typ_files.append(f"{lang}/{stem}-key.typ")
+                    pdfs[f"{lang}/{stem}-key.pdf"] = compiler.compile(input=str(path), format="pdf")
+        except typst.TypstError as error:
+            raise ExportError(f"Typst could not compile the export: {error.message}") from error
 
         if len(pdfs) == 1:
-            (lang, variant), data = next(iter(pdfs.items()))
-            suffix = "-solutions" if variant == "solutions" else ""
+            path, data = next(iter(pdfs.items()))
+            lang, file_name = path.split("/", 1)
+            base = file_name[: -len(".pdf")]
+            suffix = base[len(stem) :]
             return f"{stem}-{lang}{suffix}.pdf", "application/pdf", data
 
         buffer = io.BytesIO()
@@ -711,9 +786,8 @@ def build(document, langs, solutions, blank):
             archive.write(folder / "quizbar.typ", f"{stem}/quizbar.typ")
             for name in sorted(set(renderer.figures.values())):
                 archive.write(folder / "figures" / name, f"{stem}/figures/{name}")
-            for lang in langs:
-                archive.write(folder / lang / f"{stem}.typ", f"{stem}/{lang}/{stem}.typ")
-                for variant in variants:
-                    suffix = "-solutions" if variant == "solutions" else ""
-                    archive.writestr(f"{stem}/{lang}/{stem}{suffix}.pdf", pdfs[(lang, variant)])
+            for relative in typ_files:
+                archive.write(folder / relative, f"{stem}/{relative}")
+            for relative, data in pdfs.items():
+                archive.writestr(f"{stem}/{relative}", data)
         return f"{stem}.zip", "application/zip", buffer.getvalue()

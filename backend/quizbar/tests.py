@@ -1389,6 +1389,32 @@ class ExportTests(TestCase):
         response = self.post(scope="library", entries=entry_ids, langs=["en"], blank=True)
         self.assertEqual(response.status_code, 400)  # not their entries: nothing
 
+    def test_exam_versions(self):
+        import io
+        import zipfile
+
+        from . import export
+
+        question = Question.objects.get(text="<p>Loose question</p>")
+        for position in (2, 3):
+            AnswerOption.objects.create(question=question, text=f"Extra {position}", text_de=f"Extra {position}", position=position)
+        response = self.post(scope="room", id=self.room.pk, langs=["en"], blank=True, versions=True)
+        self.assertEqual(response.status_code, 200)
+        archive = zipfile.ZipFile(io.BytesIO(response.content))
+        names = set(archive.namelist())
+        for name in ("physics-hs26-A.pdf", "physics-hs26-B.pdf", "physics-hs26-key.pdf", "physics-hs26-B.typ"):
+            self.assertIn(f"physics-hs26/en/{name}", names)
+        key = self.pdf_text(archive.read("physics-hs26/en/physics-hs26-key.pdf"))
+        self.assertIn("Answer key", key)
+        self.assertIn("Version B", key)
+        # B has the answers in another order, A the written one
+        question = export._questions_query().get(pk=question.pk)
+        a = [o.pk for o in export.option_order(question, "A")]
+        b = [o.pk for o in export.option_order(question, "B")]
+        self.assertEqual(a, sorted(a, key=lambda pk: AnswerOption.objects.get(pk=pk).position))
+        self.assertNotEqual(a, b)
+        self.assertEqual(sorted(a), sorted(b))
+
     def test_markup_conversion(self):
         import tempfile
 
