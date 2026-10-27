@@ -507,3 +507,187 @@ class CourseTests(Base):
         room = Room.objects.get(title_de="HS26 - TA - Physics")
         self.assertEqual(room.qb_folders.count(), 14)
         self.assertEqual(room.question_sets.count(), 70)
+
+
+class LibraryTests(TestCase):
+    def setUp(self):
+        from . import library
+
+        self.library = library
+        self.owner = User.objects.create_user(username="lib", is_staff=True)
+        self.room = Room.objects.create(title="HS26", owner=self.owner)
+        self.room.owners.add(self.owner)
+        self.quiz = QuestionSet.objects.create(room=self.room, title="Quiz 1")
+        self.client.force_login(self.owner)
+
+    def new_question(self, text="Energy?", question_set=None, **library):
+        payload = {
+            "question_set": (question_set or self.quiz).pk,
+            "kind": "single_choice",
+            "text": {"de": text, "en": ""},
+            "options": [
+                {"text": {"de": "E=mc^2", "en": ""}, "is_correct": True},
+                {"text": {"de": "E=mc", "en": ""}, "is_correct": False},
+            ],
+        }
+        if library:
+            payload["library"] = library
+        resp = self.client.post("/api/questions/", payload, content_type="application/json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        return Question.objects.get(pk=resp.json()["id"]), resp.json()
+
+    def entries(self):
+        return self.client.get("/api/quizbar/library/").json()["entries"]
+
+    def test_new_question_joins_library_with_tags(self):
+        question, data = self.new_question(in_library=True, tags=["Energy", " energy ", "Week 1"])
+        self.assertTrue(data["library"]["in_library"])
+        self.assertEqual(data["library"]["tags"], ["Energy", "Week 1"])
+        [entry] = self.entries()
+        self.assertEqual(entry["master"], question.pk)
+        self.assertEqual(entry["used_in"][0]["set"], self.quiz.pk)
+        self.assertEqual(len(entry["options"]), 2)
+
+    def test_opt_out_and_back(self):
+        question, data = self.new_question(in_library=False)
+        self.assertFalse(data["library"]["in_library"])
+        self.assertEqual(self.entries(), [])
+        resp = self.client.patch(
+            f"/api/questions/{question.pk}/",
+            {"library": {"in_library": True, "tags": ["Optics"]}},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.json()["library"]["tags"], ["Optics"])
+        self.assertEqual(len(self.entries()), 1)
+
+    def test_copies_do_not_add_entries(self):
+        self.new_question()
+        copy = duplicate_set(self.quiz, self.room)
+        self.assertEqual(len(self.entries()), 1)
+        self.assertEqual(len(self.entries()[0]["used_in"]), 2)
+        self.assertEqual(copy.questions.get().qb_lineage.entry.members.count(), 2)
+
+    def test_example_rooms_stay_out(self):
+        room = Room.objects.create(title="Beispiel", owner=self.owner, is_example=True)
+        qs = QuestionSet.objects.create(room=room, title="x")
+        Question.objects.create(question_set=qs, kind="single_choice", text="demo")
+        self.assertEqual(self.entries(), [])
+
+    def test_deleting_master_moves_to_copy(self):
+        self.new_question()
+        copy_set = duplicate_set(self.quiz, self.room)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.quiz.delete()
+        [entry] = self.entries()
+        self.assertEqual(entry["master_set"], copy_set.pk)
+        self.assertEqual([u["set"] for u in entry["used_in"]], [copy_set.pk])
+        vault = self.owner.qb_library_vault.question_set
+        self.assertEqual(vault.questions.count(), 0)
+
+    def test_deleting_last_copy_keeps_it_in_the_vault(self):
+        self.new_question(tags=["Mechanics"], in_library=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.room.delete()
+        [entry] = self.entries()
+        self.assertIsNone(entry["master_set"])
+        self.assertEqual(entry["used_in"], [])
+        self.assertEqual(entry["tags"], [{"id": entry["tags"][0]["id"], "name": "Mechanics"}])
+        self.assertEqual(entry["options"][0]["text"]["de"], "E=mc^2")
+        # The vault room is never listed, not even in the staff-wide list.
+        rooms = self.client.get("/api/rooms/?all=1").json()
+        listed = rooms["results"] if isinstance(rooms, dict) else rooms
+        self.assertEqual(listed, [])
+        # Back into a set: that copy becomes the master, the vault empties.
+        room = Room.objects.create(title="HS27", owner=self.owner)
+        room.owners.add(self.owner)
+        target = QuestionSet.objects.create(room=room, title="Quiz")
+        resp = self.client.post(
+            "/api/quizbar/library/insert/",
+            {"set": target.pk, "entries": [entry["id"]]},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        [entry] = self.entries()
+        self.assertEqual(entry["master_set"], target.pk)
+        self.assertEqual(self.owner.qb_library_vault.question_set.questions.count(), 0)
+        self.assertEqual(target.questions.get().options.count(), 2)
+
+    def test_insert_skips_kinds_the_set_cannot_hold(self):
+        self.new_question()
+        cloud = Question.objects.create(question_set=self.quiz, kind="word_cloud", text="Words")
+        check = QuestionSet.objects.create(
+            room=self.room, title="Check", type=QuestionSet.SetType.SELF_CHECK
+        )
+        ids = [e["id"] for e in self.entries()]
+        resp = self.client.post(
+            "/api/quizbar/library/insert/", {"set": check.pk, "entries": ids},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.json()["skipped"], [cloud.qb_lineage.entry_id])
+        self.assertEqual(check.questions.count(), 1)
+        self.assertEqual(len(self.entries()), 2)
+
+    def test_insert_needs_own_set(self):
+        self.new_question()
+        other = User.objects.create_user(username="other")
+        room = Room.objects.create(title="Theirs", owner=other)
+        room.owners.add(other)
+        target = QuestionSet.objects.create(room=room, title="Q")
+        # Staff may open any room; a normal teacher may not.
+        self.owner.is_staff = False
+        self.owner.save()
+        resp = self.client.post(
+            "/api/quizbar/library/insert/",
+            {"set": target.pk, "entries": [self.entries()[0]["id"]]},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_remove_keeps_questions(self):
+        question, _ = self.new_question()
+        entry_id = self.entries()[0]["id"]
+        self.assertEqual(self.client.delete(f"/api/quizbar/library/entries/{entry_id}/").status_code, 204)
+        self.assertEqual(self.entries(), [])
+        self.assertTrue(Question.objects.filter(pk=question.pk).exists())
+
+    def test_bulk_tags_and_rename_merges(self):
+        self.new_question("A")
+        self.new_question("B", tags=["optics"], in_library=True)
+        ids = [e["id"] for e in self.entries()]
+        self.client.post(
+            "/api/quizbar/library/tags/", {"entries": ids, "add": ["Week 3"]},
+            content_type="application/json",
+        )
+        tags = {t["name"]: t["id"] for t in self.client.get("/api/quizbar/library/").json()["tags"]}
+        self.assertEqual(set(tags), {"optics", "Week 3"})
+        self.client.patch(
+            f"/api/quizbar/library/tags/{tags['optics']}/", {"name": "week 3"},
+            content_type="application/json",
+        )
+        data = self.client.get("/api/quizbar/library/").json()
+        self.assertEqual([t["name"] for t in data["tags"]], ["Week 3"])
+        self.assertTrue(all(len(e["tags"]) == 1 for e in data["entries"]))
+
+    def test_backfill_merges_identical_questions(self):
+        from .models import LibraryEntry, QuestionLineage
+
+        for title in ("Old 1", "Old 2"):
+            qs = QuestionSet.objects.create(room=self.room, title=title)
+            q = Question.objects.create(question_set=qs, kind="single_choice", text="Same?")
+            AnswerOption.objects.create(question=q, text="yes", is_correct=True)
+        Question.objects.create(question_set=qs, kind="single_choice", text="Other")
+        # Pretend these existed before the library.
+        QuestionLineage.objects.all().delete()
+        LibraryEntry.objects.all().delete()
+        created, joined = self.library.backfill(self.owner)
+        self.assertEqual((created, joined), (2, 1))
+        self.assertEqual(self.library.backfill(self.owner), (0, 0))
+
+    def test_deleting_the_user_does_not_rescue(self):
+        self.new_question()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.owner.delete()
+        from .models import LibraryVault
+
+        self.assertFalse(LibraryVault.objects.exists())
+        self.assertEqual(Question.objects.count(), 1)

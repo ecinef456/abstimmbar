@@ -10,8 +10,8 @@ from live.models import Run
 from live.state import broadcast
 from rooms.models import QuestionSet, Room
 
-from . import course, folders, justifications, selfcheck
-from .models import SetFolder, SetPlacement
+from . import course, folders, justifications, library, selfcheck
+from .models import LibraryEntry, LibraryTag, SetFolder, SetPlacement
 
 
 def _owner(user, room):
@@ -211,3 +211,97 @@ def duplicate_room(request, room_id):
     title = str(request.data.get("title") or "").strip()[:200] or None
     copy = course.duplicate_room(room, request.user, title=title)
     return Response({"id": copy.pk}, status=201)
+
+
+# -- question library --------------------------------------------------------
+
+
+def _own_entries(user, ids):
+    if not isinstance(ids, list):
+        return []
+    return list(
+        LibraryEntry.objects.filter(owner=user, pk__in=[i for i in ids if isinstance(i, int)])
+        .select_related("master", "owner")
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def library_list(request):
+    """The teacher's whole library (entries + tags); filtered in the browser."""
+    return Response(
+        {"entries": library.listing(request.user), "tags": library.tag_listing(request.user)}
+    )
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def library_entry(request, entry_id):
+    """PATCH {tags: [names]}; DELETE takes the question out of the library."""
+    entry = get_object_or_404(LibraryEntry, pk=entry_id, owner=request.user)
+    if request.method == "DELETE":
+        library.remove(entry)
+        return Response(status=204)
+    tags = request.data.get("tags")
+    if not isinstance(tags, list):
+        return Response({"tags": "A list of names."}, status=400)
+    library.set_tags(entry, tags)
+    return Response({"tags": library.tag_listing(request.user)})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def library_bulk_tags(request):
+    """{entries: [ids], add: [names], remove: [names]} — tag many at once."""
+    entries = _own_entries(request.user, request.data.get("entries"))
+    add = library.tags_named(request.user, request.data.get("add") or [])
+    remove = {name.lower() for name in library.clean_tag_names(request.data.get("remove"))}
+    drop = [tag for tag in LibraryTag.objects.filter(owner=request.user) if tag.name.lower() in remove]
+    for entry in entries:
+        if add:
+            entry.tags.add(*add)
+        if drop:
+            entry.tags.remove(*drop)
+    return Response({"updated": len(entries), "tags": library.tag_listing(request.user)})
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def library_tag(request, tag_id):
+    """PATCH {name} renames (merging into an existing tag of that name);
+    DELETE removes the tag from every question."""
+    tag = get_object_or_404(LibraryTag, pk=tag_id, owner=request.user)
+    if request.method == "DELETE":
+        tag.delete()
+        return Response(status=204)
+    names = library.clean_tag_names([request.data.get("name")])
+    if not names:
+        return Response({"name": "Required."}, status=400)
+    other = (
+        LibraryTag.objects.filter(owner=request.user, name__iexact=names[0])
+        .exclude(pk=tag.pk)
+        .first()
+    )
+    if other is not None:
+        for entry in tag.entries.all():
+            entry.tags.add(other)
+        tag.delete()
+    else:
+        tag.name = names[0]
+        tag.save(update_fields=["name"])
+    return Response({"tags": library.tag_listing(request.user)})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def library_insert(request):
+    """{set: id, entries: [ids]} — copy library questions to the end of a set."""
+    set_id = request.data.get("set")
+    if not isinstance(set_id, int):
+        return Response({"set": "Required."}, status=400)
+    question_set = _owned_set(request.user, set_id)
+    entries = _own_entries(request.user, request.data.get("entries"))
+    order = {pk: i for i, pk in enumerate(request.data.get("entries") or [])}
+    entries.sort(key=lambda entry: order.get(entry.pk, 0))
+    copies, skipped = library.insert(entries, question_set)
+    return Response({"inserted": [q.pk for q in copies], "skipped": skipped}, status=201)

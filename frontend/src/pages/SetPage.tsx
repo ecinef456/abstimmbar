@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
-import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Grid2x2, Languages, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, SquareStop, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Grid2x2, Languages, Library, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, SquareStop, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import {
   api,
   live,
@@ -46,6 +46,7 @@ import {
 import { LICENSE_OPTIONS, licenseNeedsHolder } from "../licenses";
 import { useTourSignal } from "../tour/signals";
 import SelfCheckSourcesPanel from "../quizbar/SelfCheckSources";
+import { LibraryPickerDialog } from "../quizbar/LibraryPage";
 
 // Values are English source strings, translated with t() at each render site
 // (this Record lives at module scope, outside any component).
@@ -1006,6 +1007,9 @@ export default function SetPage() {
   }
   // quizbar (fork): sets this self-check copies its questions from.
   const [selfCheckSources, setSelfCheckSources] = useState<SelfCheckSources | null>(null);
+  // quizbar (fork): the "From library" picker.
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryNotice, setLibraryNotice] = useState("");
 
   /** Archive current results & prepare a fresh run (#27/#56) — same action as
    * the room's set table, surfaced here in the set's ⋮ menu. Reloads the set
@@ -1594,6 +1598,21 @@ export default function SetPage() {
         </div>
       )}
 
+      {/* quizbar (fork): copy questions from the question library. */}
+      {libraryOpen && (
+        <LibraryPickerDialog
+          setId={id}
+          allowedKinds={allowedKindsFor(set.type)}
+          onClose={() => setLibraryOpen(false)}
+          onInserted={(message) => {
+            setLibraryOpen(false);
+            setLibraryNotice(message);
+            void reloadQuestions();
+            void api.listSections(id).then((page) => setSections(page.results));
+          }}
+        />
+      )}
+
       {/* quizbar (fork): fill this self-check from other sets automatically. */}
       {set.type === "self_check" && selfCheckSources && (
         <SelfCheckSourcesPanel
@@ -1924,6 +1943,16 @@ export default function SetPage() {
               <ListTree aria-hidden className="h-4 w-4" />{t("Sections")}
             </Button>
           </ProOnly>
+          {/* quizbar (fork): copy questions from the question library. */}
+          <Button onClick={() => setLibraryOpen(true)} className="inline-flex items-center gap-1.5">
+            <Library aria-hidden className="h-4 w-4" />
+            {t("From library")}
+          </Button>
+          {libraryNotice && (
+            <span role="status" className="text-sm text-brand-800 dark:text-brand-200">
+              {libraryNotice}
+            </span>
+          )}
           {aiVisible && (
             <div data-tour="set.ai-generate">
               <Button

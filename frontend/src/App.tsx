@@ -7,6 +7,7 @@ import { Link, Navigate, Outlet, useNavigate, useOutletContext } from "react-rou
 import {
   BarChart3,
   Info,
+  Library,
   Settings,
   Unplug,
   X,
@@ -406,6 +407,15 @@ export default function App() {
           </div>
           {whoami?.authenticated ? (
             <div className="flex items-center gap-1">
+              {/* quizbar (fork): the question library. */}
+              <Link
+                to="/library"
+                aria-label={t("Question library")}
+                title={t("Question library")}
+                className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              >
+                <Library aria-hidden className="h-5 w-5" />
+              </Link>
               {whoami.is_staff && (
                 <Link
                   to="/admin"

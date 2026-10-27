@@ -52,5 +52,13 @@
   "{{count}} groups proposed — untick what you don't want._one": "{{count}} group proposed — untick it if you don't want it.",
   "{{count}} groups proposed — untick what you don't want._other": "{{count}} groups proposed — untick what you don't want.",
   "AI: {{count}} changes_one": "AI: {{count}} change",
-  "AI: {{count}} changes_other": "AI: {{count}} changes"
+  "AI: {{count}} changes_other": "AI: {{count}} changes",
+  "{{count}} questions copied into “{{set}}”._one": "{{count}} question copied into “{{set}}”.",
+  "{{count}} questions copied into “{{set}}”._other": "{{count}} questions copied into “{{set}}”.",
+  "{{count}} skipped: this type of set cannot hold them._one": "{{count}} skipped: this type of set cannot hold them.",
+  "{{count}} skipped: this type of set cannot hold them._other": "{{count}} skipped: this type of set cannot hold them.",
+  "{{count}} questions copied from the library._one": "{{count}} question copied from the library.",
+  "{{count}} questions copied from the library._other": "{{count}} questions copied from the library.",
+  "{{count}} selected_one": "{{count}} selected",
+  "{{count}} selected_other": "{{count}} selected"
 }

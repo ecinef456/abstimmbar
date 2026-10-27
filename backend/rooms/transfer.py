@@ -27,6 +27,7 @@ from rest_framework import serializers
 
 from common.i18n_fields import LANGS, translated_map
 from quizbar import justifications as quizbar_justifications
+from quizbar import library as quizbar_library
 
 from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Section
@@ -167,6 +168,8 @@ def duplicate_question(question, *, question_set, section, position):
         section=section,
     )
     _copy_options(question, clone)
+    # quizbar (fork): a copy belongs to its original's library entry.
+    quizbar_library.join_copy(question, clone)
     return clone
 
 

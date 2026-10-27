@@ -19,6 +19,7 @@ from common.i18n_fields import LANGS, TranslatedMapMixin
 from common.serializers import TranslationSyncMixin
 from quizbar import justifications as quizbar_justifications
 from quizbar import languages as quizbar_languages
+from quizbar import library as quizbar_library
 
 from . import matrix, mindmap, set_types
 from .models import AnswerOption, Question, QuestionSet, Room, Section, UploadedImage
@@ -451,10 +452,14 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
     after_question = serializers.SerializerMethodField()
     is_after = serializers.SerializerMethodField()
 
+    # quizbar (fork): {"in_library": bool, "tags": [names]} — written to the
+    # question library (own tables), read back in to_representation.
+    library = serializers.JSONField(required=False, write_only=True)
+
     class Meta:
         model = Question
         fields: ClassVar = [
-            "id", "question_set", "section", "kind", "text", "shuffle_options",
+            "id", "question_set", "section", "kind", "text", "shuffle_options", "library",
             "binary_choice",
             "time_limit", "position", "options", "ai_evaluate", "evaluation_hint",
             "allow_multiple", "wordcloud_live", "wordcloud_ai_enabled",
@@ -697,8 +702,14 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
                     )
         return attrs
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["library"] = quizbar_library.info(instance)  # quizbar (fork)
+        return data
+
     def create(self, validated_data):
         options = validated_data.pop("options", [])
+        library = validated_data.pop("library", None)  # quizbar (fork)
         question_set = validated_data["question_set"]
         last = question_set.questions.order_by("-position").first()
         # New questions append at the end of the shared outline sequence and,
@@ -709,15 +720,18 @@ class QuestionSerializer(TranslationSyncMixin, TranslatedMapMixin, serializers.M
             validated_data["section"] = last.section
         question = super().create(validated_data)
         self._write_options(question, options)
+        quizbar_library.apply(question, library)
         return question
 
     def update(self, instance, validated_data):
         # A question stays in its set; moving between sets is a v2 feature.
         validated_data.pop("question_set", None)
         options = validated_data.pop("options", None)
+        library = validated_data.pop("library", None)  # quizbar (fork)
         question = super().update(instance, validated_data)
         if options is not None:
             self._write_options(question, options)
+        quizbar_library.apply(question, library)
         # Keep a linked after-question's content in sync (#54); no-op otherwise.
         sync_after_question(question)
         return question

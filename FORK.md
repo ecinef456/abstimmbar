@@ -136,6 +136,39 @@ Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
 `frontend/src/quizbar/SelfCheckSources.tsx`; hooks in `live/views.py`
 (sync before a student loads the self-check), `SetPage.tsx`, `RoomPage.tsx`.
 
+### Question library with tags
+
+- **Library** (book icon in the header, `/library`): every question you
+  write in your rooms appears here **once**, however often it is copied
+  (duplicating a question, set or room, inserting from the library and
+  self-check copies all count as the same question). Search, filter by
+  tag or type, and a **To sort** chip for questions without tags.
+- **Tags:** in the question editor ("Keep this question in my library",
+  ticked by default for new questions; untick to leave one out) or
+  directly on the library page. Select several and add tags at once;
+  rename or delete a tag from its chip (renaming onto an existing tag
+  merges them).
+- **Reuse:** "From library" on a set page, or "Copy into a question set"
+  on the library page. The copy is independent: change it freely in its
+  set. The library keeps showing the original; the pencil edits that one.
+- **Nothing gets lost:** deleting a set or room never removes a library
+  question. If its last copy goes, the library keeps it in a hidden store
+  ("Kept only in the library") until you copy it into a set again.
+- **Existing questions** (written before this version) are added once with
+
+  ```bash
+  sudo docker exec abstimmbar_app python manage.py quizbar_library --owner <username>
+  ```
+
+  Identical questions (same type, text and answers) become one entry.
+
+Code: `quizbar/library.py` (tables `LibraryEntry`, `LibraryTag`,
+`QuestionLineage`, `LibraryVault`; signals in `quizbar/apps.py`),
+`frontend/src/quizbar/Library.tsx`, `LibraryPage.tsx`; hooks in
+`rooms/transfer.py` (`duplicate_question`), `rooms/serializers.py`
+(`library` field of a question), `rooms/views.py` (hidden store never
+listed), `QuestionPage.tsx`, `SetPage.tsx`, `App.tsx`, `main.tsx`.
+
 ### A–Z as the default sort
 
 Rooms and question sets open sorted by title; numbers sort naturally

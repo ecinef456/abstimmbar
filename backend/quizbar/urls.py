@@ -13,4 +13,9 @@ urlpatterns = [
     path("sets/<int:set_id>/next/", views.set_next),
     path("sets/<int:set_id>/self-check-sources/", views.self_check_sources),
     path("rooms/<int:room_id>/duplicate/", views.duplicate_room),
+    path("library/", views.library_list),
+    path("library/entries/<int:entry_id>/", views.library_entry),
+    path("library/tags/", views.library_bulk_tags),
+    path("library/tags/<int:tag_id>/", views.library_tag),
+    path("library/insert/", views.library_insert),
 ]

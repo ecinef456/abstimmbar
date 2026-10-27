@@ -17,6 +17,7 @@ import ResultsPage from "./pages/ResultsPage";
 import RoomPage from "./pages/RoomPage";
 import SetPage from "./pages/SetPage";
 import SharedPage from "./pages/SharedPage";
+import LibraryPage from "./quizbar/LibraryPage";
 import { TranslationFormProvider } from "@basicbar/ui";
 import { TRANSLATION_CONTROLS_HOOK, translateContent } from "./translation";
 import { TourHost } from "./tour/TourController";
@@ -45,6 +46,8 @@ const router = createBrowserRouter([
               { path: "sets/:setId/results", element: <ResultsPage /> },
               { path: "sets/:setId/questions/:questionId", element: <QuestionPage /> },
               { path: "shared/:token", element: <SharedPage /> },
+              // quizbar (fork): the question library.
+              { path: "library", element: <LibraryPage /> },
             ],
           },
         ],

@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
+from django.conf import settings
 from django.db import models
+from django.db.models.functions import Lower
 
 
 class OptionJustification(models.Model):
@@ -138,3 +140,66 @@ class SelfCheckState(models.Model):
         "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_sync_state"
     )
     fingerprint = models.CharField(max_length=64, blank=True, default="")
+
+
+class LibraryTag(models.Model):
+    """A tag of the question library (one teacher's own vocabulary)."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="qb_library_tags"
+    )
+    name = models.CharField(max_length=60)
+
+    class Meta:
+        ordering = ("name", "id")
+        constraints = (
+            models.UniqueConstraint(Lower("name"), "owner", name="qb_unique_tag"),
+        )
+
+    def __str__(self):
+        return self.name
+
+
+class LibraryEntry(models.Model):
+    """One question of the library, however many copies of it exist.
+
+    ``master`` is the copy the library shows (the first one written, or the
+    most recently edited survivor once it is deleted). All copies belong to
+    the entry through ``QuestionLineage``, so copying never adds entries.
+    """
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="qb_library"
+    )
+    master = models.ForeignKey(
+        "rooms.Question", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    tags = models.ManyToManyField(LibraryTag, blank=True, related_name="entries")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-id")
+
+
+class QuestionLineage(models.Model):
+    """Which library entry a question is a copy of."""
+
+    question = models.OneToOneField(
+        "rooms.Question", on_delete=models.CASCADE, related_name="qb_lineage"
+    )
+    entry = models.ForeignKey(LibraryEntry, on_delete=models.CASCADE, related_name="members")
+
+
+class LibraryVault(models.Model):
+    """A hidden room/set per teacher that keeps library questions whose
+    last copy was deleted (so deleting a set never empties the library)."""
+
+    owner = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="qb_library_vault"
+    )
+    room = models.OneToOneField(
+        "rooms.Room", on_delete=models.CASCADE, related_name="qb_library_vault"
+    )
+    question_set = models.OneToOneField(
+        "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_library_vault"
+    )

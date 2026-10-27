@@ -246,6 +246,8 @@ class RoomViewSet(viewsets.ModelViewSet):
         show_all = self.request.query_params.get("all") in ("1", "true", "True")
         if not user.is_staff or self.action == "list" and not show_all:
             queryset = queryset.filter(Q(owners=user) | Q(owner=user)).distinct()
+        # quizbar (fork): the hidden question-library rooms are never listed.
+        queryset = queryset.filter(qb_library_vault__isnull=True)
         # The overview hides archived rooms; the archive page requests them
         # explicitly (?archived=1). Detail/actions keep every room reachable.
         if self.action == "list":

@@ -9,6 +9,7 @@ import {
   API_BASE_URL,
   aiErrorText,
   api,
+  quizbar,
   requestBody,
   requestDetail,
   requestError,
@@ -47,6 +48,7 @@ import SortableList from "../components/SortableList";
 import TranslatableField from "../components/TranslatableField";
 import { Button, ClampedNumberInput, EmptyState, Field, InfoHint, MenuItem, MoreMenu, ProOnly, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
 import { KIND_LABEL, REVEAL_LABEL } from "./SetPage";
+import { LibraryField } from "../quizbar/Library";
 
 /** Which languages of a translatable field look outdated, computed live in
  * the editor (#91) so the amber marker appears the moment you edit one
@@ -219,6 +221,16 @@ export default function QuestionPage() {
   // it is allowed, just flagged).
   const [confirmNoCorrect, setConfirmNoCorrect] = useState(false);
   const [timeLimit, setTimeLimit] = useState("");
+  // quizbar (fork): question library membership + tags (new questions: in).
+  const [inLibrary, setInLibrary] = useState(true);
+  const [libraryTags, setLibraryTags] = useState<string[]>([]);
+  const [knownTags, setKnownTags] = useState<string[]>([]);
+  useEffect(() => {
+    void quizbar
+      .library()
+      .then((data) => setKnownTags(data.tags.map((tag) => tag.name)))
+      .catch(() => {});
+  }, []);
   const [likertPreset, setLikertPreset] = useState<string>("agreement");
   const [likertSteps, setLikertSteps] = useState(5);
   const [likertLeft, setLikertLeft] = useState<LocalizedText>({ de: "Stimme nicht zu", en: "Disagree" });
@@ -342,6 +354,8 @@ export default function QuestionPage() {
       setText("");
       setTextBaseline("");
       setBinaryChoice(template === "binary");
+      setInLibrary(true);
+      setLibraryTags([]);
       setOptions(defaultOptions(kind, template));
       setOptionBaseline({});
       return supersede;
@@ -404,6 +418,8 @@ export default function QuestionPage() {
       setMatrixRatingMulti(data.matrix_rating_multi ?? true);
       setMatrixRatingLive(data.matrix_rating_live ?? false);
       setTimeLimit(data.time_limit ? String(data.time_limit) : "");
+      setInLibrary(data.library?.in_library ?? false);
+      setLibraryTags(data.library?.tags ?? []);
       // Options keep the full {de, en} map so each can be edited bilingually
       // (#33 MR2 Task 9).
       const editableOptions = data.options.map((option) => ({
@@ -657,6 +673,7 @@ export default function QuestionPage() {
             }
           : {}),
         time_limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : null,
+        library: { in_library: inLibrary, tags: libraryTags },
         // #91: report fields whose (non-canonical) translation now matches
         // what's being saved, so the API re-baselines their sync state.
         synced_fields: Array.from(new Set([...syncedFields, ...extraSynced])),
@@ -913,7 +930,7 @@ export default function QuestionPage() {
   function editSnapshot() {
     return JSON.stringify({
       text, shuffle, binaryChoice, reveal, options,
-      timeLimit, likertPreset, abstention,
+      timeLimit, likertPreset, abstention, inLibrary, libraryTags,
       // Likert step count and endpoint labels live outside `options` until
       // save (likertOptions() bakes them in), so the unsaved-changes guard
       // must watch them directly — otherwise editing only an endpoint label or
@@ -2169,6 +2186,15 @@ export default function QuestionPage() {
             </div>
           </Field>
         </div>
+
+        <LibraryField
+          inLibrary={inLibrary}
+          onInLibrary={setInLibrary}
+          tags={libraryTags}
+          onTags={setLibraryTags}
+          suggestions={knownTags}
+          copies={question.library?.copies}
+        />
 
         {error && <p className="text-sm text-danger">{error}</p>}
         {confirmNoCorrect && missingSolutionForSelfCheck && (

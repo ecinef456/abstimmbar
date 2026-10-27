@@ -301,6 +301,9 @@ export interface Question {
   kind: QuestionKind;
   text: LocalizedText;
   shuffle_options: boolean;
+  /** quizbar (fork): question library state (read). Write
+   *  `{ in_library, tags }` to change it. */
+  library?: QuestionLibraryInfo;
   /** single_choice only: created via the binary Ja/Nein preset — the editor
    *  shows the Ja/Nein · Wahr/Falsch template quick-fill above two options (#79). */
   binary_choice: boolean;
@@ -1882,7 +1885,64 @@ export interface SelfCheckSources {
 }
 
 /** quizbar (fork): this fork's own endpoints (backend app `quizbar`). */
+/** quizbar (fork): question library. */
+export interface QuestionLibraryInfo {
+  in_library: boolean;
+  entry?: number | null;
+  tags: string[];
+  copies?: number;
+}
+export interface LibraryTag {
+  id: number;
+  name: string;
+}
+export interface LibraryEntry {
+  id: number;
+  kind: QuestionKind;
+  text: LocalizedText;
+  options: { text: LocalizedText; is_correct: boolean; justification: string }[];
+  tags: LibraryTag[];
+  /** The copy the library shows; `master_set` null = kept only in the library. */
+  master: number;
+  master_set: number | null;
+  used_in: {
+    question: number;
+    set: number;
+    set_title: LocalizedText;
+    set_type: string;
+    room: number;
+    room_title: LocalizedText;
+  }[];
+  created_at: string;
+  updated_at: string;
+}
+
 export const quizbar = {
+  library: () => request<{ entries: LibraryEntry[]; tags: LibraryTag[] }>("/api/quizbar/library/"),
+  setEntryTags: (entryId: number, tags: string[]) =>
+    request<{ tags: LibraryTag[] }>(`/api/quizbar/library/entries/${entryId}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ tags }),
+    }),
+  removeEntry: (entryId: number) =>
+    request<void>(`/api/quizbar/library/entries/${entryId}/`, { method: "DELETE" }),
+  bulkTags: (entries: number[], add: string[], remove: string[] = []) =>
+    request<{ updated: number; tags: LibraryTag[] }>("/api/quizbar/library/tags/", {
+      method: "POST",
+      body: JSON.stringify({ entries, add, remove }),
+    }),
+  renameTag: (tagId: number, name: string) =>
+    request<{ tags: LibraryTag[] }>(`/api/quizbar/library/tags/${tagId}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
+  deleteTag: (tagId: number) =>
+    request<void>(`/api/quizbar/library/tags/${tagId}/`, { method: "DELETE" }),
+  insertFromLibrary: (setId: number, entries: number[]) =>
+    request<{ inserted: number[]; skipped: number[] }>("/api/quizbar/library/insert/", {
+      method: "POST",
+      body: JSON.stringify({ set: setId, entries }),
+    }),
   folders: (roomId: number) =>
     request<{ folders: SetFolder[] }>(`/api/quizbar/rooms/${roomId}/folders/`),
   createFolder: (roomId: number, data: { title: string; ordered: boolean }) =>
