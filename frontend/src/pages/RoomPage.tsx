@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { Archive, ChartColumnDecreasing, CopyPlus, ChevronDown, ChevronUp, Crown, DoorOpen, Heart, Layers, Play, Search, SearchX, Settings, Trash2, Upload, Users, X } from "lucide-react";
+import { Archive, ChartColumnDecreasing, CopyPlus, FileCode, ChevronDown, ChevronUp, Crown, DoorOpen, Heart, Layers, Play, Search, SearchX, Settings, Trash2, Upload, Users, X } from "lucide-react";
 import { useEasyMode } from "../App";
 import {
   api,
@@ -555,6 +555,9 @@ export default function RoomPage() {
   const [ownersOpen, setOwnersOpen] = useState(false);
   const [newSet, setNewSet] = useState<SetSettings | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
+  // quizbar (fork): import a quiz written with the Typst package.
+  const typstInput = useRef<HTMLInputElement>(null);
+  const [typstNotice, setTypstNotice] = useState<{ setId: number; warnings: string[] } | null>(null);
 
   // Room settings (title / description / features), behind the ⋮ menu (#2).
   const [settingsDraft, setSettingsDraft] = useState<RoomSettings | null>(null);
@@ -689,6 +692,26 @@ export default function RoomPage() {
       await reload();
     } catch (error) {
       setImportError(t("Import failed: {{error}}", { error: String(error) }));
+    }
+  }
+
+  async function handleTypstFiles(files: File[]) {
+    setImportError("");
+    setTypstNotice(null);
+    try {
+      const result = await quizbar.importTypst(
+        id,
+        files,
+        typeof folderSelection === "number" ? folderSelection : undefined,
+      );
+      if (result.warnings.length === 0) {
+        navigate(`/sets/${result.id}`);
+        return;
+      }
+      setTypstNotice({ setId: result.id, warnings: result.warnings });
+      await reload();
+    } catch (error) {
+      setImportError(t("Import failed: {{error}}", { error: requestError(error) }));
     }
   }
 
@@ -845,8 +868,25 @@ export default function RoomPage() {
                 <Upload aria-hidden className="h-4 w-4" />{t("Import question set (JSON)")}
               </MenuItem>
             )}
+            <MenuItem onClick={() => typstInput.current?.click()}>
+              <FileCode aria-hidden className="h-4 w-4" />{t("Import Typst quiz (.typ or .zip)")}
+            </MenuItem>
           </MoreMenu>
         </div>
+        <input
+          ref={typstInput}
+          type="file"
+          multiple
+          accept=".typ,.zip,image/png,image/jpeg,image/webp,image/gif"
+          aria-label={t("Import Typst quiz (.typ or .zip)")}
+          tabIndex={-1}
+          className="sr-only"
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            if (files.length) void handleTypstFiles(files);
+            event.target.value = "";
+          }}
+        />
         <input
           ref={importInput}
           type="file"
@@ -963,6 +1003,22 @@ export default function RoomPage() {
         </div>
       </div>
       {importError && <p className="mb-4 text-sm text-danger">{importError}</p>}
+      {typstNotice && (
+        <div
+          role="status"
+          className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          <p className="font-semibold">{t("Imported, with these notes:")}</p>
+          <ul className="ml-5 list-disc">
+            {typstNotice.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+          <Link to={`/sets/${typstNotice.setId}`} className="mt-1 inline-block font-semibold underline">
+            {t("Open the set")}
+          </Link>
+        </div>
+      )}
 
       {newSet && (
         <div className="mb-6 max-w-2xl rounded-2xl border border-brand-200 bg-brand-50/50 p-4 dark:border-brand-900 dark:bg-brand-950/40">

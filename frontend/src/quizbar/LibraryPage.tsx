@@ -366,6 +366,22 @@ export default function LibraryPage() {
           "Every question you write in your rooms lands here once, however often it is copied. Tag it to find it again; untagged ones wait under “To sort”.",
         )}
       </p>
+      <p className="-mt-4 mb-6 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
+        {t("Writing quizzes in Typst? Download")}{" "}
+        <a href="/quizbar/quizbar.typ" download className="font-medium text-brand-800 underline dark:text-brand-200">
+          quizbar.typ
+        </a>
+        {", "}
+        <a href="/quizbar/example.typ" download className="font-medium text-brand-800 underline dark:text-brand-200">
+          example.typ
+        </a>{" "}
+        {t("and its figure")}{" "}
+        <a href="/quizbar/figures/wave.png" download className="font-medium text-brand-800 underline dark:text-brand-200">
+          wave.png
+        </a>
+        {" — "}
+        {t("then import the quiz in a room: ⋮ → Import Typst quiz.")}
+      </p>
       {notice && (
         <p
           role="status"

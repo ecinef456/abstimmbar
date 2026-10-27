@@ -1938,6 +1938,16 @@ export const quizbar = {
     }),
   deleteTag: (tagId: number) =>
     request<void>(`/api/quizbar/library/tags/${tagId}/`, { method: "DELETE" }),
+  /** A quiz written with quizbar.typ: the .typ, figures, or a .zip. */
+  importTypst: (roomId: number, files: File[], folder?: number) => {
+    const body = new FormData();
+    for (const file of files) body.append("files", file);
+    if (folder) body.append("folder", String(folder));
+    return request<{ id: number; questions: number; warnings: string[] }>(
+      `/api/quizbar/rooms/${roomId}/import-typst/`,
+      { method: "POST", body },
+    );
+  },
   insertFromLibrary: (setId: number, entries: number[]) =>
     request<{ inserted: number[]; skipped: number[] }>("/api/quizbar/library/insert/", {
       method: "POST",

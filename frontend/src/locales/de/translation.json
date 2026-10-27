@@ -1367,5 +1367,10 @@
   "{{count}} questions copied from the library._one": "{{count}} Frage aus der Bibliothek kopiert.",
   "{{count}} questions copied from the library._other": "{{count}} Fragen aus der Bibliothek kopiert.",
   "{{count}} selected_one": "{{count}} ausgewählt",
-  "{{count}} selected_other": "{{count}} ausgewählt"
+  "{{count}} selected_other": "{{count}} ausgewählt",
+  "Import Typst quiz (.typ or .zip)": "Typst-Quiz importieren (.typ oder .zip)",
+  "Imported, with these notes:": "Importiert, mit diesen Hinweisen:",
+  "Writing quizzes in Typst? Download": "Quizze in Typst schreiben? Laden Sie",
+  "and its figure": "und die zugehörige Abbildung herunter:",
+  "then import the quiz in a room: ⋮ → Import Typst quiz.": "dann importieren Sie das Quiz in einem Raum: ⋮ → Typst-Quiz importieren."
 }

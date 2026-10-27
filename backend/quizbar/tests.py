@@ -691,3 +691,160 @@ class LibraryTests(TestCase):
 
         self.assertFalse(LibraryVault.objects.exists())
         self.assertEqual(Question.objects.count(), 1)
+
+
+class TypstImportTests(TestCase):
+    QUIZ = r"""
+#import "quizbar.typ": *
+#show: quizbar.with(title: "Week 3 – Quiz 1", type: "self-check", figures: "figures")
+
+// #question([commented out], answers: ())
+#question(
+  [Speed with $lambda = 2$ m and $f = 3$ Hz? A *bold* word, a bracket $[0, 1)$.],
+  kind: "SC",
+  answers: (
+    answer(true, [6 m/s], why: [$v = lambda f$.]),
+    answer(false, [1.5 m/s], why: [That is $lambda \/ f$.]),
+  ),
+  image: "wave.png",
+  tags: ("Waves", "Week 3"),
+  time-limit-s: 60,
+)
+
+#question(
+  [Which are conserved?
+
+  - energy
+  - period],
+  kind: "mc",
+  answers: (
+    answer(true)[Energy],
+    answer(false, [Momentum]),
+    answer(true, "Period"),
+  ),
+  tags: "Oscillations",
+  shuffle: true,
+)
+"""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="typ")
+        self.room = Room.objects.create(title="HS26", owner=self.owner)
+        self.room.owners.add(self.owner)
+        self.client.force_login(self.owner)
+
+    def test_parse(self):
+        from .typst_import import parse
+
+        quiz = parse(self.QUIZ)
+        self.assertEqual((quiz.title, quiz.set_type), ("Week 3 – Quiz 1", "self_check"))
+        first, second = quiz.questions
+        self.assertEqual(
+            first.text_html,
+            "<p>Speed with $lambda = 2$ m and $f = 3$ Hz? A <strong>bold</strong> word, "
+            "a bracket $[0, 1)$.</p>",
+        )
+        self.assertEqual(first.options[1]["justification"], r"That is $lambda \/ f$.")
+        self.assertEqual((first.image, first.time_limit, first.tags), ("wave.png", 60, ["Waves", "Week 3"]))
+        self.assertEqual(second.kind, "multiple_choice")
+        self.assertEqual(second.text_html, "<p>Which are conserved?</p><ul><li>energy</li><li>period</li></ul>")
+        self.assertEqual([o["text"] for o in second.options], ["Energy", "Momentum", "Period"])
+        self.assertTrue(second.shuffle)
+
+    def test_errors_name_the_line(self):
+        from .typst_import import TypstImportError, parse
+
+        with self.assertRaisesRegex(TypstImportError, "Line 3"):
+            parse('#import "quizbar.typ": *\n\n#question([Q], kind: "SC", answers: (answer(true, [a]), answer(true, [b])))')
+        with self.assertRaisesRegex(TypstImportError, "No #question"):
+            parse("= Just notes")
+
+    def _png(self):
+        import io
+
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new("RGB", (40, 20), "green").save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def test_import_zip_with_figure_into_folder(self):
+        import io
+        import zipfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from . import folders
+
+        folder = folders.create_folder(self.room, "Week 3")
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("week3/quiz.typ", self.QUIZ)
+            archive.writestr("week3/quizbar.typ", "#let question(..args) = none")
+            archive.writestr("week3/figures/wave.png", self._png())
+        upload = SimpleUploadedFile("week3.zip", buffer.getvalue(), content_type="application/zip")
+        resp = self.client.post(
+            f"/api/quizbar/rooms/{self.room.pk}/import-typst/",
+            {"files": [upload], "folder": folder.pk},
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.json()["warnings"], [])
+        question_set = QuestionSet.objects.get(pk=resp.json()["id"])
+        self.assertEqual(question_set.type, QuestionSet.SetType.SELF_CHECK)
+        self.assertEqual(question_set.qb_placement.folder, folder)
+        first, second = question_set.questions.order_by("position")
+        self.assertIn('<img src="/media/question-images/', first.text)
+        self.assertEqual(first.time_limit, 60)
+        self.assertEqual(
+            justifications.text_for(first.options.order_by("position")[1]), r"That is $lambda \/ f$."
+        )
+        self.assertEqual(sorted(t.name for t in first.qb_lineage.entry.tags.all()), ["Waves", "Week 3"])
+        self.assertTrue(second.shuffle_options)
+
+    def test_import_fills_the_empty_set_of_a_course_room(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from . import course, selfcheck
+
+        room = course.create_course(self.owner, "HS26 - TA - Physics", weeks=1)
+        quiz = room.question_sets.get(title_de="Week 1 – Quiz 1")
+        source = self.QUIZ.replace("Week 3 – Quiz 1", "Week 1 – Quiz 1").replace(
+            'type: "self-check"', 'type: "live"'
+        )
+        upload = SimpleUploadedFile("quiz.typ", source.encode())
+        resp = self.client.post(f"/api/quizbar/rooms/{room.pk}/import-typst/", {"files": [upload]})
+        self.assertEqual(resp.json()["id"], quiz.pk)
+        self.assertEqual(room.question_sets.count(), 5)
+        self.assertEqual(quiz.questions.count(), 2)
+        self.assertEqual(quiz.qb_placement.folder.title, "Week 1")
+        check = room.question_sets.get(title_de="Week 1 – Self-check")
+        selfcheck.ensure_synced(check)
+        self.assertEqual(check.questions.count(), 2)
+
+    def test_import_plain_typ_warns_about_missing_figure(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        upload = SimpleUploadedFile("quiz.typ", self.QUIZ.encode())
+        resp = self.client.post(f"/api/quizbar/rooms/{self.room.pk}/import-typst/", {"files": [upload]})
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["warnings"], ["Question 1: figure wave.png was not uploaded."])
+
+    def test_bad_file_is_a_400_with_the_reason(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        upload = SimpleUploadedFile("quiz.typ", b'#question([Q], answers: (answer(true, [a]),))')
+        resp = self.client.post(f"/api/quizbar/rooms/{self.room.pk}/import-typst/", {"files": [upload]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("at least two answers", resp.json()["detail"])
+
+    def test_example_file_parses(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        from .typst_import import parse
+
+        example = Path(settings.BASE_DIR).parent / "frontend/public/quizbar/example.typ"
+        if not example.exists():
+            self.skipTest("frontend not next to backend")
+        self.assertEqual(len(parse(example.read_text()).questions), 3)

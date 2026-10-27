@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -10,7 +11,7 @@ from live.models import Run
 from live.state import broadcast
 from rooms.models import QuestionSet, Room
 
-from . import course, folders, justifications, library, selfcheck
+from . import course, folders, justifications, library, selfcheck, typst_import
 from .models import LibraryEntry, LibraryTag, SetFolder, SetPlacement
 
 
@@ -305,3 +306,31 @@ def library_insert(request):
     entries.sort(key=lambda entry: order.get(entry.pk, 0))
     copies, skipped = library.insert(entries, question_set)
     return Response({"inserted": [q.pk for q in copies], "skipped": skipped}, status=201)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser])
+def import_typst(request, room_id):
+    """Upload a quiz written with quizbar.typ (``files``: the .typ, figures,
+    or a .zip of the folder; optional ``folder`` id) → a new question set."""
+    room = _owned_room(request.user, room_id)
+    folder = None
+    if request.data.get("folder"):
+        try:
+            folder = _owned_folder(request.user, int(request.data["folder"]))
+        except (TypeError, ValueError):
+            folder = None
+        if folder is not None and folder.room_id != room.pk:
+            folder = None
+    uploads = request.FILES.getlist("files")
+    if not uploads:
+        return Response({"detail": "No file uploaded."}, status=400)
+    try:
+        question_set, warnings = typst_import.import_quiz(room, request.user, uploads, folder)
+    except typst_import.TypstImportError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    return Response(
+        {"id": question_set.pk, "questions": question_set.questions.count(), "warnings": warnings},
+        status=201,
+    )
