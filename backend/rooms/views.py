@@ -30,6 +30,7 @@ from rest_framework.views import APIView
 from common import documents
 from common.i18n_fields import resolve_translated_text, translated_map
 from live.models import MatrixCard, MindmapContribution, MindmapNode, Vote
+from quizbar import folders as quizbar_folders
 
 from . import ai_generate, ai_prompts, generation, set_types
 from .images import InvalidImageError, normalize_image
@@ -502,6 +503,8 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
             canonical = getattr(question_set, canonical_key, "") or question_set.title
             title = f"{canonical} (Kopie)"[:200]
         clone = duplicate_set(question_set, target, title=title)
+        # quizbar (fork): a copy in the same room joins the original's folder.
+        quizbar_folders.follow_original(question_set, clone)
         serializer = self.get_serializer(clone)
         data = dict(serializer.data)
         data["question_count"] = clone.questions.count()

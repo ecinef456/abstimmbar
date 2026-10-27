@@ -50,3 +50,41 @@ class RoomLanguage(models.Model):
 
     def __str__(self):
         return f"room {self.room_id}: {self.language}"
+
+
+class SetFolder(models.Model):
+    """A folder of question sets inside a room (e.g. one per week).
+
+    ``ordered``: the sets have a fixed sequence (shown numbered "1 – …"),
+    which the presenter's "Next quiz" button follows; otherwise they are
+    listed with the room's normal sort.
+    """
+
+    room = models.ForeignKey("rooms.Room", on_delete=models.CASCADE, related_name="qb_folders")
+    title = models.CharField(max_length=200)
+    ordered = models.BooleanField(default=True)
+    position = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("position", "id")
+
+    def __str__(self):
+        return self.title
+
+
+class SetPlacement(models.Model):
+    """Which folder a question set is in, and where (sets without one are
+    "not in a folder"). Deleting the folder deletes the placements only."""
+
+    question_set = models.OneToOneField(
+        "rooms.QuestionSet", on_delete=models.CASCADE, related_name="qb_placement"
+    )
+    folder = models.ForeignKey(SetFolder, on_delete=models.CASCADE, related_name="placements")
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("position", "id")
+
+    def __str__(self):
+        return f"set {self.question_set_id} in folder {self.folder_id}"

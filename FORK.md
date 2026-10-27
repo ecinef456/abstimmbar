@@ -80,6 +80,26 @@ Code: `components/TranslatableField.tsx`, `quizbar/languages.py` (table
 `RoomLanguage`), hooks in `RoomSerializer`, `live/state.py`, `RoomPage.tsx`,
 `PresentPage.tsx`, `i18n.ts`, `participant.html`.
 
+### Folders of question sets, numbered order, "Next quiz"
+
+- **Folders inside a room** (e.g. one per week): chips above the set list —
+  *All sets*, each folder, *Not in a folder*, *+ New folder*. Move a set
+  with the folder icon on its card. A set created or imported while a
+  folder is open lands in it; a duplicate goes right after its original.
+- **Numbered order** (per folder, on by default): the sets are shown as
+  "1 – …", "2 – …" and reordered with the ↑/↓ buttons on the cards.
+  Off: the folder uses the room's normal sort.
+- **Next quiz:** in a numbered folder, the presenter's closing slide offers
+  "Next quiz: 2 – …" (or press **N**). It ends the current quiz and opens
+  the next one's start screen (QR code), skipping self-checks and empty
+  sets. Participants' phones follow by themselves (same room code).
+- Deleting a folder keeps its sets (they become "not in a folder").
+
+Code: `quizbar/folders.py` (tables `SetFolder`, `SetPlacement`, endpoints
+under `/api/quizbar/rooms|folders|sets/…`), `frontend/src/quizbar/Folders.tsx`,
+hooks in `RoomPage.tsx`, `PresentPage.tsx` and the set `duplicate` view.
+The room page now also loads all of a room's sets (upstream stopped at 25).
+
 ### A–Z as the default sort
 
 Rooms and question sets open sorted by title; numbers sort naturally

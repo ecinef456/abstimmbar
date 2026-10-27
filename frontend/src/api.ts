@@ -928,7 +928,9 @@ export const api = {
 
   listQuestionSets: (roomId: number, search = "") =>
     request<Paginated<QuestionSet>>(
-      `/api/question-sets/?room=${roomId}&search=${encodeURIComponent(search)}`,
+      // quizbar (fork): all sets at once (the room pages them client-side;
+      // the API's default page of 25 silently cut longer lists).
+      `/api/question-sets/?room=${roomId}&search=${encodeURIComponent(search)}&page_size=1000`,
     ),
   duplicateQuestionSet: (id: number, data: { room?: number; title?: string }) =>
     request<QuestionSet>(`/api/question-sets/${id}/duplicate/`, {
@@ -1852,8 +1854,51 @@ export const loginUrl = `${API_BASE_URL}/oidc/authenticate/`;
 export const silentLoginUrl = `${API_BASE_URL}/oidc/silent/`;
 export const logoutUrl = `${API_BASE_URL}/oidc/logout-redirect/`;
 
+/** quizbar (fork): a folder of question sets inside a room. */
+export interface SetFolder {
+  id: number;
+  title: string;
+  /** Fixed, numbered sequence ("Next quiz" follows it). */
+  ordered: boolean;
+  position: number;
+  /** Set ids in folder order. */
+  sets: number[];
+}
+
+/** quizbar (fork): where a set sits and which set comes next. */
+export interface SetNextInfo {
+  folder: { id: number; title: string; ordered: boolean } | null;
+  number: number | null;
+  next: { id: number; title: LocalizedText; type: SetType; number: number } | null;
+}
+
 /** quizbar (fork): this fork's own endpoints (backend app `quizbar`). */
 export const quizbar = {
+  folders: (roomId: number) =>
+    request<{ folders: SetFolder[] }>(`/api/quizbar/rooms/${roomId}/folders/`),
+  createFolder: (roomId: number, data: { title: string; ordered: boolean }) =>
+    request<SetFolder>(`/api/quizbar/rooms/${roomId}/folders/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateFolder: (folderId: number, data: { title?: string; ordered?: boolean }) =>
+    request<SetFolder>(`/api/quizbar/folders/${folderId}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteFolder: (folderId: number) =>
+    request<void>(`/api/quizbar/folders/${folderId}/`, { method: "DELETE" }),
+  orderFolder: (folderId: number, sets: number[]) =>
+    request<SetFolder>(`/api/quizbar/folders/${folderId}/order/`, {
+      method: "POST",
+      body: JSON.stringify({ sets }),
+    }),
+  setFolder: (setId: number, folder: number | null) =>
+    request<{ folder: number | null }>(`/api/quizbar/sets/${setId}/folder/`, {
+      method: "POST",
+      body: JSON.stringify({ folder }),
+    }),
+  nextSet: (setId: number) => request<SetNextInfo>(`/api/quizbar/sets/${setId}/next/`),
   /** Presenter key J: show/hide the active question's justifications. */
   justification: (runId: number, show: boolean) =>
     request<{ status: string; shown: boolean }>(`/api/quizbar/runs/${runId}/justification/`, {

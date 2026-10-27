@@ -3,14 +3,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate, useParams } from "react-router";
-import { Archive, ChartColumnDecreasing, ChevronDown, Crown, DoorOpen, Heart, Layers, Play, Search, SearchX, Settings, Trash2, Upload, Users, X } from "lucide-react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Archive, ChartColumnDecreasing, ChevronDown, ChevronUp, Crown, DoorOpen, Heart, Layers, Play, Search, SearchX, Settings, Trash2, Upload, Users, X } from "lucide-react";
 import { useEasyMode } from "../App";
 import {
   api,
+  quizbar,
   requestError,
   results,
   type Collaborator,
+  type SetFolder,
   type PresentationCorner,
   type QuestionSet,
   type Room,
@@ -36,6 +38,7 @@ import HomeCrumb from "../components/HomeCrumb";
 import TranslatableField from "../components/TranslatableField";
 import { localizedText, type LocalizedText, RichText, TranslationControlsSlot } from "@basicbar/ui";
 import { SetSettingsForm, type SetSettings } from "./SetPage";
+import { FolderBar, MoveToFolder, parseFolderSelection } from "../quizbar/Folders";
 import { CREATABLE_SET_TYPES, SET_TYPES, type SetType } from "../setTypes";
 
 /** #75: pick the set type up front — like "+ New question" for questions.
@@ -536,6 +539,10 @@ export default function RoomPage() {
   const easyMode = useEasyMode();
   const [room, setRoom] = useState<Room | null>(null);
   const [sets, setSets] = useState<QuestionSet[] | null>(null);
+  // quizbar (fork): folders of sets; the selected one lives in the URL.
+  const [folders, setFolders] = useState<SetFolder[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const folderSelection = parseFolderSelection(searchParams.get("folder"));
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<number | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("title");
@@ -569,12 +576,24 @@ export default function RoomPage() {
   }, [pendingSwitch]);
 
   const reload = (term = search) =>
-    Promise.all([api.getRoom(id), api.listQuestionSets(id, term)]).then(
-      ([roomData, page]) => {
-        setRoom(roomData);
-        setSets(page.results);
-      },
-    );
+    Promise.all([
+      api.getRoom(id),
+      api.listQuestionSets(id, term),
+      quizbar.folders(id).catch(() => ({ folders: [] as SetFolder[] })),
+    ]).then(([roomData, page, folderData]) => {
+      setRoom(roomData);
+      setSets(page.results);
+      setFolders(folderData.folders);
+    });
+  const reloadFolders = () =>
+    quizbar.folders(id).then((data) => setFolders(data.folders));
+  function selectFolder(selection: "all" | "none" | number) {
+    const next = new URLSearchParams(searchParams);
+    if (selection === "all") next.delete("folder");
+    else next.set("folder", String(selection));
+    setSearchParams(next, { replace: true });
+    setSetsPage(1);
+  }
   useEffect(() => {
     const timer = window.setTimeout(() => void reload(), search ? 250 : 0);
     return () => window.clearTimeout(timer);
@@ -662,7 +681,11 @@ export default function RoomPage() {
     setImportError("");
     try {
       const data = JSON.parse(await file.text());
-      await api.importQuestionSet(id, data);
+      const imported = await api.importQuestionSet(id, data);
+      // quizbar (fork): an import while a folder is open lands in it.
+      if (typeof folderSelection === "number" && imported?.id) {
+        await quizbar.setFolder(imported.id, folderSelection);
+      }
       await reload();
     } catch (error) {
       setImportError(t("Import failed: {{error}}", { error: String(error) }));
@@ -683,6 +706,10 @@ export default function RoomPage() {
     if (!newSet) return;
     // A blank title is fine — the backend fills a dated default.
     const created = await api.createQuestionSet({ room: id, ...newSet });
+    // quizbar (fork): a set created while a folder is open lands in it.
+    if (typeof folderSelection === "number") {
+      await quizbar.setFolder(created.id, folderSelection).catch(() => {});
+    }
     navigate(`/sets/${created.id}`);
   }
 
@@ -700,8 +727,34 @@ export default function RoomPage() {
 
   if (!room || !sorted) return null;
 
+  // quizbar (fork): narrow to the selected folder; an ordered folder keeps
+  // its own sequence (and numbers its sets) instead of the sort above.
+  const folderOf = new Map<number, SetFolder>();
+  for (const folder of folders) for (const setId of folder.sets) folderOf.set(setId, folder);
+  const openFolder =
+    typeof folderSelection === "number" ? folders.find((f) => f.id === folderSelection) : undefined;
+  const byId = new Map(sorted.map((set) => [set.id, set]));
+  const inFolder = openFolder
+    ? openFolder.ordered
+      ? openFolder.sets.map((setId) => byId.get(setId)).filter((s): s is QuestionSet => !!s)
+      : sorted.filter((set) => folderOf.get(set.id)?.id === openFolder.id)
+    : folderSelection === "none"
+      ? sorted.filter((set) => !folderOf.has(set.id))
+      : sorted;
+  const numbered = !!openFolder?.ordered;
+  const canReorder = numbered && !search && typeFilter === "all";
+  async function moveInFolder(setId: number, delta: -1 | 1) {
+    if (!openFolder) return;
+    const order = [...openFolder.sets];
+    const index = order.indexOf(setId);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target], order[index]];
+    setFolders((all) => all.map((f) => (f.id === openFolder.id ? { ...f, sets: order } : f)));
+    await quizbar.orderFolder(openFolder.id, order).catch(() => reloadFolders());
+  }
   const filtered =
-    typeFilter === "all" ? sorted : sorted.filter((set) => set.type === typeFilter);
+    typeFilter === "all" ? inFolder : inFolder.filter((set) => set.type === typeFilter);
   const setsTotalPages = Math.max(1, Math.ceil(filtered.length / setsPageSize));
   const setsCurrent = Math.min(setsPage, setsTotalPages);
   const pagedSets = filtered.slice(
@@ -945,6 +998,28 @@ export default function RoomPage() {
         />
       )}
 
+      {/* quizbar (fork): folders of sets. */}
+      <FolderBar
+        folders={folders}
+        setIds={(sets ?? []).map((set) => set.id)}
+        selected={folderSelection}
+        onSelect={selectFolder}
+        onCreate={async (title, ordered) => {
+          const folder = await quizbar.createFolder(id, { title, ordered });
+          await reloadFolders();
+          selectFolder(folder.id);
+        }}
+        onUpdate={async (folderId, patch) => {
+          await quizbar.updateFolder(folderId, patch);
+          await reloadFolders();
+        }}
+        onDelete={async (folderId) => {
+          await quizbar.deleteFolder(folderId);
+          selectFolder("all");
+          await reloadFolders();
+        }}
+      />
+
       {sorted.length === 0 && search ? (
         <EmptyState icon={SearchX} title={t("No results")}>
           {t("No question set matches “{{query}}”.", { query: search })}
@@ -957,6 +1032,11 @@ export default function RoomPage() {
         <>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <h2 className="font-semibold">{t("Question sets")}</h2>
+            {numbered ? (
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {t("Numbered order")}
+              </span>
+            ) : (
             <label className="flex min-w-0 max-w-full items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               <span className="shrink-0">{t("Sort by:")}</span>
               <select
@@ -974,6 +1054,7 @@ export default function RoomPage() {
                 ))}
               </select>
             </label>
+            )}
           </div>
           {/* #75: filter the sets by type — same control as the rooms-list
               archive filter. */}
@@ -996,7 +1077,9 @@ export default function RoomPage() {
           />
           {filtered.length === 0 && (
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {t("No question set of this type.")}
+              {inFolder.length === 0 && folderSelection !== "all"
+                ? t("This folder is empty.")
+                : t("No question set of this type.")}
             </p>
           )}
           <ul className="grid gap-3 sm:grid-cols-2">
@@ -1024,10 +1107,19 @@ export default function RoomPage() {
                     className="min-w-0 flex-1 after:absolute after:inset-0 after:rounded-2xl"
                   >
                     <h3 className="truncate font-semibold text-slate-900 dark:text-slate-100">
+                      {/* quizbar (fork): number in an ordered folder. */}
+                      {numbered && openFolder && (
+                        <span className="tabular-nums text-brand-700 dark:text-brand-300">
+                          {openFolder.sets.indexOf(set.id) + 1} –{" "}
+                        </span>
+                      )}
                       {localizedText(set.title)}
                     </h3>
                     <p className="mt-1 text-xs font-medium text-slate-400">
                       {t(SET_TYPES[set.type].label)}
+                      {folderSelection === "all" && folderOf.get(set.id) && (
+                        <> · {folderOf.get(set.id)!.title}</>
+                      )}
                     </p>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                       {set.question_count} {t("question", { count: set.question_count })}
@@ -1042,6 +1134,36 @@ export default function RoomPage() {
                   </Link>
                 </div>
                 <div data-tour="room.set-actions" className="relative z-10 mt-3 flex items-center justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+                  {/* quizbar (fork): order inside a numbered folder. */}
+                  {canReorder && openFolder && (
+                    <span className="mr-auto flex items-center">
+                      <Button
+                        variant="ghost"
+                        aria-label={t("Move up")}
+                        title={t("Move up")}
+                        disabled={openFolder.sets.indexOf(set.id) === 0}
+                        onClick={() => void moveInFolder(set.id, -1)}
+                      >
+                        <ChevronUp aria-hidden className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        aria-label={t("Move down")}
+                        title={t("Move down")}
+                        disabled={openFolder.sets.indexOf(set.id) === openFolder.sets.length - 1}
+                        onClick={() => void moveInFolder(set.id, 1)}
+                      >
+                        <ChevronDown aria-hidden className="h-4 w-4" />
+                      </Button>
+                    </span>
+                  )}
+                  <MoveToFolder
+                    folders={folders}
+                    currentFolder={folderOf.get(set.id)?.id ?? null}
+                    onMove={(folder) =>
+                      void quizbar.setFolder(set.id, folder).then(reloadFolders)
+                    }
+                  />
                   {set.has_results && (
                     <Link
                       to={`/sets/${set.id}/results`}

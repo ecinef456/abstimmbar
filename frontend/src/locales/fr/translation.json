@@ -1279,5 +1279,21 @@
   "Only image files (including SVG).": "Uniquement des fichiers image (SVG compris).",
   "Room language": "Langue de la salle",
   "Automatic (each person's own language)": "Automatique (langue de chaque personne)",
-  "Participants' phones and the beamer are shown in this language.": "Les téléphones des participants et l'écran s'affichent dans cette langue."
+  "Participants' phones and the beamer are shown in this language.": "Les téléphones des participants et l'écran s'affichent dans cette langue.",
+  "Folders": "Dossiers",
+  "All sets": "Toutes les séries",
+  "Not in a folder": "Hors dossier",
+  "New folder": "Nouveau dossier",
+  "e.g. Week 5": "p. ex. Semaine 5",
+  "Folder name": "Nom du dossier",
+  "Numbered order": "Ordre numéroté",
+  "Rename folder": "Renommer le dossier",
+  "Sets keep a fixed order; “Next quiz” follows it.": "Les séries gardent un ordre fixe ; « Quiz suivant » le suit.",
+  "Sets are listed with the normal sort.": "Les séries sont affichées avec le tri habituel.",
+  "Delete folder": "Supprimer le dossier",
+  "Delete folder {{title}}? The question sets stay in the room.": "Supprimer le dossier {{title}} ? Les séries de questions restent dans la salle.",
+  "Move to folder": "Déplacer vers un dossier",
+  "This folder is empty.": "Ce dossier est vide.",
+  "Next quiz: {{title}}": "Quiz suivant : {{title}}",
+  "N: next quiz": "N : quiz suivant"
 }

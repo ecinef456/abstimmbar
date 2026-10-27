@@ -287,3 +287,79 @@ class ParticipantLanguageTests(Base):
         self.client.cookies["django_language"] = "fr"
         resp = self.client.get("/api/whoami/")
         self.assertNotEqual(resp.get("Content-Language"), "fr")
+
+
+class FolderTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+        self.sets = [self.question_set] + [
+            QuestionSet.objects.create(room=self.room, title=f"Woche {n}") for n in (2, 3, 4)
+        ]
+        for qs in self.sets[1:]:
+            Question.objects.create(question_set=qs, kind=Question.Kind.SINGLE_CHOICE, text="q")
+
+    def api(self, method, url, data=None):
+        return getattr(self.client, method)(
+            f"/api/quizbar/{url}", data or {}, content_type="application/json"
+        )
+
+    def make_folder(self, ordered=True, sets=()):
+        folder = self.api("post", f"rooms/{self.room.pk}/folders/", {"title": "HS26", "ordered": ordered}).json()
+        for qs in sets:
+            self.assertEqual(self.api("post", f"sets/{qs.pk}/folder/", {"folder": folder["id"]}).status_code, 200)
+        return folder["id"]
+
+    def test_create_place_list_and_reorder(self):
+        fid = self.make_folder(sets=self.sets[:3])
+        data = self.api("get", f"rooms/{self.room.pk}/folders/").json()["folders"]
+        self.assertEqual(data[0]["sets"], [s.pk for s in self.sets[:3]])
+        new_order = [self.sets[2].pk, self.sets[0].pk, self.sets[1].pk]
+        self.assertEqual(self.api("post", f"folders/{fid}/order/", {"sets": new_order}).status_code, 200)
+        self.assertEqual(self.api("get", f"rooms/{self.room.pk}/folders/").json()["folders"][0]["sets"], new_order)
+        # The list must be exactly the folder's sets.
+        self.assertEqual(self.api("post", f"folders/{fid}/order/", {"sets": new_order[:2]}).status_code, 400)
+
+    def test_next_skips_unpresentable_and_stops_at_end(self):
+        check = QuestionSet.objects.create(room=self.room, title="Lernkontrolle", type="self_check")
+        Question.objects.create(question_set=check, kind=Question.Kind.SINGLE_CHOICE, text="q")
+        empty = QuestionSet.objects.create(room=self.room, title="leer")
+        self.make_folder(sets=[self.sets[0], check, empty, self.sets[1]])
+        info = self.api("get", f"sets/{self.sets[0].pk}/next/").json()
+        self.assertEqual(info["number"], 1)
+        self.assertEqual(info["next"]["id"], self.sets[1].pk)
+        self.assertEqual(info["next"]["number"], 4)
+        self.assertIsNone(self.api("get", f"sets/{self.sets[1].pk}/next/").json()["next"])
+
+    def test_unordered_folder_has_no_next(self):
+        self.make_folder(ordered=False, sets=self.sets[:2])
+        info = self.api("get", f"sets/{self.sets[0].pk}/next/").json()
+        self.assertIsNone(info["number"])
+        self.assertIsNone(info["next"])
+
+    def test_move_out_and_delete_folder_keeps_sets(self):
+        fid = self.make_folder(sets=self.sets[:2])
+        self.api("post", f"sets/{self.sets[0].pk}/folder/", {"folder": None})
+        self.assertEqual(self.api("get", f"rooms/{self.room.pk}/folders/").json()["folders"][0]["sets"], [self.sets[1].pk])
+        self.assertEqual(self.api("delete", f"folders/{fid}/").status_code, 204)
+        self.assertEqual(QuestionSet.objects.filter(room=self.room).count(), 4)
+
+    def test_duplicate_lands_after_original(self):
+        fid = self.make_folder(sets=self.sets[:3])
+        resp = self.client.post(
+            f"/api/question-sets/{self.sets[0].pk}/duplicate/", {}, content_type="application/json"
+        )
+        clone = resp.json()["id"]
+        sets = self.api("get", f"rooms/{self.room.pk}/folders/").json()["folders"][0]["sets"]
+        self.assertEqual(sets, [self.sets[0].pk, clone, self.sets[1].pk, self.sets[2].pk])
+        self.assertTrue(fid)
+
+    def test_other_users_and_other_rooms_refused(self):
+        fid = self.make_folder()
+        other_room = Room.objects.create(title="Other")
+        other_room.owners.add(self.owner)
+        foreign = QuestionSet.objects.create(room=other_room, title="x")
+        self.assertEqual(self.api("post", f"sets/{foreign.pk}/folder/", {"folder": fid}).status_code, 400)
+        self.client.force_login(User.objects.create_user(username="eve"))
+        self.assertEqual(self.api("get", f"rooms/{self.room.pk}/folders/").status_code, 404)
+        self.assertEqual(self.api("delete", f"folders/{fid}/").status_code, 404)

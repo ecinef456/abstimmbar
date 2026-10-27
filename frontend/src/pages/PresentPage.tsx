@@ -20,6 +20,7 @@ import {
   quizbar,
   results,
   type LiveCounter,
+  type SetNextInfo,
   type LiveState,
   type Question,
   type RunResults,
@@ -313,6 +314,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       setPresentResultsAfter(setData.present_results_after);
       // quizbar (fork): the room's language, already for the start dialog.
       api.getRoom(setData.room).then((room) => setFetchedRoomLanguage(room.language), () => {});
+      // quizbar (fork): the next quiz of an ordered folder ("Next quiz").
+      quizbar.nextSet(id).then((info) => setNextQuiz(info.next), () => {});
       // Offer the start dialog whenever we'd otherwise touch stored answers:
       // either there are results and no run is active, OR the run we'd resume
       // already carries answers (presenter left it unfinished) — so archiving
@@ -357,6 +360,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // quizbar (fork): present in the room's language (phones use it too), and
   // give the presenter their own UI language back when leaving.
   const [fetchedRoomLanguage, setFetchedRoomLanguage] = useState<string>("");
+  const [nextQuiz, setNextQuiz] = useState<SetNextInfo["next"]>(null);
   const roomLanguage = state?.room?.language ?? fetchedRoomLanguage;
   const ownLanguage = useRef(i18n.resolvedLanguage ?? i18n.language);
   useEffect(() => {
@@ -1445,6 +1449,19 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     }
     leavePresentation();
   }, [pendingFinish, runId, leavePresentation]);
+  // quizbar (fork): end this quiz and open the next one's start screen
+  // (lobby with QR code) — a full page load, so it starts cleanly.
+  const goNextQuiz = useCallback(async () => {
+    if (!nextQuiz) return;
+    if (pendingFinish && runId) {
+      try {
+        await live.control(runId, { phase: "finished" });
+      } catch {
+        // go on anyway — the run stays open and can be ended later
+      }
+    }
+    window.location.assign(`/sets/${nextQuiz.id}/present`);
+  }, [nextQuiz, pendingFinish, runId]);
   const backFromClosing = useCallback(() => {
     setPendingFinish(false);
     setEnded(false);
@@ -1486,7 +1503,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       // On the closing slide (#32) any key ends and leaves — except "←",
       // which goes back to the last question while the run isn't finished.
       if (ended) {
-        if (key === "arrowleft" && pendingFinish) backFromClosing();
+        if (key === "n" && nextQuiz) void goNextQuiz();
+        else if (key === "arrowleft" && pendingFinish) backFromClosing();
         else if (!["shift", "control", "alt", "meta", "tab", "capslock"].includes(key)) void finishAndLeave();
         return;
       }
@@ -1550,7 +1568,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         void leave();
       }
     },
-    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, toggleJustification, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave],
+    [leave, runId, phase, activeKind, requestGoto, goPrev, advanceNext, confirmInterstitial, interstitial, selfPaced, ended, jumpToResults, cycleView, toggleSolution, toggleJustification, startFromLobby, showResults, showJoin, showAiPanel, showModPanel, walk, walkAdvance, walkBack, cycleWalkView, leavePresentation, mmShown, mxShown, stopCloses, pendingFinish, backFromClosing, finishAndLeave, nextQuiz, goNextQuiz],
   );
 
   useEffect(() => {
@@ -1743,15 +1761,32 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
             )}
             <button
               onClick={() => void finishAndLeave()}
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-400 px-6 py-3 text-lg font-semibold text-slate-900 hover:bg-brand-500"
+              className={
+                nextQuiz
+                  ? "inline-flex items-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-lg font-medium text-slate-700 hover:bg-slate-50"
+                  : "inline-flex items-center gap-2 rounded-xl bg-brand-400 px-6 py-3 text-lg font-semibold text-slate-900 hover:bg-brand-500"
+              }
             >
               {t("Back to overview")}
             </button>
+            {/* quizbar (fork): next set of the ordered folder. */}
+            {nextQuiz && (
+              <button
+                onClick={() => void goNextQuiz()}
+                className="inline-flex items-center gap-2 rounded-xl bg-brand-400 px-6 py-3 text-lg font-semibold text-slate-900 hover:bg-brand-500"
+              >
+                {t("Next quiz: {{title}}", {
+                  title: `${nextQuiz.number} – ${localizedText(nextQuiz.title)}`,
+                })}
+                <ChevronRight aria-hidden className="h-5 w-5" />
+              </button>
+            )}
           </div>
           <p className="text-sm text-slate-500">
             {pendingFinish
               ? t("Any key ends the survey · ← back to the last question")
               : t("Any key returns to the overview")}
+            {nextQuiz && <> · {t("N: next quiz")}</>}
           </p>
         </div>
       </Shell>
