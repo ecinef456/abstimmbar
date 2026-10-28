@@ -589,7 +589,7 @@ export default function LibraryPage() {
                   />
                   {selected.length
                     ? t("{{count}} selected", { count: selected.length })
-                    : t("Select all shown")}
+                    : t("Select all {{count}} found", { count: visible.length })}
                 </label>
                 {selected.length > 0 && (
                   <Button

@@ -346,7 +346,7 @@ def listing(owner):
         qs.pk: qs
         for qs in QuestionSet.objects.filter(pk__in=set_ids).select_related("room")
     }
-    from quizbar import i18n, justifications, stats
+    from quizbar import i18n, stats
 
     members = {}
     for entry_id, question_id in QuestionLineage.objects.filter(entry__owner=owner).values_list(
@@ -354,6 +354,17 @@ def listing(owner):
     ):
         members.setdefault(entry_id, []).append(question_id)
     answer_stats = stats.library(members)
+
+    # In bulk (a few queries for the whole library instead of several per
+    # question): translations and justifications.
+    from .models import OptionJustification
+
+    i18n.preload([entry.master for entry in entries])
+    whys = dict(
+        OptionJustification.objects.filter(
+            option__question_id__in=[entry.master_id for entry in entries]
+        ).values_list("option_id", "text")
+    )
 
     out = []
     for entry in entries:
@@ -378,7 +389,7 @@ def listing(owner):
                             english["options"][option.pk].justification
                             if option.pk in english["options"]
                             and english["options"][option.pk].justification
-                            else justifications.text_for(option)
+                            else whys.get(option.pk, "")
                         ),
                     }
                     for option in master.options.all()

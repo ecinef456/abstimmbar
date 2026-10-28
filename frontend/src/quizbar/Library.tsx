@@ -5,13 +5,14 @@
  *  LibraryField  — the question editor's "In my library" + tags.
  *  LibraryBrowser — search / tag / kind filters over the entries, used by
  *                   the library page (manage) and the set page's picker. */
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { BarChart3, Check, Pencil, Search, Tag, Trash2, X } from "lucide-react";
+import { BarChart3, Check, ChevronDown, ChevronUp, Pencil, Search, Tag, Trash2, X } from "lucide-react";
 import { localizedText, RichText, stripHtml } from "@basicbar/ui";
 import type { LibraryEntry, LibraryTag } from "../api";
 import { Button, ConfirmDialog, Select, TextInput } from "../components/ui";
+import { Pager } from "../components/Pager";
 import { mathHtml, MathText } from "../math";
 
 export const KIND_LABEL_KEYS: Record<string, string> = {
@@ -209,15 +210,25 @@ function readTagMode(): boolean {
   }
 }
 
+const SHOW_TAGS_KEY = "quizbar.library.showTags";
+const PAGE_SIZES = [30, 60, 120];
+
+// Lower-case search text of an entry, built once per entry object.
+const haystacks = new WeakMap<LibraryEntry, string>();
+
 export function entryMatches(entry: LibraryEntry, query: string): boolean {
   if (!query) return true;
-  const haystack = [
-    stripHtml(localizedText(entry.text)),
-    ...entry.options.map((o) => localizedText(o.text)),
-    ...entry.tags.map((tag) => tag.name),
-  ]
-    .join(" ")
-    .toLowerCase();
+  let haystack = haystacks.get(entry);
+  if (haystack === undefined) {
+    haystack = [
+      stripHtml(localizedText(entry.text)),
+      ...entry.options.map((o) => localizedText(o.text)),
+      ...entry.tags.map((tag) => tag.name),
+    ]
+      .join(" ")
+      .toLowerCase();
+    haystacks.set(entry, haystack);
+  }
   return query
     .toLowerCase()
     .split(/\s+/)
@@ -270,6 +281,27 @@ export function LibraryBrowser({
   };
   const [tagFilter, setTagFilter] = useState<TagFilter>("all");
   const [kind, setKind] = useState("");
+  // Typing stays fast: the (long) list follows the search a moment later.
+  const deferredQuery = useDeferredValue(query);
+  // The tag chips (hundreds of them) are folded away by default.
+  const [showTags, setShowTagsState] = useState(() => {
+    try {
+      return window.localStorage.getItem(SHOW_TAGS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setShowTags = (on: boolean) => {
+    setShowTagsState(on);
+    try {
+      window.localStorage.setItem(SHOW_TAGS_KEY, on ? "1" : "0");
+    } catch {
+      // Private mode: not remembered.
+    }
+  };
+  // Only one page of cards is drawn; filters always search everything.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -288,7 +320,7 @@ export function LibraryBrowser({
   }, [usable]);
   const kinds = useMemo(() => Array.from(new Set(usable.map((e) => e.kind))), [usable]);
   const vocabulary = useMemo(() => new Set(tags.map((tag) => tag.name)), [tags]);
-  const terms = tagMode ? tagTerms(query) : [];
+  const terms = tagMode ? tagTerms(deferredQuery) : [];
   const visible = only
     ? usable.filter((entry) => only.includes(entry.id))
     : usable.filter(
@@ -296,8 +328,12 @@ export function LibraryBrowser({
           (tagFilter === "all" ||
             (tagFilter === "untagged" ? !entry.tags.length : entry.tags.some((tag) => tag.id === tagFilter))) &&
           (!kind || entry.kind === kind) &&
-          (tagMode ? entryHasTags(entry, terms, vocabulary) : entryMatches(entry, query.trim())),
+          (tagMode ? entryHasTags(entry, terms, vocabulary) : entryMatches(entry, deferredQuery.trim())),
       );
+  useEffect(() => setPage(1), [deferredQuery, tagFilter, kind, tagMode, only]);
+  const pages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const shownPage = Math.min(page, pages);
+  const pageEntries = visible.slice((shownPage - 1) * pageSize, shownPage * pageSize);
   // Tag mode: complete the term being typed from the existing tags.
   const typing = tagMode ? normalizeTag(query.split(",").pop() ?? "") : "";
   const completions =
@@ -392,7 +428,7 @@ export function LibraryBrowser({
           {t("To sort")} <span className="tabular-nums opacity-70">{counts.untagged}</span>
         </button>
         {sortTags(tags)
-          .filter((tag) => counts.byTag.has(tag.id) || tagFilter === tag.id)
+          .filter((tag) => (showTags && counts.byTag.has(tag.id)) || tagFilter === tag.id)
           .map((tag) => (
             <button
               key={tag.id}
@@ -406,6 +442,17 @@ export function LibraryBrowser({
               <span className="tabular-nums opacity-70">{counts.byTag.get(tag.id) ?? 0}</span>
             </button>
           ))}
+        {counts.byTag.size > 0 && (
+          <button
+            type="button"
+            aria-expanded={showTags}
+            onClick={() => setShowTags(!showTags)}
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-950/40"
+          >
+            {showTags ? <ChevronUp aria-hidden className="h-4 w-4" /> : <ChevronDown aria-hidden className="h-4 w-4" />}
+            {showTags ? t("Hide the tag list") : t("Show the tag list ({{count}})", { count: counts.byTag.size })}
+          </button>
+        )}
       </div>
 
       {currentTag && (onRenameTag || onDeleteTag) && (
@@ -491,13 +538,27 @@ export function LibraryBrowser({
         </p>
       ) : (
         <ul className={`grid gap-3 ${columns ? "sm:grid-cols-2 lg:grid-cols-3" : ""}`}>
-          {visible.map((entry) => (
+          {pageEntries.map((entry) => (
             <li key={entry.id} className="min-w-0">
               {renderEntry(entry)}
             </li>
           ))}
         </ul>
       )}
+      <Pager
+        page={shownPage}
+        pageSize={pageSize}
+        count={visible.length}
+        onPage={(next) => {
+          setPage(next);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        onPageSize={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
+        options={PAGE_SIZES}
+      />
     </div>
   );
 }

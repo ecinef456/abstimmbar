@@ -15,7 +15,10 @@ export { hasMath };
 
 // The presenter re-renders often (SSE ticks, countdown); cache the results.
 const cache = new Map<string, string>();
-const CACHE_MAX = 300;
+// quizbar (fork): large enough for a whole question library (text, answers
+// and justifications of a few hundred questions), else it is cleared on
+// every render and all math is typeset again.
+const CACHE_MAX = 5000;
 
 /** Render math inside a (server-sanitized) HTML fragment; returns HTML. */
 export function mathHtml(html: string): string {

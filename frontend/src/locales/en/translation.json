@@ -78,5 +78,7 @@
   "{{count}} tags changed._one": "{{count}} tag changed.",
   "{{count}} tags changed._other": "{{count}} tags changed.",
   "Delete {{count}} tags from all their questions? The questions stay in the library._one": "Delete {{count}} tag from all its questions? The questions stay in the library.",
-  "Delete {{count}} tags from all their questions? The questions stay in the library._other": "Delete {{count}} tags from all their questions? The questions stay in the library."
+  "Delete {{count}} tags from all their questions? The questions stay in the library._other": "Delete {{count}} tags from all their questions? The questions stay in the library.",
+  "Select all {{count}} found_one": "Select the {{count}} found",
+  "Select all {{count}} found_other": "Select all {{count}} found"
 }

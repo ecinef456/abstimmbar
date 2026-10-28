@@ -163,6 +163,12 @@ Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
   show only the 25 most recently changed sets) and *From the library*.
 - **Library-only questions** (imported, or whose sets were deleted) live in
   a hidden set and open in the normal editor from the library.
+- **Fast with hundreds of questions:** 30 cards per page (60 / 120
+  selectable) while search, tags and "select all found" always cover the
+  whole library; the tag chips are folded behind *Show the tag list*; the
+  list follows typing a moment later instead of on every key; the server
+  loads translations and justifications in bulk (300 questions: about
+  2 s → 0.25 s), and typeset math is cached for the whole library.
 - **Cards:** three per row on wide screens (two on tablets, one on
   phones); images in a card are at most 10rem high, and a long question is
   cut with **Show all** so it does not stretch its row.

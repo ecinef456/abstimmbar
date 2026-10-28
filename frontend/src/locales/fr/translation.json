@@ -1477,5 +1477,9 @@
   "Rename or delete": "Renommer ou supprimer",
   "Delete {{count}} tags from all their questions? The questions stay in the library._one": "Supprimer {{count}} tag de toutes ses questions ? Les questions restent dans la bibliothèque.",
   "Delete {{count}} tags from all their questions? The questions stay in the library._other": "Supprimer {{count}} tags de toutes leurs questions ? Les questions restent dans la bibliothèque.",
-  "Many quizzes at once, straight into the library: Import Typst quizzes (.zip) — each question is tagged with its file name.": "Plusieurs quiz d’un coup, directement dans la bibliothèque : Importer des quiz Typst (.zip) – chaque question reçoit son nom de fichier comme tag."
+  "Many quizzes at once, straight into the library: Import Typst quizzes (.zip) — each question is tagged with its file name.": "Plusieurs quiz d’un coup, directement dans la bibliothèque : Importer des quiz Typst (.zip) – chaque question reçoit son nom de fichier comme tag.",
+  "Hide the tag list": "Masquer la liste des tags",
+  "Show the tag list ({{count}})": "Afficher la liste des tags ({{count}})",
+  "Select all {{count}} found_one": "Sélectionner la question trouvée",
+  "Select all {{count}} found_other": "Sélectionner les {{count}} trouvées"
 }
