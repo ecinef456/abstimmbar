@@ -291,19 +291,20 @@ def library_tag(request, tag_id):
     names = library.clean_tag_names([request.data.get("name")])
     if not names:
         return Response({"name": "Required."}, status=400)
-    other = (
-        LibraryTag.objects.filter(owner=request.user, name__iexact=names[0])
-        .exclude(pk=tag.pk)
-        .first()
-    )
-    if other is not None:
-        for entry in tag.entries.all():
-            entry.tags.add(other)
-        tag.delete()
-    else:
-        tag.name = names[0]
-        tag.save(update_fields=["name"])
+    library.rename_tag(request.user, tag, names[0])
     return Response({"tags": library.tag_listing(request.user)})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def library_tags_replace(request):
+    """{find, replace, whole, apply} — search and replace in tag names (an
+    empty result deletes the tag). Without ``apply``: just the preview."""
+    data = request.data
+    plan = library.replace_in_tags(
+        request.user, data.get("find"), data.get("replace"), bool(data.get("whole")), bool(data.get("apply"))
+    )
+    return Response({"changes": plan, "tags": library.tag_listing(request.user)})
 
 
 @api_view(["POST"])

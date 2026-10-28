@@ -16,6 +16,7 @@ urlpatterns = [
     path("library/", views.library_list),
     path("library/entries/<int:entry_id>/", views.library_entry),
     path("library/tags/", views.library_bulk_tags),
+    path("library/tags/replace/", views.library_tags_replace),
     path("library/tags/<int:tag_id>/", views.library_tag),
     path("library/insert/", views.library_insert),
     path("library/import/", views.import_library),

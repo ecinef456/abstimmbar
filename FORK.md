@@ -151,6 +151,18 @@ Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
 - **Selection:** ticked questions stay selected while you change the
   search; **Show only the selected** lists exactly them (to check before
   copying or exporting).
+- **Tags tab:** the library has two tabs, *Questions* and *Tags*. *Tags*
+  lists every tag A–Z (four per row) with its number of questions — click
+  one to see its questions — and has **search and replace** for tag names:
+  "Find" → "Replace with", inside every tag containing the text, or *whole
+  tag only*. A preview shows old → new before anything changes; a tag that
+  becomes an existing one is merged into it, a tag replaced by nothing is
+  **deleted** (its questions keep their other tags).
+- **Copying questions into a set:** *Add questions from another set …*
+  has two tabs, *From a room* (every room, also archived ones — it used to
+  show only the 25 most recently changed sets) and *From the library*.
+- **Library-only questions** (imported, or whose sets were deleted) live in
+  a hidden set and open in the normal editor from the library.
 - **Cards:** three per row on wide screens (two on tablets, one on
   phones); images in a card are at most 10rem high, and a long question is
   cut with **Show all** so it does not stretch its row.
@@ -278,9 +290,9 @@ The package lives in `frontend/public/quizbar/` (`quizbar.typ`, `example.typ`,
 - **Many quizzes straight into the library:** library page → *Import Typst
   quizzes (.zip)*. One zip with any number of quizzes, each as
   `name.en.typ` / `name.de.typ` / `name.fr.typ` (same folder, same name)
-  plus their figures, 150 MB at most. Each quiz becomes a set of the
-  archived room **Library imports** (so its questions stay editable);
-  every question gets its own tags plus the file name as a tag
+  plus their figures, 150 MB at most. The questions go into the library
+  only — no room, no set; they are edited from the library (pencil) like
+  any other. Every question gets its own tags plus the file name as a tag
   (`kinematics`). Questions already in the library (same kind, text and
   answers) are not added again — they only get the tags. A quiz whose
   language versions do not match is skipped with a message; the others

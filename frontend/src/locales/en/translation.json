@@ -70,5 +70,13 @@
   "{{count}} participants_one": "{{count}} participant",
   "{{count}} participants_other": "{{count}} participants",
   "{{count}} completed attempts_one": "{{count}} completed attempt",
-  "{{count}} completed attempts_other": "{{count}} completed attempts"
+  "{{count}} completed attempts_other": "{{count}} completed attempts",
+  "Delete {{count}} tags_one": "Delete {{count}} tag",
+  "Delete {{count}} tags_other": "Delete {{count}} tags",
+  "Change {{count}} tags_one": "Change {{count}} tag",
+  "Change {{count}} tags_other": "Change {{count}} tags",
+  "{{count}} tags changed._one": "{{count}} tag changed.",
+  "{{count}} tags changed._other": "{{count}} tags changed.",
+  "Delete {{count}} tags from all their questions? The questions stay in the library._one": "Delete {{count}} tag from all its questions? The questions stay in the library.",
+  "Delete {{count}} tags from all their questions? The questions stay in the library._other": "Delete {{count}} tags from all their questions? The questions stay in the library."
 }

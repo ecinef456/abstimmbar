@@ -589,7 +589,8 @@ class LibraryTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             self.room.delete()
         [entry] = self.entries()
-        self.assertIsNone(entry["master_set"])
+        # kept in the hidden library set, still editable from the library
+        self.assertEqual(entry["master_set"], self.owner.qb_library_vault.question_set_id)
         self.assertEqual(entry["used_in"], [])
         self.assertEqual(entry["tags"], [{"id": entry["tags"][0]["id"], "name": "mechanics"}])
         self.assertEqual(entry["options"][0]["text"]["de"], "E=mc^2")
@@ -1758,9 +1759,17 @@ class LibraryImportTests(TestCase):
         from . import i18n
 
         self.assertIn("Wie schnell", i18n.question_map(speed.master)["de"])
-        room = speed.master.question_set.room
-        self.assertEqual(room.title, "Library imports")
-        self.assertTrue(room.archived_by.filter(pk=self.owner.pk).exists())
+        # straight into the library: the hidden set, no room of its own
+        from . import library
+
+        self.assertEqual(speed.master.question_set_id, library.vault_for(self.owner).pk)
+        self.assertEqual(self.client.get("/api/rooms/").json()["count"], 0)
+        self.assertEqual(self.client.get("/api/question-sets/").json()["count"], 0)
+        # ... and editable from the library (pencil → question editor)
+        listing = self.client.get("/api/quizbar/library/").json()["entries"]
+        mine = next(e for e in listing if e["id"] == speed.pk)
+        self.assertEqual(mine["master_set"], speed.master.question_set_id)
+        self.assertEqual(self.client.get(f"/api/questions/{speed.master_id}/").status_code, 200)
         # again: everything is already there
         again = self.upload(files).json()
         self.assertEqual((again["questions"], again["skipped"]), (0, 4))
@@ -1768,3 +1777,39 @@ class LibraryImportTests(TestCase):
         waves = next(e for e in entries if "Which are waves" in e.master.text)
         # in both quizzes: tagged with both file names
         self.assertEqual(sorted(t.name for t in waves.tags.all()), ["kinematics", "oscillations"])
+
+
+class TagReplaceTests(TestCase):
+    """Search and replace (and delete) in library tag names."""
+
+    def setUp(self):
+        from . import library
+
+        self.owner = User.objects.create_user(username="tg")
+        self.client.force_login(self.owner)
+        room = Room.objects.create(title="R", owner=self.owner)
+        room.owners.add(self.owner)
+        question_set = QuestionSet.objects.create(room=room, title="S")
+        self.entries = []
+        for number, tags in enumerate((["electro-magnetism", "week-3"], ["electromagnetism"], ["junk", "week-3"])):
+            question = Question.objects.create(question_set=question_set, kind="single_choice", text=f"<p>{number}</p>")
+            entry = library.entry_of(question)
+            library.set_tags(entry, tags)
+            self.entries.append(entry)
+
+    def post(self, **data):
+        return self.client.post("/api/quizbar/library/tags/replace/", data, content_type="application/json").json()
+
+    def test_preview_replace_merge_delete(self):
+        preview = self.post(find="electro-", replace="electro")
+        self.assertEqual([(c["name"], c["new"]) for c in preview["changes"]], [("electro-magnetism", "electromagnetism")])
+        self.assertTrue(self.entries[0].tags.filter(name="electro-magnetism").exists())  # nothing changed yet
+        self.post(find="electro-", replace="electro", apply=True)
+        names = {t["name"]: t["count"] for t in self.client.get("/api/quizbar/library/").json()["tags"]}
+        self.assertEqual(names.get("electromagnetism"), 2)  # merged
+        self.assertNotIn("electro-magnetism", names)
+        # whole tag replaced by nothing = deleted
+        result = self.post(find="junk", replace="", whole=True, apply=True)
+        self.assertIsNone(result["changes"][0]["new"])
+        self.assertFalse(any(t["name"] == "junk" for t in result["tags"]))
+        self.assertEqual(sorted(t.name for t in self.entries[2].tags.all()), ["week-3"])

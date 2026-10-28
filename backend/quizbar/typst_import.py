@@ -872,35 +872,20 @@ def _same_question_key(kind, text_html, options):
     return (kind, plain(text_html), tuple((plain(o[0]), bool(o[1])) for o in options))
 
 
-IMPORT_ROOM_TITLE = "Library imports"
-
-
-def _import_room(user):
-    """The teacher's (archived) room that holds quizzes imported straight
-    into the library: one set per quiz, so the questions stay editable."""
-    from rooms.models import Room
-
-    room = Room.objects.filter(owner=user, title=IMPORT_ROOM_TITLE).order_by("id").first()
-    if room is None:
-        room = Room.objects.create(title=IMPORT_ROOM_TITLE, title_de=IMPORT_ROOM_TITLE, owner=user)
-        room.owners.add(user)
-        room.archived_by.add(user)
-    return room
-
-
 def import_library(user, uploads):
-    """Import any number of quizzes (each with its language versions) into
-    ``user``'s library. Each quiz becomes a set of the archived room
-    "Library imports"; every question gets its own tags plus the quiz's file
-    name as a tag (e.g. "kinematics"). Questions already in the library are
-    not added again, they only get those tags. Returns a summary dict."""
+    """Import any number of quizzes (each with its language versions)
+    straight into ``user``'s library — no room, no set: the questions are
+    kept in the library's hidden set and are edited from the library. Each
+    question gets its own tags plus the quiz's file name as a tag (e.g.
+    "kinematics"). Questions already in the library are not added again,
+    they only get those tags. Returns a summary dict."""
     from django.db import transaction
 
     from common.i18n_fields import translated_map
     from rooms.transfer import EXPORT_FORMAT, import_set
 
     from . import library
-    from .models import LibraryEntry
+    from .models import LibraryEntry, QuestionLineage
 
     files = collect_files(uploads, LIBRARY_MAX_BYTES, LIBRARY_MAX_ENTRIES)
     groups = {}
@@ -921,11 +906,10 @@ def import_library(user, uploads):
         known.setdefault(key, entry)
 
     def add_tags(entry, names):
-        current = [tag.name for tag in entry.tags.all()]
-        library.set_tags(entry, [*current, *names])
+        library.set_tags(entry, [*(tag.name for tag in entry.tags.all()), *names])
 
-    room = None
-    summary = {"quizzes": 0, "questions": 0, "skipped": 0, "warnings": [], "room": None}
+    vault = library.vault_for(user)
+    summary = {"quizzes": 0, "questions": 0, "skipped": 0, "warnings": []}
     for (folder, stem), sources in sorted(groups.items()):
         label = posixpath.join(folder, stem) if folder else stem
         try:
@@ -934,11 +918,11 @@ def import_library(user, uploads):
             summary["warnings"].append(f"{label}: {exc}")
             continue
         _, _, quiz = versions[0]
+        topic = library.normalize_tag(stem)
         keys = [
             _same_question_key(q.kind, q.text_html, [(o["text"], o["is_correct"]) for o in q.options])
             for q in quiz.questions
         ]
-        topic = library.normalize_tag(stem)
         kept = []
         for index, key in enumerate(keys):
             names = [*quiz.questions[index].tags, topic] if topic else quiz.questions[index].tags
@@ -947,31 +931,37 @@ def import_library(user, uploads):
                 add_tags(known[key], names)
             else:
                 kept.append(index)
+        summary["quizzes"] += 1
         if not kept:
             continue
         with transaction.atomic():
             items, figure_html, warnings = build_items(files, versions, user)
             summary["warnings"] += [f"{label}: {w}" for w in warnings]
-            room = room or _import_room(user)
-            question_set = import_set(
-                room,
+            # Built as a set (all of import_set's cleaning), then moved into
+            # the library's hidden set.
+            temporary = import_set(
+                vault.room,
                 {
                     "format": EXPORT_FORMAT,
-                    "title": quiz.title or stem,
-                    "description": quiz.description_html,
-                    "type": quiz.set_type,
+                    "title": stem,
+                    "type": "live_poll",
                     "questions": [items[i] for i in kept],
                 },
             )
-            created = list(question_set.questions.order_by("position", "id"))
+            position = vault.questions.count()
+            created = list(temporary.questions.order_by("position", "id"))
             for question, index in zip(created, kept, strict=True):
-                entry = library.entry_of(question)
+                question.question_set = vault
+                question.section = None
+                question.position = position
+                question.save(update_fields=["question_set", "section", "position"])
+                position += 1
+                entry = LibraryEntry.objects.create(owner=user, master=question)
+                QuestionLineage.objects.create(question=question, entry=entry)
                 parsed = quiz.questions[index]
-                if entry is not None:
-                    library.set_tags(entry, [*parsed.tags, topic] if topic else parsed.tags)
-                    known[keys[index]] = entry
+                library.set_tags(entry, [*parsed.tags, topic] if topic else parsed.tags)
                 save_translations(question, index, versions, figure_html)
-        summary["quizzes"] += 1
+                known[keys[index]] = entry
+            temporary.delete()
         summary["questions"] += len(kept)
-    summary["room"] = room.pk if room else None
     return summary

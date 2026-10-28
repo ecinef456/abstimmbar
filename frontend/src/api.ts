@@ -1127,8 +1127,10 @@ export const api = {
       { method: "POST", body: JSON.stringify({ text }) },
     ),
   /** All of the user's sets (move target picker) — no room filter. */
+  // quizbar (fork): every set (the default page of 25 hid older rooms in
+  // "Add questions from another set").
   listAllQuestionSets: () =>
-    request<Paginated<QuestionSet>>("/api/question-sets/"),
+    request<Paginated<QuestionSet>>("/api/question-sets/?page_size=1000"),
 
   shareQuestionSet: (id: number, enabled: boolean) =>
     request<{ share_token: string | null }>(`/api/question-sets/${id}/share/`, {
@@ -1935,6 +1937,8 @@ export interface QuestionLibraryInfo {
 export interface LibraryTag {
   id: number;
   name: string;
+  /** Questions with this tag (tag listing only). */
+  count?: number;
 }
 export interface LibraryEntry {
   id: number;
@@ -2104,6 +2108,13 @@ export const quizbar = {
       { method: "POST", body },
     );
   },
+  /** Search and replace in tag names; an empty result deletes the tag.
+   *  Without `apply` only the preview. */
+  replaceTags: (data: { find: string; replace: string; whole: boolean; apply: boolean }) =>
+    request<{ changes: { id: number; name: string; new: string | null; questions: number }[]; tags: LibraryTag[] }>(
+      "/api/quizbar/library/tags/replace/",
+      { method: "POST", body: JSON.stringify(data) },
+    ),
   insertFromLibrary: (setId: number, entries: number[]) =>
     request<{ inserted: number[]; skipped: number[] }>("/api/quizbar/library/insert/", {
       method: "POST",

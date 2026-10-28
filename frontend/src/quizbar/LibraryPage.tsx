@@ -20,6 +20,7 @@ import HomeCrumb from "../components/HomeCrumb";
 import { EntryContent, EntryStats, LibraryBrowser, TagInput, UsedIn } from "./Library";
 import Modal from "./Modal";
 import ExportDialog from "./ExportDialog";
+import TagsPanel from "./TagsPanel";
 
 type LibraryData = { entries: LibraryEntry[]; tags: LibraryTag[] };
 
@@ -137,11 +138,14 @@ export function LibraryPickerDialog({
   allowedKinds,
   onClose,
   onInserted,
+  onFromRoom,
 }: {
   setId: number;
   allowedKinds: string[];
   onClose: () => void;
   onInserted: (message: string) => void;
+  /** Switch to copying from another room's set instead. */
+  onFromRoom?: () => void;
 }) {
   const { t } = useTranslation();
   const [data, setData] = useState<LibraryData | null>(null);
@@ -163,6 +167,7 @@ export function LibraryPickerDialog({
 
   return (
     <Modal title={t("Copy questions from the library")} onClose={onClose} wide>
+      {onFromRoom && <SourceSwitch active="library" onRoom={onFromRoom} />}
       {data === null ? (
         <p className="text-sm text-slate-500">{t("Loading …")}</p>
       ) : (
@@ -219,6 +224,41 @@ export function LibraryPickerDialog({
         </Button>
       </div>
     </Modal>
+  );
+}
+
+/** "From a room | From the library" at the top of both copy dialogs. */
+export function SourceSwitch({
+  active,
+  onRoom,
+  onLibrary,
+}: {
+  active: "room" | "library";
+  onRoom?: () => void;
+  onLibrary?: () => void;
+}) {
+  const { t } = useTranslation();
+  const tab = (on: boolean) =>
+    `rounded-md px-3 py-1 text-sm ${
+      on
+        ? "bg-white font-semibold text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
+        : "text-slate-600 hover:text-slate-900 dark:text-slate-300"
+    }`;
+  return (
+    <div role="tablist" className="mb-4 inline-flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+      <button type="button" role="tab" aria-selected={active === "room"} className={tab(active === "room")} onClick={onRoom}>
+        {t("From a room")}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === "library"}
+        className={tab(active === "library")}
+        onClick={onLibrary}
+      >
+        {t("From the library")}
+      </button>
+    </div>
   );
 }
 
@@ -344,6 +384,9 @@ export default function LibraryPage() {
   const [selected, setSelected] = useState<number[]>([]);
   const [insertIds, setInsertIds] = useState<number[] | null>(null);
   const [onlySelected, setOnlySelected] = useState(false);
+  // "Questions" or "Tags" tab; a tag picked on the Tags tab becomes the search.
+  const [tab, setTab] = useState<"questions" | "tags">("questions");
+  const [preset, setPreset] = useState({ query: "", key: 0 });
   const [exporting, setExporting] = useState<{ entries: number[]; label: string } | null>(null);
   const [removing, setRemoving] = useState<LibraryEntry | null>(null);
   const [bulkTags, setBulkTags] = useState<string[]>([]);
@@ -459,7 +502,7 @@ export default function LibraryPage() {
         </a>
         {" — "}
         {t("then import the quiz in a room: ⋮ → Import Typst quiz.")}{" "}
-        {t("Many quizzes at once: Import Typst quizzes (.zip) — they go to the archived room “Library imports”, tagged with their file name.")}
+        {t("Many quizzes at once, straight into the library: Import Typst quizzes (.zip) — each question is tagged with its file name.")}
       </p>
       {notice && (
         <p
@@ -474,129 +517,165 @@ export default function LibraryPage() {
           )}
         </p>
       )}
-      <LibraryBrowser
-        columns
-        only={onlySelected && selected.length ? selected : undefined}
-        entries={data.entries}
-        tags={data.tags}
-        onRenameTag={async (tag, name) => {
-          await quizbar.renameTag(tag.id, name);
-          await reload();
-        }}
-        onDeleteTag={async (tag) => {
-          await quizbar.deleteTag(tag.id);
-          await reload();
-        }}
-        toolbar={(visible, filter) => {
-          const visibleIds = visible.map((entry) => entry.id);
-          // PDF export: the selection if there is one, else what is shown.
-          const exportable = (selected.length ? data.entries.filter((e) => selected.includes(e.id)) : visible).filter(
-            (entry) => entry.kind === "single_choice" || entry.kind === "multiple_choice",
-          );
-          const allChosen = visibleIds.length > 0 && visibleIds.every((id) => selected.includes(id));
-          return (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-800">
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={allChosen}
-                  onChange={(event) =>
-                    setSelected((current) =>
-                      event.target.checked
-                        ? Array.from(new Set([...current, ...visibleIds]))
-                        : current.filter((id) => !visibleIds.includes(id)),
-                    )
-                  }
-                  className="h-4 w-4 rounded border-slate-300 accent-brand-600"
-                />
-                {selected.length
-                  ? t("{{count}} selected", { count: selected.length })
-                  : t("Select all shown")}
-              </label>
-              {selected.length > 0 && (
-                <Button
-                  variant={onlySelected ? "primary" : "secondary"}
-                  aria-pressed={onlySelected}
-                  onClick={() => setOnlySelected(!onlySelected)}
-                >
-                  {onlySelected ? t("Show all again") : t("Show only the selected")}
-                </Button>
-              )}
-              {selected.length > 0 && (
-                <>
-                  <div className="w-64">
-                    <TagInput
-                      idPrefix="qb-bulk"
-                      tags={bulkTags}
-                      onChange={setBulkTags}
-                      suggestions={suggestions}
-                      placeholder={t("Tags to add …")}
-                    />
-                  </div>
-                  <Button
-                    disabled={!bulkTags.length}
-                    onClick={() =>
-                      void quizbar.bulkTags(selected, bulkTags).then(() => {
-                        setBulkTags([]);
-                        return reload();
-                      })
+      {/* quizbar (fork): the questions, or all tags with search and replace. */}
+      <div role="tablist" className="mb-4 flex gap-1 border-b border-slate-200 dark:border-slate-800">
+        {(["questions", "tags"] as const).map((name) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            aria-selected={tab === name}
+            onClick={() => setTab(name)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${
+              tab === name
+                ? "border-brand-600 text-brand-800 dark:text-brand-200"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            }`}
+          >
+            {name === "questions" ? t("Questions") : t("Tags")}
+            <span className="ml-1.5 text-xs font-normal text-slate-400">
+              {name === "questions" ? data.entries.length : data.tags.length}
+            </span>
+          </button>
+        ))}
+      </div>
+      {tab === "tags" ? (
+        <TagsPanel
+          tags={data.tags}
+          onChanged={reload}
+          onPick={(name) => {
+            setPreset((current) => ({ query: name, key: current.key + 1 }));
+            setOnlySelected(false);
+            setTab("questions");
+          }}
+        />
+      ) : (
+        <LibraryBrowser
+          key={preset.key}
+          initialQuery={preset.query}
+          columns
+          only={onlySelected && selected.length ? selected : undefined}
+          entries={data.entries}
+          tags={data.tags}
+          onRenameTag={async (tag, name) => {
+            await quizbar.renameTag(tag.id, name);
+            await reload();
+          }}
+          onDeleteTag={async (tag) => {
+            await quizbar.deleteTag(tag.id);
+            await reload();
+          }}
+          toolbar={(visible, filter) => {
+            const visibleIds = visible.map((entry) => entry.id);
+            // PDF export: the selection if there is one, else what is shown.
+            const exportable = (selected.length ? data.entries.filter((e) => selected.includes(e.id)) : visible).filter(
+              (entry) => entry.kind === "single_choice" || entry.kind === "multiple_choice",
+            );
+            const allChosen = visibleIds.length > 0 && visibleIds.every((id) => selected.includes(id));
+            return (
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-800">
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={allChosen}
+                    onChange={(event) =>
+                      setSelected((current) =>
+                        event.target.checked
+                          ? Array.from(new Set([...current, ...visibleIds]))
+                          : current.filter((id) => !visibleIds.includes(id)),
+                      )
                     }
-                  >
-                    {t("Add tags")}
-                  </Button>
-                  <Button onClick={() => setInsertIds(selected)}>{t("Copy into a question set")}</Button>
+                    className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+                  />
+                  {selected.length
+                    ? t("{{count}} selected", { count: selected.length })
+                    : t("Select all shown")}
+                </label>
+                {selected.length > 0 && (
                   <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setSelected([]);
-                      setOnlySelected(false);
-                    }}
+                    variant={onlySelected ? "primary" : "secondary"}
+                    aria-pressed={onlySelected}
+                    onClick={() => setOnlySelected(!onlySelected)}
                   >
-                    {t("Clear selection")}
+                    {onlySelected ? t("Show all again") : t("Show only the selected")}
                   </Button>
-                </>
-              )}
-              <Button
-                variant="ghost"
-                className="ml-auto inline-flex items-center gap-1.5"
-                disabled={!exportable.length}
-                title={t("Single- and multiple-choice questions only.")}
-                onClick={() =>
-                  setExporting({
-                    entries: exportable.map((entry) => entry.id),
-                    label: selected.length ? "" : filter,
-                  })
-                }
-              >
-                <FileDown aria-hidden className="h-4 w-4" />
-                {selected.length ? t("Export selection as PDF") : t("Export shown as PDF")}
-              </Button>
-            </div>
-          );
-        }}
-        renderEntry={(entry) => (
-          <EntryCard
-            entry={entry}
-            selected={selected.includes(entry.id)}
-            onSelect={(on) => select(entry.id, on)}
-            suggestions={suggestions}
-            onTags={(names) => {
-              // Optimistic: show the new chips at once, then reload ids.
-              setData((current) =>
-                current && {
-                  ...current,
-                  entries: current.entries.map((e) =>
-                    e.id === entry.id ? { ...e, tags: names.map((name, i) => ({ id: -1 - i, name })) } : e,
-                  ),
-                },
-              );
-              void quizbar.setEntryTags(entry.id, names).then(reload);
-            }}
-            onInsert={() => setInsertIds([entry.id])}
-            onRemove={() => setRemoving(entry)}
-          />
-        )}
-      />
+                )}
+                {selected.length > 0 && (
+                  <>
+                    <div className="w-64">
+                      <TagInput
+                        idPrefix="qb-bulk"
+                        tags={bulkTags}
+                        onChange={setBulkTags}
+                        suggestions={suggestions}
+                        placeholder={t("Tags to add …")}
+                      />
+                    </div>
+                    <Button
+                      disabled={!bulkTags.length}
+                      onClick={() =>
+                        void quizbar.bulkTags(selected, bulkTags).then(() => {
+                          setBulkTags([]);
+                          return reload();
+                        })
+                      }
+                    >
+                      {t("Add tags")}
+                    </Button>
+                    <Button onClick={() => setInsertIds(selected)}>{t("Copy into a question set")}</Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setSelected([]);
+                        setOnlySelected(false);
+                      }}
+                    >
+                      {t("Clear selection")}
+                    </Button>
+                  </>
+                )}
+                <Button
+                  variant="ghost"
+                  className="ml-auto inline-flex items-center gap-1.5"
+                  disabled={!exportable.length}
+                  title={t("Single- and multiple-choice questions only.")}
+                  onClick={() =>
+                    setExporting({
+                      entries: exportable.map((entry) => entry.id),
+                      label: selected.length ? "" : filter,
+                    })
+                  }
+                >
+                  <FileDown aria-hidden className="h-4 w-4" />
+                  {selected.length ? t("Export selection as PDF") : t("Export shown as PDF")}
+                </Button>
+              </div>
+            );
+          }}
+          renderEntry={(entry) => (
+            <EntryCard
+              entry={entry}
+              selected={selected.includes(entry.id)}
+              onSelect={(on) => select(entry.id, on)}
+              suggestions={suggestions}
+              onTags={(names) => {
+                // Optimistic: show the new chips at once, then reload ids.
+                setData((current) =>
+                  current && {
+                    ...current,
+                    entries: current.entries.map((e) =>
+                      e.id === entry.id ? { ...e, tags: names.map((name, i) => ({ id: -1 - i, name })) } : e,
+                    ),
+                  },
+                );
+                void quizbar.setEntryTags(entry.id, names).then(reload);
+              }}
+              onInsert={() => setInsertIds([entry.id])}
+              onRemove={() => setRemoving(entry)}
+            />
+          )}
+        />
+      )}
       {exporting && (
         <ExportDialog
           title={exporting.label ? `${t("Question library")} · ${exporting.label}` : t("Question library")}

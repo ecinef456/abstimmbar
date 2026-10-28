@@ -46,7 +46,7 @@ import {
 import { LICENSE_OPTIONS, licenseNeedsHolder } from "../licenses";
 import { useTourSignal } from "../tour/signals";
 import SelfCheckSourcesPanel from "../quizbar/SelfCheckSources";
-import { LibraryPickerDialog } from "../quizbar/LibraryPage";
+import { LibraryPickerDialog, SourceSwitch } from "../quizbar/LibraryPage";
 import GameModePanel from "../quizbar/GameModePanel";
 import ConfidencePanel from "../quizbar/ConfidencePanel";
 import { MathText } from "../math";
@@ -1607,6 +1607,10 @@ export default function SetPage() {
           setId={id}
           allowedKinds={allowedKindsFor(set.type)}
           onClose={() => setLibraryOpen(false)}
+          onFromRoom={() => {
+            setLibraryOpen(false);
+            void openPull();
+          }}
           onInserted={(message) => {
             setLibraryOpen(false);
             setLibraryNotice(message);
@@ -2403,6 +2407,16 @@ export default function SetPage() {
             <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">
               {t("Add questions from another set …")}
             </h2>
+            {/* quizbar (fork): or from the question library. */}
+            <div>
+              <SourceSwitch
+                active="room"
+                onLibrary={() => {
+                  setPullTargets(null);
+                  setLibraryOpen(true);
+                }}
+              />
+            </div>
             {pullTargets.length === 0 ? (
               <p className="text-sm text-slate-400">
                 {t("There is no other set to copy questions from.")}

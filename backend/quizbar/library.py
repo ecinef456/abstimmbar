@@ -28,7 +28,8 @@ from rooms.models import Question, QuestionSet, Room
 from .models import LibraryEntry, LibraryTag, LibraryVault, QuestionLineage
 
 TAG_MAX = 60
-VAULT_TITLE = "quizbar library (hidden)"
+# Shown only in the editor's breadcrumb of library-only questions.
+VAULT_TITLE = "Question library"
 
 
 # -- ownership ---------------------------------------------------------------
@@ -38,7 +39,7 @@ def owner_of(question_set):
     """The teacher whose library a set's questions belong to: the room's
     owner, else its first member (None: example rooms, the hidden vault)."""
     room = question_set.room
-    if room.is_example:
+    if room.is_example or LibraryVault.objects.filter(room_id=room.pk).exists():
         return None
     if room.owner_id is not None:
         return room.owner
@@ -57,8 +58,13 @@ def vault_for(owner):
         return vault.question_set
     # No owner, no owners: invisible in every room list (and excluded from
     # the staff-wide list by a hook in rooms/views.py).
-    room = Room.objects.create(title=VAULT_TITLE, title_de=VAULT_TITLE, owner=None)
-    question_set = QuestionSet.objects.create(room=room, title=VAULT_TITLE, title_de=VAULT_TITLE)
+    room = Room.objects.create(title=VAULT_TITLE, title_de=VAULT_TITLE, title_en=VAULT_TITLE, owner=None)
+    # A member (not the owner) so the teacher may edit library-only
+    # questions; the room is still never listed (rooms/views.py).
+    room.owners.add(owner)
+    question_set = QuestionSet.objects.create(
+        room=room, title=VAULT_TITLE, title_de=VAULT_TITLE, title_en=VAULT_TITLE
+    )
     LibraryVault.objects.create(owner=owner, room=room, question_set=question_set)
     return question_set
 
@@ -170,6 +176,52 @@ def tags_named(owner, names):
             tag = LibraryTag.objects.create(owner=owner, name=name)
         tags.append(tag)
     return tags
+
+
+def rename_tag(owner, tag, name):
+    """Rename ``tag`` (merging into an existing tag of that name); an empty
+    name deletes it. Returns the tag that remains (None if deleted)."""
+    name = normalize_tag(name)
+    if not name:
+        tag.delete()
+        return None
+    other = LibraryTag.objects.filter(owner=owner, name__iexact=name).exclude(pk=tag.pk).first()
+    if other is not None:
+        for entry in tag.entries.all():
+            entry.tags.add(other)
+        tag.delete()
+        return other
+    if tag.name != name:
+        tag.name = name
+        tag.save(update_fields=["name"])
+    return tag
+
+
+def replace_in_tags(owner, find, replace, whole=False, apply=False):
+    """Search and replace in tag names: ``whole`` — tags equal to ``find``,
+    else every tag containing it (that part replaced). An empty result
+    deletes the tag. Returns [{"id", "name", "new" (None = deleted),
+    "questions"}]; changes them only with ``apply``."""
+    find = str(find or "").strip().lower()
+    if whole:
+        find = normalize_tag(find)
+    if not find:
+        return []
+    plan = []
+    for tag in LibraryTag.objects.filter(owner=owner).order_by("name"):
+        if whole and tag.name != find:
+            continue
+        if not whole and find not in tag.name:
+            continue
+        new = normalize_tag(str(replace or "") if whole else tag.name.replace(find, str(replace or "").lower()))
+        plan.append({"id": tag.pk, "name": tag.name, "new": new or None, "questions": tag.entries.count()})
+    if apply:
+        with transaction.atomic():
+            for row in plan:
+                tag = LibraryTag.objects.filter(pk=row["id"], owner=owner).first()
+                if tag is not None:
+                    rename_tag(owner, tag, row["new"] or "")
+    return plan
 
 
 def set_tags(entry, names):
@@ -333,7 +385,9 @@ def listing(owner):
                 ],
                 "tags": [{"id": tag.pk, "name": tag.name} for tag in entry.tags.all()],
                 "master": master.pk,
-                "master_set": None if master.question_set_id == vault_id else master.question_set_id,
+                # Library-only questions live in the hidden vault set; they are
+                # edited there like any other question.
+                "master_set": master.question_set_id,
                 "used_in": [
                     {
                         "question": question_id,
@@ -367,9 +421,13 @@ def _only(text):
 
 
 def tag_listing(owner):
+    from django.db.models import Count
+
     return [
-        {"id": tag.pk, "name": tag.name}
-        for tag in LibraryTag.objects.filter(owner=owner)
+        {"id": tag.pk, "name": tag.name, "count": tag.n}
+        for tag in LibraryTag.objects.filter(owner=owner).annotate(
+            n=Count("entries", filter=Q(entries__master__isnull=False))
+        )
     ]
 
 

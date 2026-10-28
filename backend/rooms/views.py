@@ -466,6 +466,10 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_staff:
             queryset = queryset.filter(room__owners=user)
+        # quizbar (fork): the hidden question-library set is never listed
+        # (its questions are still editable, through the library).
+        if getattr(self, "action", None) == "list":
+            queryset = queryset.filter(room__qb_library_vault__isnull=True)
         room_id = self.request.query_params.get("room")
         if room_id:
             queryset = queryset.filter(room_id=room_id)

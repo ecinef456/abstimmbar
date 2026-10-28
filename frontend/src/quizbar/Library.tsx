@@ -237,6 +237,7 @@ export function LibraryBrowser({
   allowedKinds,
   columns = false,
   only,
+  initialQuery = "",
 }: {
   entries: LibraryEntry[];
   tags: LibraryTag[];
@@ -252,9 +253,11 @@ export function LibraryBrowser({
   columns?: boolean;
   /** Show just these entries (e.g. the selection), ignoring the filters. */
   only?: number[];
+  /** Start with this search (e.g. a tag picked on the Tags tab). */
+  initialQuery?: string;
 }) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   // Tag search (default) or full text over questions, answers and tags.
   const [tagMode, setTagModeState] = useState(readTagMode);
   const setTagMode = (on: boolean) => {
