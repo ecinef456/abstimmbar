@@ -728,3 +728,9 @@ msgstr "sicher"
 #: quizbar/templates/quizbar/peer_participant.html
 msgid "Thanks!"
 msgstr "Danke!"
+
+msgid "How sure are you?"
+msgstr "Wie sicher sind Sie?"
+
+msgid "optional"
+msgstr "freiwillig"

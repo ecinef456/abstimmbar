@@ -22,8 +22,9 @@ LIVE, CHECK = QuestionSet.SetType.LIVE_POLL, QuestionSet.SetType.SELF_CHECK
 WEEK_SETS = (
     ("Activators PRE", LIVE,
      "Activators done at the beginning of the class (no solution given)", "never", False),
-    ("Quiz 1", LIVE, "In-class quiz about XX", None, True),
-    ("Quiz 2", LIVE, "In-class quiz about XX", None, True),
+    # the solution only when you show it (key L), not with the results
+    ("Quiz 1", LIVE, "In-class quiz about XX", "after_close", True),
+    ("Quiz 2", LIVE, "In-class quiz about XX", "after_close", True),
     ("Activators POST", LIVE,
      "Activators done at the end of the class (with solutions)", None, True),
     ("Self-check", CHECK,

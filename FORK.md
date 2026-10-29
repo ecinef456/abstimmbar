@@ -43,6 +43,12 @@ page, built by `npm run build`), plus small hooks in `PresentPage.tsx`,
 Single- and multiple-choice options have an optional **justification**
 (editor: the field under each answer; Typst/LaTeX math works).
 
+**No correct answer ticked?** Saving a single- or multiple-choice question
+without any answer marked correct asks first ("Are you sure this question
+has no correct answer?" — *Back to the answers* / *Save anyway*). Upstream
+asked only in self-checks, in a box at the end of the form; now it is a
+pop-up for every set.
+
 - **Live poll:** after the vote, press **J** on the beamer. The correct
   answers are marked and every answer shows its justification, on the
   beamer and on the participants' phones (if the set shows results to
@@ -116,9 +122,12 @@ The room page now also loads all of a room's sets (upstream stopped at 25).
   survive edits.
 - **Course rooms:** a management command creates a room with folders
   *Week 1 … Week N*, each with five sets in numbered order: *Activators
-  PRE* (live poll, answers never revealed), *Quiz 1*, *Quiz 2*, *Activators
-  POST* (live polls) and a *Self-check* filled from Quiz 1, Quiz 2 and
-  Activators POST of that week. Room language English unless
+  PRE* (live poll, answers never revealed), *Quiz 1*, *Quiz 2* (live polls,
+  the correct answer only on key press — "After closing, on key press"),
+  *Activators POST* (live poll, answers with the results) and a
+  *Self-check* filled from Quiz 1, Quiz 2 and Activators POST of that week.
+  (Migration `quizbar 0013` switched the quizzes of existing course rooms to
+  "on key press" too.) Room language English unless
   `--language de|fr|none`.
 
   ```bash
@@ -165,7 +174,8 @@ Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
   a hidden set and open in the normal editor from the library.
 - **Fast with hundreds of questions:** 30 cards per page (60 / 120
   selectable) while search, tags and "select all found" always cover the
-  whole library; the tag chips are folded behind *Show the tag list*; the
+  whole library; the tag chips are folded behind *Show the tag list* (always
+  folded when the page opens); the
   list follows typing a moment later instead of on every key; the server
   loads translations and justifications in bulk (300 questions: about
   2 s → 0.25 s), and typeset math is cached for the whole library.
@@ -358,8 +368,8 @@ identical.
   beamer's results (and the stored results) show **Vote 1** above
   **Vote 2** for every answer. Once per question; not in game mode.
 - **Confidence:** set page → *Ask how sure students are* (off by default).
-  After answering, phones show an optional, light grey row 0–10 (guessing …
-  sure) under the answer. Results show the average, separately for right
+  After answering, phones show an optional scale 0–10 (guessing … sure)
+  under the answer: one pill-shaped bar that fills up to the chosen number. Results show the average, separately for right
   and wrong answers ("wrong but sure" = a misconception).
 
 Code: `quizbar/peer.py` (models `PeerRound`, `SetConfidence`,

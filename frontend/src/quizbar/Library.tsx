@@ -210,7 +210,6 @@ function readTagMode(): boolean {
   }
 }
 
-const SHOW_TAGS_KEY = "quizbar.library.showTags";
 const PAGE_SIZES = [30, 60, 120];
 
 // Lower-case search text of an entry, built once per entry object.
@@ -283,22 +282,8 @@ export function LibraryBrowser({
   const [kind, setKind] = useState("");
   // Typing stays fast: the (long) list follows the search a moment later.
   const deferredQuery = useDeferredValue(query);
-  // The tag chips (hundreds of them) are folded away by default.
-  const [showTags, setShowTagsState] = useState(() => {
-    try {
-      return window.localStorage.getItem(SHOW_TAGS_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const setShowTags = (on: boolean) => {
-    setShowTagsState(on);
-    try {
-      window.localStorage.setItem(SHOW_TAGS_KEY, on ? "1" : "0");
-    } catch {
-      // Private mode: not remembered.
-    }
-  };
+  // The tag chips (hundreds of them) always start folded away.
+  const [showTags, setShowTags] = useState(false);
   // Only one page of cards is drawn; filters always search everything.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);

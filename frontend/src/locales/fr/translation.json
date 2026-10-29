@@ -1481,5 +1481,8 @@
   "Hide the tag list": "Masquer la liste des tags",
   "Show the tag list ({{count}})": "Afficher la liste des tags ({{count}})",
   "Select all {{count}} found_one": "Sélectionner la question trouvée",
-  "Select all {{count}} found_other": "Sélectionner les {{count}} trouvées"
+  "Select all {{count}} found_other": "Sélectionner les {{count}} trouvées",
+  "No correct answer?": "Aucune réponse correcte ?",
+  "No answer is marked as correct. Are you sure this question has no correct answer?": "Aucune réponse n’est marquée comme correcte. Êtes-vous sûr·e que cette question n’a pas de bonne réponse ?",
+  "Back to the answers": "Revenir aux réponses"
 }

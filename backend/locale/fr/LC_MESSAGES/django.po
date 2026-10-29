@@ -729,3 +729,9 @@ msgstr "sûr·e"
 #: quizbar/templates/quizbar/peer_participant.html
 msgid "Thanks!"
 msgstr "Merci !"
+
+msgid "How sure are you?"
+msgstr "Êtes-vous sûr·e ?"
+
+msgid "optional"
+msgstr "facultatif"

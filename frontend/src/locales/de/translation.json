@@ -1502,5 +1502,8 @@
   "Hide the tag list": "Tag-Liste ausblenden",
   "Show the tag list ({{count}})": "Tag-Liste zeigen ({{count}})",
   "Select all {{count}} found_one": "Die {{count}} gefundene auswählen",
-  "Select all {{count}} found_other": "Alle {{count}} gefundenen auswählen"
+  "Select all {{count}} found_other": "Alle {{count}} gefundenen auswählen",
+  "No correct answer?": "Keine richtige Antwort?",
+  "No answer is marked as correct. Are you sure this question has no correct answer?": "Keine Antwort ist als richtig markiert. Sind Sie sicher, dass diese Frage keine richtige Antwort hat?",
+  "Back to the answers": "Zurück zu den Antworten"
 }

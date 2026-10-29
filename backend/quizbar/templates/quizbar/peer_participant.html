@@ -4,15 +4,24 @@
   #qb-round { margin: 0 0 10px; padding: 8px 12px; border-radius: 12px; background: var(--brand-soft);
               color: var(--brand-strong); font-weight: 700; font-size: 15px; text-align: center; }
   #qb-round small { display: block; font-weight: 400; font-size: 13px; color: var(--ink-soft); }
-  #qb-conf { margin: 18px auto 0; max-width: 380px; opacity: .8; }
-  #qb-conf p { margin: 0 0 6px; font-size: 13px; color: var(--ink-soft); }
-  #qb-conf .row { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; }
-  #qb-conf .row button { margin: 0; min-height: 0; padding: 7px 0; font-size: 13px; border-radius: 8px;
-                         border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); }
-  #qb-conf .row button[aria-pressed="true"] { background: var(--brand-strong); border-color: var(--brand-strong);
-                                             color: var(--bg); font-weight: 700; }
-  #qb-conf .ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
-  #qb-conf .thanks { font-size: 12px; min-height: 1.2em; margin-top: 4px; }
+  /* One pill-shaped scale 0–10; the choice fills the bar up to it. */
+  #qb-conf { margin: 22px auto 0; max-width: 380px; text-align: center; }
+  #qb-conf p { margin: 0 0 8px; font-size: 13px; color: var(--ink-soft); }
+  #qb-conf p span { opacity: .7; }
+  #qb-conf .row { display: flex; height: 40px; border: 1px solid var(--line); border-radius: 999px;
+                  overflow: hidden; background: var(--surface); }
+  #qb-conf .row button { flex: 1 1 0; display: flex; align-items: center; justify-content: center;
+                         margin: 0; padding: 0; min-height: 0; min-width: 0; border: 0; border-radius: 0;
+                         border-left: 1px solid var(--line); background: transparent; color: var(--ink-soft);
+                         font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;
+                         text-align: center; transition: background-color .15s, color .15s; }
+  #qb-conf .row button:first-child { border-left: 0; }
+  #qb-conf .row button:focus-visible { outline-offset: -3px; }
+  #qb-conf .row button.fill { background: var(--brand-soft); color: var(--brand-strong); }
+  #qb-conf .row button[aria-pressed="true"] { background: var(--brand-strong); color: var(--bg); font-weight: 800; }
+  #qb-conf .ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-soft);
+                   margin: 5px 6px 0; }
+  #qb-conf .thanks { font-size: 12px; min-height: 1.2em; margin-top: 6px; color: var(--brand-strong); }
 </style>
 <script>
 (() => {
@@ -24,6 +33,8 @@
     vote2: "{% trans 'Vote 2' %}",
     vote2Hint: "{% trans 'You discussed it — now vote again.' %}",
     sure: "{% trans 'How sure are you? (optional)' %}",
+    sureShort: "{% trans 'How sure are you?' %}",
+    optional: "{% trans 'optional' %}",
     guess: "{% trans 'guessing' %}",
     certain: "{% trans 'sure' %}",
     thanks: "{% trans 'Thanks!' %}",
@@ -41,8 +52,8 @@
   const box = document.createElement("div");
   box.id = "qb-conf";
   box.hidden = true;
-  box.innerHTML = `<p>${T.sure}</p><div class="row" role="group" aria-label="${T.sure}"></div>
-    <div class="ends"><span>0 · ${T.guess}</span><span>${T.certain} · 10</span></div>
+  box.innerHTML = `<p>${T.sureShort} <span>(${T.optional})</span></p><div class="row" role="group" aria-label="${T.sure}"></div>
+    <div class="ends"><span>${T.guess}</span><span>${T.certain}</span></div>
     <p class="thanks" aria-live="polite"></p>`;
   done.appendChild(box);
   const row = box.querySelector(".row");
@@ -60,8 +71,11 @@
     row.appendChild(button);
   }
   function paint() {
+    const chosen = saved[mark];
     for (const button of row.children) {
-      button.setAttribute("aria-pressed", String(saved[mark] === Number(button.textContent)));
+      const value = Number(button.textContent);
+      button.setAttribute("aria-pressed", String(chosen === value));
+      button.classList.toggle("fill", chosen !== undefined && value < chosen);
     }
   }
   async function send(value) {
@@ -77,7 +91,7 @@
     saved[mark] = value;
     try { sessionStorage.setItem(SURE_KEY, JSON.stringify(saved)); } catch { /* ignore */ }
     paint();
-    thanks.textContent = T.thanks;
+    thanks.textContent = "✓ " + T.thanks;
   }
 
   window.addEventListener("quizbar-state", (event) => {

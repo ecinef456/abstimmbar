@@ -460,12 +460,34 @@ class CourseTests(Base):
             ["Week 2 – Activators PRE", "Week 2 – Quiz 1", "Week 2 – Quiz 2",
              "Week 2 – Activators POST", "Week 2 – Self-check"],
         )
-        self.assertEqual(week2[0].reveal_answers, "never")
+        self.assertEqual(
+            [qs.reveal_answers for qs in week2[:4]], ["never", "after_close", "after_close", "immediately"]
+        )
         self.assertEqual(week2[4].type, QuestionSet.SetType.SELF_CHECK)
         self.assertEqual(
             [s.source.title for s in week2[4].qb_sources.all()],
             ["Week 2 – Quiz 1", "Week 2 – Quiz 2", "Week 2 – Activators POST"],
         )
+
+    def test_migration_quizzes_reveal_on_key(self):
+        from importlib import import_module
+
+        from django.apps import apps
+
+        from . import course
+
+        room = course.create_course(self.owner, "HS26", weeks=1)
+        QuestionSet.objects.filter(room=room).update(reveal_answers="immediately")
+        loose = QuestionSet.objects.create(room=room, title_de="Week 1 – Quiz 1")  # not in a folder
+        import_module("quizbar.migrations.0013_quiz_reveal_on_key").forwards(apps, None)
+        reveal = dict(
+            QuestionSet.objects.filter(room=room).exclude(pk=loose.pk).values_list("title_de", "reveal_answers")
+        )
+        self.assertEqual(reveal["Week 1 – Quiz 1"], "after_close")
+        self.assertEqual(reveal["Week 1 – Quiz 2"], "after_close")
+        self.assertEqual(reveal["Week 1 – Activators POST"], "immediately")
+        loose.refresh_from_db()
+        self.assertEqual(loose.reveal_answers, "immediately")
 
     def test_duplicate_room_keeps_structure_and_relinks(self):
         from . import course, languages

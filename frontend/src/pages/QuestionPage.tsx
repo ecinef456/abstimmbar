@@ -49,6 +49,7 @@ import TranslatableField from "../components/TranslatableField";
 import { Button, ClampedNumberInput, EmptyState, Field, InfoHint, MenuItem, MoreMenu, ProOnly, SegmentedControl, TextInput, ToggleSwitch } from "../components/ui";
 import { KIND_LABEL, REVEAL_LABEL } from "./SetPage";
 import { LibraryField } from "../quizbar/Library";
+import Modal from "../quizbar/Modal"; // quizbar (fork)
 import TranslationsPanel, {
   emptyTranslations,
   translationsFromApi,
@@ -582,6 +583,13 @@ export default function QuestionPage() {
     question?.kind === "open_text"
       ? "No model solution entered. Learners then get no feedback on this question in the self-check. Save anyway?"
       : "No correct answer is marked. Learners then get no feedback on this question in the self-check. Save anyway?";
+  // quizbar (fork): warn for every choice question, not only in self-checks —
+  // a forgotten tick is easy to miss. Saving stays possible (all answers wrong).
+  const missingCorrectAnswer =
+    missingSolutionForSelfCheck ||
+    (!!question &&
+      (question.kind === "single_choice" || question.kind === "multiple_choice") &&
+      !options.some((o) => o.is_correct && !o.is_abstention));
 
   async function save({
     stay = false,
@@ -2222,16 +2230,21 @@ export default function QuestionPage() {
         />
 
         {error && <p className="text-sm text-danger">{error}</p>}
-        {confirmNoCorrect && missingSolutionForSelfCheck && (
-          <div
-            role="alert"
-            className="grid gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
-          >
-            <div className="flex items-start gap-3">
+        {/* quizbar (fork): a pop-up instead of a box at the end of the form */}
+        {confirmNoCorrect && missingCorrectAnswer && (
+          <Modal title={t("No correct answer?")} onClose={() => setConfirmNoCorrect(false)}>
+            <div className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-200">
               <TriangleAlert aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-              <p>{t(missingSolutionMessage)}</p>
+              <p>
+                {missingSolutionForSelfCheck
+                  ? t(missingSolutionMessage)
+                  : t("No answer is marked as correct. Are you sure this question has no correct answer?")}
+              </p>
             </div>
-            <div className="flex flex-wrap gap-2 pl-8">
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button variant="ghost" onClick={() => setConfirmNoCorrect(false)}>
+                {t("Back to the answers")}
+              </Button>
               <Button
                 variant="primary"
                 onClick={() => {
@@ -2241,18 +2254,15 @@ export default function QuestionPage() {
               >
                 {t("Save anyway")}
               </Button>
-              <Button variant="ghost" onClick={() => setConfirmNoCorrect(false)}>
-                {t("Cancel")}
-              </Button>
             </div>
-          </div>
+          </Modal>
         )}
         <div className="sticky bottom-0 z-20 mt-4 flex gap-2 bg-white/90 py-3 backdrop-blur shadow-[0_-6px_16px_-8px_rgba(15,23,42,0.18)] dark:bg-slate-950/90">
           <Button
             variant="primary"
             disabled={saving || invalid}
             onClick={() => {
-              if (missingSolutionForSelfCheck && !confirmNoCorrect) setConfirmNoCorrect(true);
+              if (missingCorrectAnswer && !confirmNoCorrect) setConfirmNoCorrect(true); // quizbar (fork)
               else void save();
             }}
           >
