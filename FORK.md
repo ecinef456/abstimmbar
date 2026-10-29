@@ -121,20 +121,30 @@ The room page now also loads all of a room's sets (upstream stopped at 25).
   after the copied ones. Copies keep their ids, so attempt statistics
   survive edits.
 - **Course rooms:** a management command creates a room with folders
-  *Week 1 … Week N*, each with five sets in numbered order: *Activators
-  PRE* (live poll, answers never revealed), *Quiz 1*, *Quiz 2* (live polls,
-  the correct answer only on key press — "After closing, on key press"),
-  *Activators POST* (live poll, answers with the results) and a
-  *Self-check* filled from Quiz 1, Quiz 2 and Activators POST of that week.
-  (Migration `quizbar 0013` switched the quizzes of existing course rooms to
-  "on key press" too.) Room language English unless
+  *Week 1 … Week N*, each with 13 sets in numbered order: *Activators
+  PRE* (live poll, answers never revealed), *Quiz 1* … *Quiz 10* (live
+  polls, the correct answer only on key press — "After closing, on key
+  press"), *Activators POST* (live poll, answers with the results) and a
+  *Self-check* filled from the quizzes and Activators POST of that week.
+  Empty quizzes cost nothing: *Next quiz* and the self-check skip them.
+  All live polls of the structure: answerable as soon as a question is
+  shown, results not on the phones. Room language English unless
   `--language de|fr|none`.
+- **Updating an existing course room** (`--update`, e.g. a template made
+  with the older 2-quiz structure): adds the missing quizzes to every
+  *Week N* folder (after its last quiz) and to the week's self-check
+  (before Activators POST), and gives the structure's sets that were never
+  presented the current settings. It never removes or empties anything;
+  presented sets and your own sets keep their settings. Running it twice
+  changes nothing.
 
   ```bash
   sudo docker exec abstimmbar_app python manage.py quizbar_course \
       --owner <username> --title "0000 - TEMPLATE" --archived
   sudo docker exec abstimmbar_app python manage.py quizbar_course \
       --owner <username> --title "HS26 - TA - Physics"        # --weeks 14 is the default
+  sudo docker exec abstimmbar_app python manage.py quizbar_course \
+      --owner <username> --title "0000 - TEMPLATE" --update
   ```
 - **Duplicate room** (room ⋮ menu, also for archived rooms): copies
   settings, language, folders, every set with its questions and the
@@ -497,6 +507,16 @@ it like any other file of the fork; locally:
 Code: `quizbar/handbook.py`, endpoint `/api/quizbar/handbook/` (`?pdf=1`),
 `frontend/src/quizbar/Handbook.tsx`; hooks in `components/HelpMenu.tsx`,
 `main.tsx`.
+
+### Defaults for new live polls
+
+A new live poll — from *New question set*, a Typst import or the course
+structure — starts with: solutions revealed only on key press (L),
+*answerable immediately on open* on, *results on the participants'
+devices* off. (Upstream: solutions immediately with the results, results on
+the phones.) Copies of sets and rooms keep their own settings. Hook:
+`NEW_SET_DEFAULTS` in `RoomPage.tsx`; `quizbar/typst_import.py`,
+`quizbar/course.py`.
 
 ### A–Z as the default sort
 

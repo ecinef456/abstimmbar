@@ -139,14 +139,16 @@ function NewSetMenu({
   );
 }
 
+// quizbar (fork): new live polls reveal the solution only on key press and
+// show the results on the beamer only (not on the phones).
 const NEW_SET_DEFAULTS: SetSettings = {
   type: "live_poll",
   title: "",
   description: "",
-  reveal_answers: "immediately",
+  reveal_answers: "after_close",
   open_on_show: true,
   quiz_time_limit: null,
-  show_results_to_participants: true,
+  show_results_to_participants: false,
   present_results_after: true,
   allow_back_navigation: true,
   shuffle_questions: false,

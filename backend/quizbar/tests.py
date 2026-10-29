@@ -455,18 +455,20 @@ class CourseTests(Base):
         week2 = [
             p.question_set for p in folders_[1].placements.select_related("question_set")
         ]
+        quizzes = [f"Week 2 – Quiz {n}" for n in range(1, 11)]
         self.assertEqual(
             [qs.title for qs in week2],
-            ["Week 2 – Activators PRE", "Week 2 – Quiz 1", "Week 2 – Quiz 2",
-             "Week 2 – Activators POST", "Week 2 – Self-check"],
+            ["Week 2 – Activators PRE", *quizzes, "Week 2 – Activators POST", "Week 2 – Self-check"],
         )
+        live = week2[:12]
         self.assertEqual(
-            [qs.reveal_answers for qs in week2[:4]], ["never", "after_close", "after_close", "immediately"]
+            [qs.reveal_answers for qs in live], ["never", *["after_close"] * 10, "immediately"]
         )
-        self.assertEqual(week2[4].type, QuestionSet.SetType.SELF_CHECK)
+        self.assertTrue(all(qs.open_on_show for qs in live))
+        self.assertFalse(any(qs.show_results_to_participants for qs in live))
+        self.assertEqual(week2[12].type, QuestionSet.SetType.SELF_CHECK)
         self.assertEqual(
-            [s.source.title for s in week2[4].qb_sources.all()],
-            ["Week 2 – Quiz 1", "Week 2 – Quiz 2", "Week 2 – Activators POST"],
+            [s.source.title for s in week2[12].qb_sources.all()], [*quizzes, "Week 2 – Activators POST"]
         )
 
     def test_migration_quizzes_reveal_on_key(self):
@@ -489,6 +491,71 @@ class CourseTests(Base):
         loose.refresh_from_db()
         self.assertEqual(loose.reveal_answers, "immediately")
 
+    def test_update_old_course_room_adds_quizzes_keeps_everything(self):
+        """A room made with the old structure (2 quizzes) gets Quiz 3-10;
+        nothing is removed, used sets keep their settings, own sets stay."""
+        from live.models import Run
+
+        from . import course, folders
+
+        room = course.create_course(self.owner, "HS26", weeks=2)
+        old = {f"Quiz {n}" for n in range(3, 11)}
+        for question_set in list(room.question_sets.all()):
+            name = question_set.title_de.split(" – ", 1)[1]
+            if name in old:
+                question_set.delete()
+        QuestionSet.objects.filter(room=room).update(
+            reveal_answers="immediately", show_results_to_participants=True, open_on_show=False
+        )
+        week1 = room.qb_folders.get(title="Week 1")
+        quiz1 = room.question_sets.get(title_de="Week 1 – Quiz 1")
+        q = Question.objects.create(question_set=quiz1, kind=Question.Kind.SINGLE_CHOICE, text="<p>q</p>")
+        AnswerOption.objects.create(question=q, text="x", is_correct=True)
+        Run.objects.create(question_set=quiz1, phase="finished")  # presented: keeps its settings
+        own = QuestionSet.objects.create(room=room, title_de="Extra")  # the teacher's own set
+        folders.place(own, week1)
+        order = [p.question_set_id for p in week1.placements.order_by("position", "id")]
+        order.remove(own.pk)
+        order.insert(2, own.pk)  # between Quiz 1 and Quiz 2
+        folders.reorder(week1, order)
+        check = room.question_sets.get(title_de="Week 1 – Self-check")
+        course.selfcheck.set_sources(
+            check, [quiz1, room.question_sets.get(title_de="Week 1 – Quiz 2"),
+                    room.question_sets.get(title_de="Week 1 – Activators POST")]
+        )
+        copied = list(check.questions.values_list("pk", flat=True))
+        self.assertEqual(len(copied), 1)
+        before = room.question_sets.count()
+
+        result = course.update_course(room)
+        self.assertEqual(result["added"], 16)
+        self.assertEqual(room.question_sets.count(), before + 16)
+        titles = [p.question_set.title_de for p in week1.placements.order_by("position")]
+        self.assertEqual(
+            titles,
+            ["Week 1 – Activators PRE", "Week 1 – Quiz 1", "Extra", "Week 1 – Quiz 2",
+             *[f"Week 1 – Quiz {n}" for n in range(3, 11)],
+             "Week 1 – Activators POST", "Week 1 – Self-check"],
+        )
+        quiz1.refresh_from_db()
+        self.assertEqual(quiz1.reveal_answers, "immediately")  # presented: untouched
+        self.assertEqual(quiz1.questions.count(), 1)
+        quiz2 = room.question_sets.get(title_de="Week 1 – Quiz 2")
+        self.assertEqual(
+            (quiz2.reveal_answers, quiz2.open_on_show, quiz2.show_results_to_participants),
+            ("after_close", True, False),
+        )
+        own.refresh_from_db()
+        self.assertTrue(own.show_results_to_participants)  # not part of the structure
+        self.assertEqual(
+            [s.source.title_de for s in check.qb_sources.all()],
+            ["Week 1 – Quiz 1", "Week 1 – Quiz 2", *[f"Week 1 – Quiz {n}" for n in range(3, 11)],
+             "Week 1 – Activators POST"],
+        )
+        self.assertEqual(list(check.questions.values_list("pk", flat=True)), copied)  # same copy
+        # running it again changes nothing
+        self.assertEqual(course.update_course(room), {"added": 0, "settings": 0})
+
     def test_duplicate_room_keeps_structure_and_relinks(self):
         from . import course, languages
 
@@ -507,11 +574,11 @@ class CourseTests(Base):
         self.assertEqual(copy.title, "0000 - TEMPLATE (copy)")
         self.assertFalse(copy.archived_by.exists())
         self.assertEqual(languages.room_language(copy), "fr")
-        self.assertEqual(copy.question_sets.count(), 10)
+        self.assertEqual(copy.question_sets.count(), 2 * 13)
         self.assertEqual(copy.qb_folders.count(), 2)
         new_check = copy.question_sets.get(title_de="Week 1 – Self-check")
         self.assertEqual(
-            [s.source.room_id for s in new_check.qb_sources.all()], [copy.pk] * 3
+            [s.source.room_id for s in new_check.qb_sources.all()], [copy.pk] * 11
         )
         # One copy, linked to the NEW room's quiz (not doubled, not the old one).
         self.assertEqual(new_check.questions.count(), 1)
@@ -528,7 +595,9 @@ class CourseTests(Base):
         call_command("quizbar_course", owner="frank", title="HS26 - TA - Physics", weeks=14)
         room = Room.objects.get(title_de="HS26 - TA - Physics")
         self.assertEqual(room.qb_folders.count(), 14)
-        self.assertEqual(room.question_sets.count(), 70)
+        self.assertEqual(room.question_sets.count(), 14 * 13)
+        call_command("quizbar_course", owner="frank", title="HS26 - TA - Physics", update=True)
+        self.assertEqual(room.question_sets.count(), 14 * 13)  # already complete: nothing added
 
 
 class LibraryTests(TestCase):
@@ -839,6 +908,10 @@ class TypstImportTests(TestCase):
         question_set = QuestionSet.objects.get(pk=resp.json()["id"])
         self.assertEqual(question_set.type, QuestionSet.SetType.SELF_CHECK)
         self.assertEqual(question_set.qb_placement.folder, folder)
+        self.assertEqual(
+            (question_set.reveal_answers, question_set.open_on_show, question_set.show_results_to_participants),
+            ("after_close", True, False),
+        )
         first, second = question_set.questions.order_by("position")
         self.assertIn('<img src="/media/question-images/', first.text)
         self.assertEqual(first.time_limit, 60)
@@ -861,7 +934,7 @@ class TypstImportTests(TestCase):
         upload = SimpleUploadedFile("quiz.typ", source.encode())
         resp = self.client.post(f"/api/quizbar/rooms/{room.pk}/import-typst/", {"files": [upload]})
         self.assertEqual(resp.json()["id"], quiz.pk)
-        self.assertEqual(room.question_sets.count(), 5)
+        self.assertEqual(room.question_sets.count(), 13)  # filled, no new set
         self.assertEqual(quiz.questions.count(), 2)
         self.assertEqual(quiz.qb_placement.folder.title, "Week 1")
         check = room.question_sets.get(title_de="Week 1 – Self-check")

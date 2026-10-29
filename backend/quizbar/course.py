@@ -2,11 +2,15 @@
 """Course structures: build a room with week folders, and duplicate rooms.
 
 The default structure (TA exercise class): folders "Week 1" … "Week N",
-each with four live polls and a self-check that fills itself from the
-in-class quizzes and the end-of-class activators.
+each with Activators PRE, Quiz 1 … Quiz 10, Activators POST (live polls)
+and a self-check that fills itself from the quizzes and Activators POST.
+Empty quizzes cost nothing: "Next quiz" skips them, and so do self-checks.
 """
+import re
+
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Max
 
 from rooms.models import QuestionSet, Room
 from rooms.naming import unique_title
@@ -18,19 +22,34 @@ from .models import SelfCheckSource, SetFolder, SetPlacement
 CANONICAL = settings.MODELTRANSLATION_DEFAULT_LANGUAGE
 LIVE, CHECK = QuestionSet.SetType.LIVE_POLL, QuestionSet.SetType.SELF_CHECK
 
+QUIZZES = 10
+
 # (name, type, description, reveal_answers, feeds the self-check)
 WEEK_SETS = (
     ("Activators PRE", LIVE,
      "Activators done at the beginning of the class (no solution given)", "never", False),
-    # the solution only when you show it (key L), not with the results
-    ("Quiz 1", LIVE, "In-class quiz about XX", "after_close", True),
-    ("Quiz 2", LIVE, "In-class quiz about XX", "after_close", True),
+    # the quizzes: the solution only when you show it (key L)
+    *(
+        (f"Quiz {n}", LIVE, "In-class quiz about XX", "after_close", True)
+        for n in range(1, QUIZZES + 1)
+    ),
     ("Activators POST", LIVE,
-     "Activators done at the end of the class (with solutions)", None, True),
+     "Activators done at the end of the class (with solutions)", "immediately", True),
     ("Self-check", CHECK,
-     ("All questions of Quiz 1, Quiz 2 and Activators POST of this week, "
+     ("All questions of the quizzes and Activators POST of this week, "
       "with instant feedback."), None, False),
 )
+
+# Every live poll of the structure: answerable as soon as a question is
+# shown, results only on the beamer (not on the phones).
+LIVE_SETTINGS = {"open_on_show": True, "show_results_to_participants": False}
+
+
+def _settings(set_type, reveal):
+    settings_ = dict(LIVE_SETTINGS) if set_type == LIVE else {}
+    if reveal:
+        settings_["reveal_answers"] = reveal
+    return settings_
 
 
 def _canonical(**columns):
@@ -70,7 +89,7 @@ def create_course(user, title, weeks=14, archived=False, language="en"):
                 room=room,
                 type=set_type,
                 **_canonical(title=f"Week {week} – {name}", description=f"<p>{description}</p>"),
-                **({"reveal_answers": reveal} if reveal else {}),
+                **_settings(set_type, reveal),
             )
             folders.place(question_set, folder)
             if feeds_check:
@@ -82,6 +101,105 @@ def create_course(user, title, weeks=14, archived=False, language="en"):
     if archived:
         room.archived_by.add(user)
     return room
+
+
+WEEK = re.compile(r"^Week (\d+)$")
+QUIZ = re.compile(r"^Quiz (\d+)$")
+
+
+def _structure_name(question_set, week):
+    """"Quiz 3" for "Week 2 – Quiz 3" in week 2, else None."""
+    title = _lang_columns(question_set, "title")[f"title_{CANONICAL}"] or question_set.title or ""
+    prefix = f"Week {week} – "
+    return title[len(prefix):] if title.startswith(prefix) else None
+
+
+@transaction.atomic
+def update_course(room):
+    """Bring an existing course room up to the current structure, without
+    removing or emptying anything:
+
+    - each "Week N" folder gets the quizzes it lacks (Quiz 1 … Quiz 10),
+      right after its last quiz (else after Activators PRE), and the week's
+      self-check copies them too (before Activators POST);
+    - sets of the structure that were never presented get the current
+      settings (reveal, answerable on open, results not on phones).
+
+    Returns {"added": n, "settings": n}."""
+    added = updated = 0
+    structure = {name: (set_type, reveal) for name, set_type, _d, reveal, _f in WEEK_SETS}
+    for folder in room.qb_folders.order_by("position", "id"):
+        match = WEEK.match(folder.title)
+        if not match:
+            continue
+        week = int(match.group(1))
+        order = list(
+            folder.placements.order_by("position", "id").select_related("question_set")
+        )
+        sets = [p.question_set for p in order]
+        named = {}
+        for question_set in sets:
+            name = _structure_name(question_set, week)
+            if name in structure and name not in named:
+                named[name] = question_set
+
+        for name, (set_type, reveal) in structure.items():
+            question_set = named.get(name)
+            if question_set is None or question_set.runs.exists():
+                continue
+            changes = {
+                field: value
+                for field, value in _settings(set_type, reveal).items()
+                if getattr(question_set, field) != value
+            }
+            if changes:
+                QuestionSet.objects.filter(pk=question_set.pk).update(**changes)
+                updated += 1
+
+        new_quizzes = []
+        for n in range(1, QUIZZES + 1):
+            name = f"Quiz {n}"
+            if name in named:
+                continue
+            question_set = QuestionSet.objects.create(
+                room=room,
+                type=LIVE,
+                **_canonical(title=f"Week {week} – {name}", description="<p>In-class quiz about XX</p>"),
+                **_settings(LIVE, "after_close"),
+            )
+            named[name] = question_set
+            new_quizzes.append(question_set)
+            # right after the previous quiz, else after Activators PRE, else first
+            before = next(
+                (named[f"Quiz {k}"] for k in range(n - 1, 0, -1) if f"Quiz {k}" in named),
+                named.get("Activators PRE"),
+            )
+            index = sets.index(before) + 1 if before in sets else 0
+            sets.insert(index, question_set)
+            added += 1
+        if not new_quizzes:
+            continue
+        last = folder.placements.aggregate(m=Max("position"))["m"] or 0
+        for offset, question_set in enumerate(new_quizzes, start=1):
+            folders.place(question_set, folder, position=last + offset)
+        folders.reorder(folder, [s.pk for s in sets])
+
+        check = named.get("Self-check")
+        if check is not None and check.type == CHECK:
+            links = list(check.qb_sources.order_by("position", "id"))
+            linked = [link.source_id for link in links]
+            post = named.get("Activators POST")
+            cut = linked.index(post.pk) if post is not None and post.pk in linked else len(linked)
+            wanted = linked[:cut] + [q.pk for q in new_quizzes] + linked[cut:]
+            # keep the existing links (and the copies made from them), add the new
+            for q in new_quizzes:
+                SelfCheckSource.objects.create(self_check=check, source=q, position=0)
+            for position, source_id in enumerate(wanted):
+                SelfCheckSource.objects.filter(self_check=check, source_id=source_id).update(
+                    position=position
+                )
+            selfcheck.ensure_synced(check, force=True)
+    return {"added": added, "settings": updated}
 
 
 @transaction.atomic

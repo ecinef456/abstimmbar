@@ -749,6 +749,11 @@ def import_quiz(room, user, uploads, folder=None):
                 "title": title,
                 "description": quiz.description_html,
                 "type": quiz.set_type,
+                # new live polls: answerable on open, solution on key press,
+                # results only on the beamer (the fork's defaults)
+                "reveal_answers": "after_close",
+                "open_on_show": True,
+                "show_results_to_participants": False,
                 "questions": items,
             },
         )

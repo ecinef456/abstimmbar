@@ -149,7 +149,7 @@
   [*Justifications*], [Under each answer: why it is right or wrong. Shown with #key("J").],
   [*One language per room*], [No DE/EN tabs: write once; set the room language (EN/DE/FR). The interface also speaks French.],
   [*Folders*], [Sets grouped per week inside a room, in a numbered order, with a *Next quiz* button.],
-  [*Course rooms*], [A room with Week 1 … Week 14, each with Activators PRE, Quiz 1, Quiz 2, Activators POST, Self-check.],
+  [*Course rooms*], [A room with Week 1 … Week 14, each with Activators PRE, Quiz 1 … Quiz 10, Activators POST, Self-check.],
   [*Duplicate room*], [Copy a whole room (e.g. the template) in one click.],
   [*Question library*], [Every question you write, once, with tags. Search by tags; copy questions into any set.],
   [*Typst quizzes*], [Write quizzes in Typst → clean PDF (with/without solutions) → import into abstimmbar.],
@@ -173,16 +173,18 @@
 #step(2)[Room menu #key("⋮") → *Duplicate room*. You land in "0000 - TEMPLATE (copy)".]
 #step(3)[#key("⋮") → *Settings*: rename it (e.g. "FS27 - TA - Physics") and pick the *room language*.]
 
-You now have folders *Week 1 … Week 14*, each with five sets in this order:
+You now have folders *Week 1 … Week 14*, each with 13 sets in this order:
 
 #table(
   columns: (auto, auto, 1fr),
   table.header([Set], [Type], [Use]),
   [Activators PRE], [live poll], [at the start of class; solutions never shown],
-  [Quiz 1, Quiz 2], [live poll], [in-class quizzes; the solution only when you press #key("L")],
+  [Quiz 1 … Quiz 10], [live poll], [in-class quizzes; the solution only when you press #key("L"). Fill as many as you need — empty ones are skipped by *Next quiz* and the self-check],
   [Activators POST], [live poll], [at the end, with solutions],
-  [Self-check], [self-check], [copies Quiz 1 + Quiz 2 + Activators POST automatically],
+  [Self-check], [self-check], [copies the quizzes + Activators POST automatically],
 )
+
+All live polls start *answerable as soon as a question is shown*, with the results only on the beamer (not on the phones). New live polls you make yourself start the same way, with the solution on #key("L").
 
 == Every week
 #step(1)[Fill *Quiz 1*, *Quiz 2*, *Activators* — by hand, from the library ("From library"), or by importing a Typst file (chapter 6).]
@@ -523,8 +525,10 @@ sudo tailscale funnel status   # is the public link on?
 sudo docker exec abstimmbar_app python manage.py quizbar_library --owner " + me + "
 # create course rooms
 sudo docker exec abstimmbar_app python manage.py quizbar_course --owner " + me + " --title \"0000 - TEMPLATE\" --archived
-sudo docker exec abstimmbar_app python manage.py quizbar_course --owner " + me + " --title \"HS26 - TA - Physics\"")
-On the test site: the same with `abstimmbar_test_app`. Options of `quizbar_course`: `--weeks 14`, `--language en|de|fr|none`.
+sudo docker exec abstimmbar_app python manage.py quizbar_course --owner " + me + " --title \"HS26 - TA - Physics\"
+# bring an existing course room up to date (adds missing quizzes, removes nothing)
+sudo docker exec abstimmbar_app python manage.py quizbar_course --owner " + me + " --title \"0000 - TEMPLATE\" --update")
+On the test site: the same with `abstimmbar_test_app`. Options of `quizbar_course`: `--weeks 14`, `--language en|de|fr|none`, `--update`.
 
 == Switch on automatic translation (once)
 Add *one* of these to `/opt/abstimmbar/.env`, then run `fork/deploy.sh`:
@@ -562,7 +566,7 @@ QUIZBAR_LIBRETRANSLATE_URL=http://libretranslate:5000
   ]),
   (false, [
     *Each week* \
-    folder Week N → Quiz 1, Quiz 2, Activators \
+    folder Week N → Activators, Quiz 1 … 10, Activators \
     → present → *Next quiz* \
     → Self-check → *Publish* → link on Moodle
   ]),
