@@ -2217,7 +2217,13 @@ export default function QuestionPage() {
           value={trans}
           onChange={setTrans}
           options={OPTIONLESS_TRANSLATION.includes(question.kind) ? [] : filledOptions}
-          originalText={canonicalHtml}
+          // quizbar (fork): older questions may hold their text only in the
+          // other language column (shown, and moved over on the next save).
+          originalText={
+            canonicalHtml ||
+            Object.values(localizedMap(text)).find((html) => !isEmptyHtml(html ?? "")) ||
+            ""
+          }
         />
 
         <LibraryField

@@ -229,7 +229,8 @@ listed), `QuestionPage.tsx`, `SetPage.tsx`, `App.tsx`, `main.tsx`.
 - The **library** shows English (the English translation, if the original
   is not English). Tags are English.
 - Editor: a collapsed **Translations** box under the answers (tabs English /
-  Deutsch / Français).
+  Deutsch / Français). The original question text is shown above the
+  translated one, and each answer's original above its field, for reference.
 - Copies (library, duplicated sets/rooms, self-checks) keep the translations.
 - From Typst: one file per language, imported together (see below).
 
@@ -537,7 +538,7 @@ Scripts (in `fork/`):
 |---|---|
 | `test-setup.sh` | once: creates the test worktree, `.env.test`, and the tailnet-only HTTPS |
 | `backup.sh` | backs up the live database and uploaded images |
-| `test-up.sh` | loads a fresh copy of the live data into the test instance and (re)builds it; `--keep-data` skips the copy |
+| `test-up.sh` | loads a fresh copy of the live data into the test instance and (re)builds it; `--keep-data` skips the copy. Always copies the translation settings (`COMPOSE_PROFILES`, `QUIZBAR_*`) from `.env` into `.env.test` |
 | `deploy.sh` | backup, then fast-forwards `custom` to `next`, rebuilds the live instance, pushes to GitHub |
 | `update-upstream.sh` | merges virtUOS's latest `main` into `next` (stops without changes on conflicts) |
 | `restore.sh <db-backup>` | puts a backup back into the live instance (asks first) |

@@ -2,7 +2,20 @@
 # (Re)build and start the test instance from /opt/abstimmbar-test (branch
 # next). By default it first takes a fresh backup of the live instance and
 # loads it, so new migrations are tried on real data. --keep-data skips that.
+# The translation settings (DeepL key / LibreTranslate) are always copied
+# from the live .env, so "Translate" works the same on the test site.
 set -eu
+
+# Copy the live instance's translation settings into .env.test (replacing
+# older copies of those lines; the rest of .env.test stays as it is).
+sync_translation() {
+  keys='COMPOSE_PROFILES|QUIZBAR_DEEPL_KEY|QUIZBAR_LIBRETRANSLATE_URL|QUIZBAR_LIBRETRANSLATE_KEY'
+  tmp=$(mktemp)
+  sudo grep -Ev "^($keys)=" "$1" > "$tmp" || true
+  sudo grep -E "^($keys)=" /opt/abstimmbar/.env >> "$tmp" || true
+  sudo tee "$1" < "$tmp" > /dev/null
+  rm -f "$tmp"
+}
 
 main() {
   test=/opt/abstimmbar-test
@@ -12,6 +25,7 @@ main() {
       -f "$test/docker-compose.prod.yml" -f "$test/docker-compose.test.yml" "$@"
   }
   cd "$test"
+  sync_translation "$test/.env.test"
   if [ "${1:-}" != "--keep-data" ]; then
     "$here/backup.sh"
     db=$(ls -1t "$HOME"/abstimmbar-backups/db-*.sql.gz | head -1)

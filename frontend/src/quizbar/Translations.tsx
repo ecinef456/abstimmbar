@@ -7,9 +7,10 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Languages, Loader2, Sparkles } from "lucide-react";
 import { RichTextEditor } from "@basicbar/ui/rich-text-editor";
-import { localizedText, stripHtml, type LocalizedText } from "@basicbar/ui";
+import { localizedText, RichText, stripHtml, type LocalizedText } from "@basicbar/ui";
 import { api, quizbar, requestDetail, type QuestionTranslations } from "../api";
 import { Button, TextInput } from "../components/ui";
+import { mathHtml } from "../math";
 
 export const TRANSLATION_LANGS = ["en", "de", "fr"] as const;
 export type TranslationLang = (typeof TRANSLATION_LANGS)[number];
@@ -249,6 +250,13 @@ export default function TranslationsPanel({
           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
             {t("Question text")} ({LANG_NAMES[lang]})
           </span>
+          {/* The original for reference, like "A · …" above each answer. */}
+          {originalText && (stripHtml(originalText) || originalText.includes("<img")) && (
+            <div className="max-h-32 overflow-y-auto rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-900/50 dark:text-slate-400 [&_img]:inline-block [&_img]:max-h-16 [&_img]:w-auto [&_p]:my-0">
+              <span className="font-medium">{t("Original")}:</span>{" "}
+              <RichText html={mathHtml(originalText)} />
+            </div>
+          )}
           <RichTextEditor
             key={lang}
             value={current.text}
