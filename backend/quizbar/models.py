@@ -324,3 +324,12 @@ class PeerRound(models.Model):
         constraints = (
             models.UniqueConstraint(fields=("run", "question"), name="qb_one_peer_round"),
         )
+
+
+class DemoRun(models.Model):
+    """Demo present: this run is a test. It never counts in any statistic
+    and is deleted (with its votes) when the presenter leaves it, when any
+    presentation starts in its room, or after a few hours."""
+
+    run = models.OneToOneField("live.Run", on_delete=models.CASCADE, related_name="qb_demo")
+    created_at = models.DateTimeField(auto_now_add=True)

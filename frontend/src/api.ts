@@ -1541,8 +1541,11 @@ export interface FreeTextEvaluation {
 }
 
 export const results = {
-  list: (setId: number) =>
-    request<{ results: RunResults[] }>(`/api/question-sets/${setId}/results/`),
+  // quizbar (fork): ``demoRun`` — include that demo run (walkthrough after a demo).
+  list: (setId: number, demoRun?: number) =>
+    request<{ results: RunResults[] }>(
+      `/api/question-sets/${setId}/results/${demoRun ? `?demo=${demoRun}` : ""}`,
+    ),
   /** Optional AI short report (sanitized HTML) summarising one run's results. */
   summarize: (runId: number) =>
     request<{ report: string }>(`/api/runs/${runId}/ai-summary/`, {
@@ -2145,6 +2148,20 @@ export const quizbar = {
       body: JSON.stringify({ folder }),
     }),
   nextSet: (setId: number) => request<SetNextInfo>(`/api/quizbar/sets/${setId}/next/`),
+  /** The fork's handbook as an HTML fragment (? menu → Handbook). */
+  handbook: () => request<{ html: string }>("/api/quizbar/handbook/"),
+  /** Demo present: a test run of the set that leaves no statistics. */
+  demoStart: (setId: number, mode: "live" | "self_paced") =>
+    request<{ run: number; room_code: string; recording_token: null }>(
+      `/api/quizbar/sets/${setId}/demo/`,
+      { method: "POST", body: JSON.stringify({ mode }) },
+    ),
+  /** Leave a demo: deletes it. ``keepalive`` lets it finish while the page closes. */
+  demoEnd: (runId: number) =>
+    request<{ deleted: boolean }>(`/api/quizbar/runs/${runId}/demo/end/`, {
+      method: "POST",
+      keepalive: true,
+    }),
   /** Self-check sources; GET also brings the self-check up to date. */
   selfCheckSources: (setId: number) =>
     request<SelfCheckSources>(`/api/quizbar/sets/${setId}/self-check-sources/`),

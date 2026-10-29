@@ -1835,3 +1835,137 @@ class TagReplaceTests(TestCase):
         self.assertIsNone(result["changes"][0]["new"])
         self.assertFalse(any(t["name"] == "junk" for t in result["tags"]))
         self.assertEqual(sorted(t.name for t in self.entries[2].tags.all()), ["week-3"])
+
+
+class DemoPresentTests(TestCase):
+    """Demo present: a test run that never shows up in any statistic."""
+
+    def setUp(self):
+        from live.models import ParticipantToken
+
+        self.ParticipantToken = ParticipantToken
+        self.owner = User.objects.create_user(username="demo-teacher")
+        self.room = Room.objects.create(title="R", owner=self.owner)
+        self.room.owners.add(self.owner)
+        self.set = QuestionSet.objects.create(room=self.room, title="Quiz")
+        self.q = Question.objects.create(question_set=self.set, kind="single_choice", text="<p>Q</p>")
+        self.right = AnswerOption.objects.create(question=self.q, text="r", is_correct=True, position=0)
+        self.wrong = AnswerOption.objects.create(question=self.q, text="w", position=1)
+        self.client.force_login(self.owner)
+
+    def vote(self, run, option, question=None):
+        from live.models import Vote
+
+        vote = Vote.objects.create(
+            run=run, question=question or self.q, token=self.ParticipantToken.objects.create(room=self.room)
+        )
+        vote.options.add(option)
+
+    def start_demo(self, mode="live"):
+        response = self.client.post(f"/api/quizbar/sets/{self.set.pk}/demo/", {"mode": mode}, format="json")
+        self.assertEqual(response.status_code, 200)
+        return Run.objects.get(pk=response.json()["run"])
+
+    def library_stats(self):
+        return self.client.get("/api/quizbar/library/").json()["entries"][0]["stats"]
+
+    def test_demo_counts_nowhere_and_is_deleted_on_leave(self):
+        real = Run.objects.create(question_set=self.set, phase="finished")
+        self.vote(real, self.right)
+        demo_run = self.start_demo()
+        self.assertEqual(demo_run.phase, "lobby")
+        payloads = build_payloads(self.room)
+        self.assertTrue(payloads["participant"]["qb_demo"])
+        self.assertTrue(payloads["presenter"]["qb_demo"])
+        for _ in range(3):
+            self.vote(demo_run, self.wrong)
+
+        self.assertEqual(self.library_stats()["answers"], 1)
+        self.assertEqual(self.library_stats()["correct"], 1.0)
+        stats = self.client.get(f"/api/quizbar/sets/{self.set.pk}/stats/").json()
+        self.assertEqual([r["id"] for r in stats["runs"]], [real.pk])
+        results = self.client.get(f"/api/question-sets/{self.set.pk}/results/").json()["results"]
+        self.assertEqual([r["run"] for r in results], [real.pk])
+        walk = self.client.get(f"/api/question-sets/{self.set.pk}/results/?demo={demo_run.pk}").json()
+        self.assertEqual({r["run"] for r in walk["results"]}, {real.pk, demo_run.pk})
+        csv = self.client.get(f"/api/question-sets/{self.set.pk}/results.csv").content.decode()
+        self.assertEqual(csv.count("\n"), 1 + 2)  # header + one row per option of the real run
+        status = self.client.get(f"/api/question-sets/{self.set.pk}/live-status/").json()
+        self.assertIsNone(status["active_run"])
+
+        response = self.client.post(f"/api/quizbar/runs/{demo_run.pk}/demo/end/")
+        self.assertEqual(response.json(), {"deleted": True})
+        self.assertFalse(Run.objects.filter(pk=demo_run.pk).exists())
+        self.assertEqual(self.client.post(f"/api/quizbar/runs/{demo_run.pk}/demo/end/").json(), {"deleted": False})
+        # a real run is never deleted by the demo endpoint
+        self.assertEqual(self.client.post(f"/api/quizbar/runs/{real.pk}/demo/end/").json(), {"deleted": False})
+        self.assertTrue(Run.objects.filter(pk=real.pk).exists())
+
+    def test_real_start_clears_demo_and_demo_keeps_real_answers(self):
+        open_real = Run.objects.create(question_set=self.set, phase="closed")
+        self.vote(open_real, self.right)
+        demo_run = self.start_demo()
+        open_real.refresh_from_db()
+        self.assertEqual(open_real.phase, "finished")  # kept as a result, not deleted
+        self.vote(demo_run, self.wrong)
+        response = self.client.post(f"/api/question-sets/{self.set.pk}/start-run/", {"existing": "archive"})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Run.objects.filter(pk=demo_run.pk).exists())
+        self.assertNotEqual(response.json()["run"], demo_run.pk)
+        self.assertFalse(build_payloads(self.room)["participant"].get("qb_demo", False))
+
+    def test_self_paced_demo_and_stale_purge(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        demo_run = self.start_demo("self_paced")
+        self.assertEqual((demo_run.mode, demo_run.phase), ("self_paced", "open"))
+        self.assertTrue(build_payloads(self.room)["participant"]["qb_demo"])
+        Run.objects.filter(pk=demo_run.pk).update(updated_at=timezone.now() - timedelta(hours=7))
+        self.client.get(f"/api/question-sets/{self.set.pk}/live-status/")
+        self.assertFalse(Run.objects.filter(pk=demo_run.pk).exists())
+        bad = self.client.post(f"/api/quizbar/sets/{self.set.pk}/demo/", {"mode": "nope"}, format="json")
+        self.assertEqual(bad.status_code, 400)
+
+    def test_library_counts_the_first_vote_after_peer_instruction(self):
+        from .models import PeerRound
+
+        run = Run.objects.create(question_set=self.set, phase="results")
+        tokens = [self.ParticipantToken.objects.create(room=self.room) for _ in range(4)]
+        # vote 1: 1 of 4 right; vote 2 (the live votes): 4 of 4 right
+        PeerRound.objects.create(
+            run=run, question=self.q, votes=4,
+            answers={str(t.pk): [self.right.pk if i == 0 else self.wrong.pk] for i, t in enumerate(tokens)},
+        )
+        for _ in range(4):
+            self.vote(run, self.right)
+        stats = self.library_stats()
+        self.assertEqual(stats["answers"], 4)
+        self.assertEqual(stats["correct"], 0.25)
+
+
+class HandbookTests(TestCase):
+    """The handbook in the app (HTML) and as PDF, from one Typst file."""
+
+    def test_html_and_pdf(self):
+        from . import handbook
+
+        owner = User.objects.create_user(username="hb-user")
+        self.assertEqual(self.client.get("/api/quizbar/handbook/").status_code, 403)
+        self.client.force_login(owner)
+        html = self.client.get("/api/quizbar/handbook/", HTTP_HOST="localhost:8443").json()["html"]
+        self.assertIn("<h2>Presenting: all keys</h2>", html)
+        self.assertIn("<kbd>D</kbd>", html)
+        self.assertIn('class="hb-box hb-tip"', html)
+        self.assertIn("http://localhost:8443", html)  # the test site, port once
+        self.assertNotIn(":8443:8443", html)
+        self.assertIn("--owner hb-user", html)
+        self.assertNotIn("<body>", html)
+        pdf = self.client.get("/api/quizbar/handbook/?pdf=1")
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF"))
+        # nothing personal in the repository's copy
+        source = handbook.SOURCE.read_text()
+        self.assertNotIn("vkusar", source)
+        self.assertNotIn("tailce9f42", source)

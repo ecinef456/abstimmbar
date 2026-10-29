@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
-import { Archive, ArrowDownUp, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Grid2x2, Languages, Library, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, SquareStop, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import { Archive, ArrowDownUp, FlaskConical, BarChart3, Check, ChevronDown, CircleDot, CircleHelp, Cloud, Copy, CopyPlus, Download, Files, FolderInput, Grid2x2, Languages, Library, Link2, ListChecks, ListTree, MessageSquareText, Network, Play, Scale, Settings, Share2, SlidersHorizontal, Sparkles, Square, SquareStop, Timer, ToggleLeft, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import {
   api,
   live,
@@ -1891,6 +1891,23 @@ export default function SetPage() {
                     <Play aria-hidden className="h-4 w-4" />{t("Present")}
                   </Button>
                 </div>
+              )}
+              {/* quizbar (fork): demo present — try the quiz out, nothing is saved. */}
+              {(SET_TYPES[set.type].runAction === "present" ||
+                SET_TYPES[set.type].runAction === "self_paced") && (
+                <Button
+                  title={t(
+                    "Present as usual, but nothing is saved: your test answers never appear in the results or statistics.",
+                  )}
+                  onClick={() =>
+                    navigate(
+                      `/sets/${id}/${SET_TYPES[set.type].runAction === "present" ? "present" : "quiz"}?demo=1`,
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5"
+                >
+                  <FlaskConical aria-hidden className="h-4 w-4" />{t("Demo")}
+                </Button>
               )}
               {/* The presenter's ✕ only leaves (spec PR 2): an unfinished
                   run is ended here. */}

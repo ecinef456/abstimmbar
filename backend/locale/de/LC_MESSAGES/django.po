@@ -734,3 +734,6 @@ msgstr "Wie sicher sind Sie?"
 
 msgid "optional"
 msgstr "freiwillig"
+
+msgid "Demo — your answers are not saved."
+msgstr "Demo – Ihre Antworten werden nicht gespeichert."

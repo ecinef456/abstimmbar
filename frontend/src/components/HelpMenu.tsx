@@ -6,7 +6,8 @@
  *  neighboring Settings link. */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, HelpCircle } from "lucide-react";
+import { Link } from "react-router";
+import { BookOpen, ExternalLink, HelpCircle } from "lucide-react";
 import type { TourMode } from "../tour/steps";
 
 /** The guide on the project website, in the UI language (German at the
@@ -88,6 +89,16 @@ export default function HelpMenu({
             {t("Guide")}
             <ExternalLink aria-hidden className="h-4 w-4 text-slate-400" />
           </a>
+          {/* quizbar (fork): the fork's own handbook, inside the app. */}
+          <Link
+            role="menuitem"
+            to="/handbook"
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            {t("Handbook")}
+            <BookOpen aria-hidden className="h-4 w-4 text-slate-400" />
+          </Link>
         </div>
       )}
     </div>

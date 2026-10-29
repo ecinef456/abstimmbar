@@ -13,9 +13,11 @@ from rooms.models import QuestionSet, Room
 
 from . import (
     course,
+    demo,
     export,
     folders,
     game,
+    handbook,
     justifications,
     library,
     peer,
@@ -617,3 +619,49 @@ def game_leaderboard(request, run_id):
     if not _owner(request.user, run.question_set.room):
         raise Http404
     return Response(game.leaderboard(run, final=request.query_params.get("final") == "1"))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def demo_start(request, set_id):
+    """Demo present: start a test run of the set that leaves no statistics.
+    Body: {"mode": "live" | "self_paced"}."""
+    question_set = get_object_or_404(QuestionSet.objects.select_related("room"), pk=set_id)
+    if not _owner(request.user, question_set.room):
+        raise Http404
+    mode = request.data.get("mode") or Run.Mode.LIVE
+    if mode not in {m.value for m in Run.Mode} or question_set.type == "self_check":
+        return Response({"detail": "Invalid mode."}, status=400)
+    run = demo.start(question_set, mode)
+    broadcast(question_set.room)
+    return Response({"run": run.pk, "room_code": question_set.room.code, "recording_token": None})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def demo_end(request, run_id):
+    """Leave a demo: delete the run with everything answered in it."""
+    run = Run.objects.select_related("question_set__room").filter(pk=run_id).first()
+    if run is None:
+        return Response({"deleted": False})  # already gone (e.g. a newer start)
+    room = run.question_set.room
+    if not _owner(request.user, room):
+        raise Http404
+    deleted = demo.end(run)
+    if deleted:
+        broadcast(room)
+    return Response({"deleted": deleted})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def handbook_view(request):
+    """The handbook: {"html": …} for the app, or the PDF with ``?pdf=1``."""
+    # the live address without a port (the handbook adds ":8443" for the test site)
+    site = f"{request.scheme}://{request.get_host().rsplit(':', 1)[0]}"
+    user = request.user.get_username()
+    if request.query_params.get("pdf"):
+        response = HttpResponse(handbook.pdf(site, user), content_type="application/pdf")
+        response["Content-Disposition"] = 'attachment; filename="abstimmbar-handbook.pdf"'
+        return response
+    return Response({"html": handbook.html(site, user)})

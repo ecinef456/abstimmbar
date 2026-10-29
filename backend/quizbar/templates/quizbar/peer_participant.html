@@ -1,9 +1,12 @@
 {% load i18n %}
-{# quizbar (fork): on the phone — the "Vote 2" banner of peer instruction, and the optional "How sure are you?" row (0–10) under the answer just given. Listens to the page's "quizbar-state" events. #}
+{# quizbar (fork): on the phone — the "Vote 2" banner of peer instruction, the optional "How sure are you?" row (0–10) under the answer just given, and the "Demo" note of a test run (demo present). Listens to the page's "quizbar-state" events. #}
 <style>
   #qb-round { margin: 0 0 10px; padding: 8px 12px; border-radius: 12px; background: var(--brand-soft);
               color: var(--brand-strong); font-weight: 700; font-size: 15px; text-align: center; }
   #qb-round small { display: block; font-weight: 400; font-size: 13px; color: var(--ink-soft); }
+  #qb-demo { margin: 0 auto 14px; max-width: 480px; padding: 6px 12px; border-radius: 999px; text-align: center;
+             font-size: 13px; font-weight: 600; background: #fff4dc; color: #8a5300; }
+  :root[data-theme="dark"] #qb-demo { background: #3a2a0c; color: #f5d08a; }
   /* One pill-shaped scale 0–10; the choice fills the bar up to it. */
   #qb-conf { margin: 22px auto 0; max-width: 380px; text-align: center; }
   #qb-conf p { margin: 0 0 8px; font-size: 13px; color: var(--ink-soft); }
@@ -38,6 +41,7 @@
     guess: "{% trans 'guessing' %}",
     certain: "{% trans 'sure' %}",
     thanks: "{% trans 'Thanks!' %}",
+    demo: "{% trans 'Demo — your answers are not saved.' %}",
   };
   const question = document.getElementById("question");
   const done = document.getElementById("done");
@@ -48,6 +52,12 @@
   banner.hidden = true;
   banner.innerHTML = `${T.vote2}<small>${T.vote2Hint}</small>`;
   question.prepend(banner);
+
+  const demoNote = document.createElement("p");
+  demoNote.id = "qb-demo";
+  demoNote.hidden = true;
+  demoNote.textContent = T.demo;
+  (document.querySelector("main") || question).prepend(demoNote);
 
   const box = document.createElement("div");
   box.id = "qb-conf";
@@ -96,6 +106,7 @@
 
   window.addEventListener("quizbar-state", (event) => {
     const state = event.detail || {};
+    demoNote.hidden = !state.qb_demo;
     const q = state.phase === "open" ? state.question : null;
     banner.hidden = !(q && q.qb_round === 2);
     const asked = !!(q && q.qb_confidence);

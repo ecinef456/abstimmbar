@@ -34,4 +34,7 @@ urlpatterns = [
     path("game/<str:code>/me/", views.game_me),
     path("game/<str:code>/enter/", views.game_enter),
     path("game/runs/<int:run_id>/leaderboard/", views.game_leaderboard),
+    path("sets/<int:set_id>/demo/", views.demo_start),
+    path("runs/<int:run_id>/demo/end/", views.demo_end),
+    path("handbook/", views.handbook_view),
 ]

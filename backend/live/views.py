@@ -32,6 +32,7 @@ from common.csv_safe import csv_safe
 from common.i18n_fields import resolve_translated_text, translated_map
 from common.markdown import render_markdown
 from common.models import SiteConfig
+from quizbar import demo as quizbar_demo
 from quizbar import justifications as quizbar_justifications
 from quizbar import selfcheck as quizbar_selfcheck
 from rooms.models import AnswerOption, Question, QuestionSet, Room
@@ -1850,13 +1851,15 @@ def live_status(request, set_id):
     question_set = get_object_or_404(QuestionSet, pk=set_id)
     if not _require_owner(request.user, question_set.room):
         raise Http404
+    # quizbar (fork): demo runs are invisible here (start_run deletes them).
+    quizbar_demo.purge_stale()
     run = (
-        Run.objects.filter(question_set=question_set)
+        quizbar_demo.real(Run.objects.filter(question_set=question_set))
         .exclude(phase=Run.Phase.FINISHED)
         .first()
     )
     # "Votes" here means any stored answers, mind-map contributions included.
-    has_votes = question_set.runs.filter(mindmap.answered_runs_q()).exists()
+    has_votes = quizbar_demo.real(question_set.runs.filter(mindmap.answered_runs_q())).exists()
     # Whether the run the start dialog would resume already carries answers —
     # lets the UI offer archive/delete instead of silently appending (#70).
     active_run_has_votes = bool(run and mindmap.run_has_answers(run))
@@ -1940,6 +1943,8 @@ def start_run(request, set_id):
     # the first to commit, then see (and reuse) the run it created.
     with transaction.atomic():
         Room.objects.select_for_update().get(pk=question_set.room_id)
+        # quizbar (fork): a real presentation ends every demo run of the room.
+        quizbar_demo.clear(question_set.room)
 
         # One active run per room: a room's participant page shows a single
         # active run, so finish/drop any unfinished run of *other* sets first.
@@ -2191,6 +2196,7 @@ def set_results(request, set_id):
         question_set.runs.filter(mindmap.answered_runs_q())
         .order_by("-created_at")
     )
+    runs = quizbar_demo.visible(runs, request)  # quizbar (fork): no demo runs
     return Response({"results": [run_results(run) for run in runs]})
 
 
@@ -2953,7 +2959,7 @@ def results_csv(request, set_id):
     question_set = _owned_question_set(request.user, set_id)
     # Optional ?run=<id>: export only that Durchführung, else the whole set
     # including archived runs (#17).
-    runs = question_set.runs.order_by("created_at")
+    runs = quizbar_demo.real(question_set.runs.order_by("created_at"))  # quizbar (fork)
     run_id = request.query_params.get("run")
     if run_id:
         runs = runs.filter(pk=run_id)

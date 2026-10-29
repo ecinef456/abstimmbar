@@ -156,7 +156,10 @@ Code: `quizbar/selfcheck.py`, `quizbar/course.py`,
   self-check copies all count as the same question). Filter by tag chip
   or type, and a **To sort** chip for questions without tags.
 - **Statistics on each card:** runs, answers and % correct over every
-  copy of the question and every run, plus the most chosen wrong answer.
+  copy of the question and every run (all rooms, all semesters: each
+  answer ever given counts once), plus the most chosen wrong answer. After
+  peer instruction the *first* vote counts (before discussing); demo runs
+  never count; self-check attempts are not included.
 - **Selection:** ticked questions stay selected while you change the
   search; **Show only the selected** lists exactly them (to check before
   copying or exporting).
@@ -447,6 +450,52 @@ Run signal in `quizbar/apps.py`), `quizbar/templates/quizbar/game_participant.ht
 (included by the participant page), `frontend/src/quizbar/Game.tsx`,
 `GameModePanel.tsx`; hooks in `live/state.py`, `participant.html` (one
 event), `PresentPage.tsx`, `SetPage.tsx`, `rooms/views.py` (duplicate).
+
+### Demo present (try a quiz out, nothing is saved)
+
+Set page → **Demo**, next to *Present* (live polls and self-paced quizzes).
+It presents exactly as usual — lobby, QR code, phones, every key, peer
+instruction, game mode, *Next quiz* (stays in demo mode) — but the run is a
+test: the beamer shows "Demo — nothing is saved", the phones "your answers
+are not saved".
+
+- The demo run is deleted with everything answered in it when the
+  presenter leaves it (✕/Esc, end of the quiz, closing or reloading the
+  tab), when any presentation (real or demo) starts in the same room, or
+  after 6 hours untouched.
+- While it exists it is invisible to the results page, the CSV, the room
+  statistics, the PDF report, the library card numbers and the start
+  dialog ("continue / archive / delete").
+- Starting a demo leaves real results alone: an unfinished real run of the
+  set (presenter left with Esc) is kept as a finished result.
+
+Code: `quizbar/demo.py` (table `DemoRun`, endpoints
+`POST /api/quizbar/sets/<id>/demo/` and `/api/quizbar/runs/<id>/demo/end/`),
+`frontend/src/quizbar/Demo.tsx`; hooks in `live/views.py` (`live_status`,
+`start_run`, `set_results`, `results_csv`), `live/state.py`,
+`PresentPage.tsx`, `SetPage.tsx`, `api.ts` (`results.list`), phone note in
+`quizbar/templates/quizbar/peer_participant.html`.
+
+### The handbook, inside the app
+
+Header **?** → **Handbook** (`/handbook`): the fork's handbook as a page of
+the app, with a table of contents that follows the reading position
+(chapters; the sections of the current chapter), deep links
+(`/handbook#demo-try-a-quiz-out`) and a small *PDF* link.
+
+The source is `backend/quizbar/handbook/handbook.typ` — one Typst file for
+both: the server compiles it to HTML for the page (cached) and to PDF for
+the link, filling in its own address and the signed-in user, so the file
+holds nothing personal. Its helpers (`tip`, `warn`, `key`, `step`,
+`cards`) check `target()` and give boxes/keys/steps in both outputs. Edit
+it like any other file of the fork; locally:
+
+    typst compile backend/quizbar/handbook/handbook.typ \
+        --input site=https://<server>.ts.net --input user=<username>
+
+Code: `quizbar/handbook.py`, endpoint `/api/quizbar/handbook/` (`?pdf=1`),
+`frontend/src/quizbar/Handbook.tsx`; hooks in `components/HelpMenu.tsx`,
+`main.tsx`.
 
 ### A–Z as the default sort
 

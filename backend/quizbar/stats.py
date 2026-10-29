@@ -62,14 +62,26 @@ def is_correct(options, chosen):
 def library(members):
     """``members``: {entry id: [question ids (all copies)]} →
     {entry id: {"runs", "answers", "correct" (share or None),
-    "top_wrong" (option position or None), "top_wrong_share"}}."""
+    "top_wrong" (option position or None), "top_wrong_share"}}.
+
+    Every answer ever given to any copy counts once (all rooms, all runs;
+    demo runs never). After peer instruction the *first* vote counts — what
+    students knew before discussing, which is what makes a question easy or
+    hard."""
+    from .models import PeerRound
+
     question_ids = [q for ids in members.values() for q in ids]
     options = options_of(question_ids)
+    peered = PeerRound.objects.filter(question_id__in=question_ids, run__qb_demo__isnull=True)
+    first_votes = {(p.run_id, p.question_id): p.answers for p in peered}
     by_question = defaultdict(list)
     for _vote, run, question, _token, chosen in votes_of(
-        question_id__in=question_ids, question__kind__in=CHOICE
+        question_id__in=question_ids, question__kind__in=CHOICE, run__qb_demo__isnull=True
     ):
-        by_question[question].append((run, chosen))
+        if (run, question) not in first_votes:
+            by_question[question].append((run, chosen))
+    for (run, question), answers in first_votes.items():
+        by_question[question].extend((run, frozenset(chosen)) for chosen in answers.values())
 
     out = {}
     for entry_id, ids in members.items():
@@ -113,7 +125,7 @@ def _share(right, scored):
 def runs_with_votes(question_set):
     """Runs of a set that collected answers, newest first."""
     return list(
-        Run.objects.filter(question_set=question_set)
+        Run.objects.filter(question_set=question_set, qb_demo__isnull=True)  # no demo runs
         .annotate(n=Count("votes"))
         .filter(n__gt=0)
         .order_by("-created_at")

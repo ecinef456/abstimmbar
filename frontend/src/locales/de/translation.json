@@ -1505,5 +1505,12 @@
   "Select all {{count}} found_other": "Alle {{count}} gefundenen auswählen",
   "No correct answer?": "Keine richtige Antwort?",
   "No answer is marked as correct. Are you sure this question has no correct answer?": "Keine Antwort ist als richtig markiert. Sind Sie sicher, dass diese Frage keine richtige Antwort hat?",
-  "Back to the answers": "Zurück zu den Antworten"
+  "Back to the answers": "Zurück zu den Antworten",
+  "Demo": "Demo",
+  "Demo — nothing is saved": "Demo – nichts wird gespeichert",
+  "Present as usual, but nothing is saved: your test answers never appear in the results or statistics.": "Wie gewohnt präsentieren, aber nichts wird gespeichert: Ihre Testantworten erscheinen nie in den Ergebnissen oder Statistiken.",
+  "Handbook": "Handbuch",
+  "Contents": "Inhalt",
+  "PDF": "PDF",
+  "The handbook could not be loaded.": "Das Handbuch konnte nicht geladen werden."
 }

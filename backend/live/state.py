@@ -13,6 +13,7 @@ import nh3
 from django.db.models import Count
 
 from common.i18n_fields import translated_map
+from quizbar import demo as quizbar_demo
 from quizbar import game as quizbar_game
 from quizbar import i18n as quizbar_i18n
 from quizbar import justifications as quizbar_justifications
@@ -321,6 +322,8 @@ def build_payloads(room):
     quizbar_game.attach(run, participant, presenter)
     # quizbar (fork): peer instruction (vote 1 / vote 2) and confidence.
     quizbar_peer.attach(run, participant, presenter)
+    # quizbar (fork): demo present — "nothing is saved" on beamer and phones.
+    quizbar_demo.attach(run, participant, presenter)
     return {"participant": participant, "presenter": presenter}
 
 
@@ -355,6 +358,7 @@ def _self_paced_payloads(room, run, base):
         for question in run.question_set.questions.all()
     ]
     presenter["votes_total"] = sum(counts.values())
+    quizbar_demo.attach(run, participant, presenter)  # quizbar (fork)
     return {"participant": participant, "presenter": presenter}
 
 

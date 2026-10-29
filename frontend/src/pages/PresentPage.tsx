@@ -47,6 +47,7 @@ import { Footer, FooterIconButton, buildViewSegments, type ViewSegment } from ".
 import HelpOverlay from "./presenter/HelpOverlay";
 import MatrixPanel from "./presenter/MatrixPanel";
 import { GameLobby, LeaderboardOverlay, MuteBadge, Podium, useGameSounds } from "../quizbar/Game";
+import { endDemo, useDemo } from "../quizbar/Demo"; // quizbar (fork)
 import { INK, evalColor, categoryColor, categoryDeep, categoryHue, termColor } from "../results/palette";
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -171,6 +172,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // ?recording=1; live only (self-paced is already async).
   const [searchParams] = useSearchParams();
   const recording = searchParams.get("recording") === "1" && mode !== "self_paced";
+  // quizbar (fork): demo present (?demo=1) — a test run, nothing is saved.
+  const demo = searchParams.get("demo") === "1";
   // Deep link (#7): jump straight to a specific question.
   const targetQuestionId = Number(searchParams.get("question")) || null;
   // ?resume=continue|archive|delete (guided tour): answer the "existing
@@ -321,6 +324,14 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
       // either there are results and no run is active, OR the run we'd resume
       // already carries answers (presenter left it unfinished) — so archiving
       // is reliably offered instead of silently appending (#70).
+      // quizbar (fork): a demo never asks about stored results — it starts a
+      // separate test run that is deleted again.
+      if (demo) {
+        const started = await quizbar.demoStart(id, mode);
+        setRunId(started.run);
+        setCode(started.room_code);
+        return;
+      }
       if (
         !easyMode &&
         !status.recently_started &&
@@ -344,6 +355,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     setRunId(started.run);
     setCode(started.room_code);
   }
+
+  useDemo(demo, runId); // quizbar (fork): "Demo" badge; deleted when the page closes
 
   const handleState = useCallback((s: LiveState) => {
     setState(s);
@@ -1448,8 +1461,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
   // path's frequent SSE-driven re-renders (#75). Declared before onKey, which
   // references it.
   const leavePresentation = useCallback(() => {
+    endDemo(demo, runId); // quizbar (fork)
     navigate(`/sets/${id}`);
-  }, [navigate, id]);
+  }, [navigate, id, demo, runId]);
   // ✕ / Esc (spec PR 2): leave WITHOUT ending — an open vote is closed and
   // participants see „paused"; the run is ended from the set overview (or
   // resumed by presenting again). Always back to the set overview in the same
@@ -1468,8 +1482,9 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         new Promise((resolve) => window.setTimeout(resolve, 3000)),
       ]);
     }
+    endDemo(demo, runId); // quizbar (fork)
     navigate(`/sets/${id}`, { replace: true });
-  }, [runId, selfPaced, navigate, id]);
+  }, [runId, selfPaced, navigate, id, demo]);
   // Closing slide reached in live mode, run not finished yet (see finish()).
   const [pendingFinish, setPendingFinish] = useState(false);
   const finishAndLeave = useCallback(async () => {
@@ -1493,8 +1508,8 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
         // go on anyway — the run stays open and can be ended later
       }
     }
-    window.location.assign(`/sets/${nextQuiz.id}/present`);
-  }, [nextQuiz, pendingFinish, runId]);
+    window.location.assign(`/sets/${nextQuiz.id}/present${demo ? "?demo=1" : ""}`);
+  }, [nextQuiz, pendingFinish, runId, demo]);
   const backFromClosing = useCallback(() => {
     setPendingFinish(false);
     setEnded(false);
@@ -1642,7 +1657,7 @@ export default function PresentPage({ mode = "live" }: { mode?: "live" | "self_p
     // fails.
     if (selfPaced && presentResultsAfter && runId) {
       try {
-        const payload = await results.list(id);
+        const payload = await results.list(id, demo && runId ? runId : undefined);
         const run = payload.results.find((r) => r.run === runId) ?? payload.results[0];
         if (run && run.questions.length > 0) {
           setWalk(run.questions);
