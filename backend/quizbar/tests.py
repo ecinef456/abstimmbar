@@ -2042,3 +2042,33 @@ class HandbookTests(TestCase):
         source = handbook.SOURCE.read_text()
         self.assertNotIn("vkusar", source)
         self.assertNotIn("tailce9f42", source)
+
+
+class StructureTitleTests(TestCase):
+    """Course-structure set titles in the room's language while presenting."""
+
+    def test_titles(self):
+        from . import languages
+
+        room = Room.objects.create(title="R")
+        cases = {
+            "Week 2 – Activators PRE": ("Woche 2 – Aktivierungsfragen PRE", "Semaine 2 – Activateurs PRE",
+                                        "Settimana 2 – Attivatori PRE"),
+            "Week 12 – Quiz 7": ("Woche 12 – Quiz 7", "Semaine 12 – Quiz 7", "Settimana 12 – Quiz 7"),
+            "Self-check": ("Selbsttest", "Auto-évaluation", "Autoverifica"),
+        }
+        for title, (de, fr, it) in cases.items():
+            question_set = QuestionSet.objects.create(room=room, title_de=title)
+            self.assertEqual(
+                languages.set_title_map(question_set), {"en": title, "de": de, "fr": fr, "it": it}
+            )
+        own = QuestionSet.objects.create(room=room, title_de="Waves revision")
+        self.assertEqual(languages.set_title_map(own)["de"], "Waves revision")
+        self.assertNotIn("it", languages.set_title_map(own))
+
+    def test_payload(self):
+        room = Room.objects.create(title="R")
+        question_set = QuestionSet.objects.create(room=room, title_de="Week 3 – Activators POST")
+        question = Question.objects.create(question_set=question_set, kind="single_choice", text="<p>Q</p>")
+        Run.objects.create(question_set=question_set, phase="open", active_question=question)
+        self.assertEqual(build_payloads(room)["participant"]["set_title"]["fr"], "Semaine 3 – Activateurs POST")

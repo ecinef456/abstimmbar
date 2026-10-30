@@ -2,15 +2,16 @@
 /** quizbar (fork): a question's translations (en/de/fr) in the editor.
  *
  *  The question's own text stays the original; a translation is shown when
- *  the room (or the viewer) uses that language. Collapsed by default. */
+ *  the room (or the viewer) uses that language. Collapsed by default.
+ *  The original is usually English: the English tab shows it in its field
+ *  (an English "translation" equal to the original is not stored). */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Languages, Loader2, Sparkles } from "lucide-react";
 import { RichTextEditor } from "@basicbar/ui/rich-text-editor";
-import { localizedText, RichText, stripHtml, type LocalizedText } from "@basicbar/ui";
+import { localizedText, stripHtml, type LocalizedText } from "@basicbar/ui";
 import { api, quizbar, requestDetail, type QuestionTranslations } from "../api";
 import { Button, TextInput } from "../components/ui";
-import { mathHtml } from "../math";
 
 export const TRANSLATION_LANGS = ["en", "de", "fr"] as const;
 export type TranslationLang = (typeof TRANSLATION_LANGS)[number];
@@ -82,6 +83,15 @@ function useTranslateEnabled() {
 
 const clean = (html: string) => stripHtml(html).replace(/\s+/g, " ").trim();
 
+/** An "English translation" that is just the original (shown in the English
+ *  field) is no translation: same text and the same images. */
+const filledText = (html: string) => Boolean(clean(html) || html.includes("<img"));
+
+function sameAsOriginal(html: string, original?: string) {
+  const images = (value: string) => (value.match(/<img[^>]*src="([^"]*)"/g) ?? []).join(" ");
+  return clean(html) === clean(original ?? "") && images(html) === images(original ?? "");
+}
+
 export default function TranslationsPanel({
   value,
   onChange,
@@ -99,36 +109,34 @@ export default function TranslationsPanel({
   const present = TRANSLATION_LANGS.filter((lang) => filled(value, lang));
   const [open, setOpen] = useState(false);
   const autoEnabled = useTranslateEnabled();
-  const [from, setFrom] = useState<"original" | TranslationLang>("original");
+  const [from, setFrom] = useState<TranslationLang>("en");
   const [overwrite, setOverwrite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autoError, setAutoError] = useState("");
 
   async function translateAll() {
     const ids = options.map((o) => o.clientId);
-    const source =
-      from === "original"
-        ? {
-            text: originalText ?? "",
-            options: options.map((o) => ({ text: localizedText(o.text), justification: o.justification ?? "" })),
-          }
-        : {
-            text: value[from].text,
-            options: ids.map((id, i) => ({
-              text: value[from].options[id]?.text || localizedText(options[i].text),
-              justification: value[from].options[id]?.justification ?? "",
-            })),
-          };
+    // English without an English translation = the original (its language
+    // is then detected, in case an older question was written in another).
+    const useOriginal = from === "en" && !filled(value, "en");
+    const source = {
+      text: (useOriginal ? "" : value[from].text) || (from === "en" ? originalText ?? "" : ""),
+      options: ids.map((id, i) => ({
+        text: value[from].options[id]?.text || localizedText(options[i].text),
+        justification:
+          value[from].options[id]?.justification || (from === "en" ? options[i].justification ?? "" : ""),
+      })),
+    };
     const targets = TRANSLATION_LANGS.filter((lang) => lang !== from);
     setBusy(true);
     setAutoError("");
     try {
-      const result = await quizbar.translate({ source: from === "original" ? "" : from, targets, ...source });
+      const result = await quizbar.translate({ source: useOriginal ? "" : from, targets, ...source });
       const next: TranslationState = { ...value };
       for (const lang of targets) {
         const item = result[lang];
         // Same text back = the source was already in this language.
-        if (!item || (from === "original" && clean(item.text) === clean(source.text))) continue;
+        if (!item || (useOriginal && clean(item.text) === clean(source.text))) continue;
         const current = next[lang];
         const optionsNext = { ...current.options };
         ids.forEach((id, i) => {
@@ -187,12 +195,11 @@ export default function TranslationsPanel({
             <span>{t("Translate from")}</span>
             <select
               value={from}
-              onChange={(event) => setFrom(event.target.value as "original" | TranslationLang)}
+              onChange={(event) => setFrom(event.target.value as TranslationLang)}
               aria-label={t("Translate from")}
               className="rounded-md border border-field bg-white px-2 py-1 text-sm dark:bg-slate-900"
             >
-              <option value="original">{t("the original")}</option>
-              {TRANSLATION_LANGS.filter((lang) => filled(value, lang)).map((lang) => (
+              {TRANSLATION_LANGS.filter((lang) => lang === "en" || filled(value, lang)).map((lang) => (
                 <option key={lang} value={lang}>
                   {LANG_NAMES[lang]}
                 </option>
@@ -250,17 +257,13 @@ export default function TranslationsPanel({
           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
             {t("Question text")} ({LANG_NAMES[lang]})
           </span>
-          {/* The original for reference, like "A · …" above each answer. */}
-          {originalText && (stripHtml(originalText) || originalText.includes("<img")) && (
-            <div className="max-h-32 overflow-y-auto rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-900/50 dark:text-slate-400 [&_img]:inline-block [&_img]:max-h-16 [&_img]:w-auto [&_p]:my-0">
-              <span className="font-medium">{t("Original")}:</span>{" "}
-              <RichText html={mathHtml(originalText)} />
-            </div>
-          )}
           <RichTextEditor
             key={lang}
-            value={current.text}
-            onChange={(html: string) => update({ text: html })}
+            // English: the original when there is no English translation.
+            value={lang === "en" && !filledText(current.text) ? originalText ?? "" : current.text}
+            onChange={(html: string) =>
+              update({ text: lang === "en" && sameAsOriginal(html, originalText) ? "" : html })
+            }
             onUploadImage={async (file: File) => (await api.uploadImage(file)).url}
           />
         </div>

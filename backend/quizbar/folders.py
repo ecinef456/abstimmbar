@@ -6,6 +6,7 @@ from django.db.models import F, Max
 from common.i18n_fields import translated_map
 from rooms.models import QuestionSet
 
+from . import languages
 from .models import SetFolder, SetPlacement
 
 MAX_TITLE = 200
@@ -110,7 +111,7 @@ def next_info(question_set):
         if candidate is not None and presentable(candidate):
             info["next"] = {
                 "id": candidate.pk,
-                "title": translated_map(candidate, "title"),
+                "title": languages.set_title_map(candidate),  # in the room's language
                 "type": candidate.type,
                 "number": info["number"] + offset,
             }

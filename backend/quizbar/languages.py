@@ -107,3 +107,46 @@ class ParticipantLanguageMiddleware:
             if base in CODES:
                 return base, None
         return None, None
+
+
+# -- titles of the course structure in the room's language ----------------------
+# Sets are edited in English ("Week 2 – Activators PRE"); while presenting,
+# beamer and phones show them in the room's language. Other titles as written.
+STRUCTURE_WORDS = {
+    "Week": {"de": "Woche", "fr": "Semaine", "it": "Settimana"},
+    "Activators PRE": {"de": "Aktivierungsfragen PRE", "fr": "Activateurs PRE", "it": "Attivatori PRE"},
+    "Activators POST": {"de": "Aktivierungsfragen POST", "fr": "Activateurs POST", "it": "Attivatori POST"},
+    "Quiz": {"de": "Quiz", "fr": "Quiz", "it": "Quiz"},
+    "Self-check": {"de": "Selbsttest", "fr": "Auto-évaluation", "it": "Autoverifica"},
+}
+STRUCTURE_TITLE = re.compile(
+    r"^(?:Week (?P<week>\d+) – )?(?P<name>Activators PRE|Activators POST|Quiz (?P<quiz>\d+)|Self-check)$"
+)
+
+
+def _structure_title(title, lang):
+    match = STRUCTURE_TITLE.match(title or "")
+    if match is None:
+        return None
+    if lang == "en":
+        return title
+    words = STRUCTURE_WORDS
+    if match["quiz"]:
+        name = f"{words['Quiz'][lang]} {match['quiz']}"
+    else:
+        name = words[match["name"]][lang]
+    return f"{words['Week'][lang]} {match['week']} – {name}" if match["week"] else name
+
+
+def set_title_map(question_set):
+    """The set's title as a language map; titles of the course structure
+    come in English, German, French and Italian."""
+    from common.i18n_fields import translated_map
+
+    titles = translated_map(question_set, "title")
+    canonical = titles.get(settings.MODELTRANSLATION_DEFAULT_LANGUAGE) or next(
+        (value for value in titles.values() if value), ""
+    )
+    if STRUCTURE_TITLE.match(canonical or "") is None:
+        return titles
+    return {lang: _structure_title(canonical, lang) for lang in ("en", "de", "fr", "it")}

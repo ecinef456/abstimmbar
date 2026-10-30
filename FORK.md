@@ -89,6 +89,17 @@ Code: `components/TranslatableField.tsx`, `quizbar/languages.py` (table
 - The matrix colour names and the guided tour are in French too (the
   tour's old "German/English tabs" step now explains the room language).
 
+### Course-structure titles in the room's language
+
+Sets are edited in English, but while presenting, the titles of the course
+structure appear in the room's language on the beamer and the phones:
+"Week 2 – Activators PRE" → "Woche 2 – Aktivierungsfragen PRE",
+"Semaine 2 – Activateurs PRE", "Settimana 2 – Attivatori PRE"; likewise
+"Quiz N" and "Self-check" (Selbsttest, Auto-évaluation, Autoverifica).
+Other titles are shown as written. Code: `quizbar.languages.set_title_map`,
+hooks in `live/state.py`, `live/views.py` (`set_title`), `quizbar/folders.py`
+(next quiz).
+
 ### Folders of question sets, numbered order, "Next quiz"
 
 - **Folders inside a room** (e.g. one per week): chips above the set list —
@@ -239,8 +250,10 @@ listed), `QuestionPage.tsx`, `SetPage.tsx`, `App.tsx`, `main.tsx`.
 - The **library** shows English (the English translation, if the original
   is not English). Tags are English.
 - Editor: a collapsed **Translations** box under the answers (tabs English /
-  Deutsch / Français). The original question text is shown above the
-  translated one, and each answer's original above its field, for reference.
+  Deutsch / Français). The original is usually English, so the English tab
+  shows the original text in its field (an English "translation" equal to
+  the original is not stored); each answer's original is shown above its
+  field.
 - Copies (library, duplicated sets/rooms, self-checks) keep the translations.
 - From Typst: one file per language, imported together (see below).
 
@@ -252,8 +265,9 @@ Code: `quizbar/i18n.py` (tables `QuestionTranslation`, `OptionTranslation`),
 ### Automatic translation in the editor (DeepL or LibreTranslate)
 
 The translation panel of the question editor gets a **Translate** row:
-"Translate from [the original | English | Deutsch | Français] into the
-other languages". It fills the empty fields of the other two languages
+"Translate from [English | Deutsch | Français] into the other languages"
+(English = the English translation, else the original, whose language is
+then detected). It fills the empty fields of the other two languages
 (question, answers, justifications); tick *replace what is already there*
 to overwrite. Math (`$…$`, `\(…\)`) is never sent to the translator and
 comes back unchanged. It is a draft: check it, then save.

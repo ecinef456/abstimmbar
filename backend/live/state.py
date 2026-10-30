@@ -127,7 +127,8 @@ def build_payloads(room):
     base["run_id"] = run.pk
 
     question_set = run.question_set
-    base["set_title"] = translated_map(question_set, "title")
+    # quizbar (fork): course-structure titles in the room's language
+    base["set_title"] = quizbar_languages.set_title_map(question_set)
 
     if run.mode == Run.Mode.SELF_PACED:
         return _self_paced_payloads(room, run, base)

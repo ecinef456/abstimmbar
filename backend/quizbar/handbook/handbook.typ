@@ -261,9 +261,11 @@ Under every answer in the editor there is a field *"why right / wrong"*. In clas
 == Translations (one question, three languages)
 Under the answers in the editor: *Translations* (tabs English / Deutsch / Français) — question text, answers and "why" in the other languages.
 - The room's language decides what is shown. No translation for it → the original text.
+- The English tab shows your original in its field; only what you change there becomes an English translation.
+- Titles of the course structure ("Week 2 – Activators PRE", "Quiz 3", "Self-check") appear in the room's language while presenting ("Woche 2 – Aktivierungsfragen PRE", "Semaine 2 – Activateurs PRE" …). You keep editing them in English.
 - The library always shows the English version; tags are English.
 - Copies (library, duplicated rooms, self-checks) keep the translations.
-- *Translate* (if set up on the server, chapter 8): "Translate from the original / English / Deutsch / Français into the other languages" fills the empty fields; tick *replace what is already there* to overwrite. Math stays untouched. Check the draft, then *Save*.
+- *Translate* (if set up on the server, chapter 8): "Translate from English / Deutsch / Français into the other languages" fills the empty fields (English = your original); tick *replace what is already there* to overwrite. Math stays untouched. Check the draft, then *Save*.
 
 // ---------------------------------------------------------------- 5
 = The question library

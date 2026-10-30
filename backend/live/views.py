@@ -34,6 +34,7 @@ from common.markdown import render_markdown
 from common.models import SiteConfig
 from quizbar import demo as quizbar_demo
 from quizbar import justifications as quizbar_justifications
+from quizbar import languages as quizbar_languages
 from quizbar import selfcheck as quizbar_selfcheck
 from rooms.models import AnswerOption, Question, QuestionSet, Room
 
@@ -183,7 +184,7 @@ def question_preview(request, question_id):
             "show_code": False,
             "corner": room.presentation_corner,
         },
-        "set_title": translated_map(question.question_set, "title"),
+        "set_title": quizbar_languages.set_title_map(question.question_set),  # quizbar (fork)
         "question": question_payload(question, shuffle_seed=0),
     }
     if question.kind == Question.Kind.MINDMAP:
@@ -630,7 +631,7 @@ def quiz(request, code):
         {
             # {de, en} map (#33 MR2), matching every other title/text field in
             # this payload (via question_payload) and the live SSE snapshot.
-            "set_title": translated_map(run.question_set, "title"),
+            "set_title": quizbar_languages.set_title_map(run.question_set),  # quizbar (fork)
             "feedback": feedback,
             "allow_back": run.question_set.allow_back_navigation,
             "questions": [question_payload(q, shuffle_seed=run.pk) for q in questions],
@@ -1442,7 +1443,7 @@ def recording_questions(request, token):
 
     return Response(
         {
-            "set_title": translated_map(run.question_set, "title"),
+            "set_title": quizbar_languages.set_title_map(run.question_set),  # quizbar (fork)
             "room_code": run.question_set.room.code,
             "feedback": feedback,
             "questions": [question_payload(q, shuffle_seed=run.pk) for q in questions],
@@ -1689,7 +1690,7 @@ def check_questions(request, token):
 
     return Response(
         {
-            "set_title": translated_map(qs, "title"),
+            "set_title": quizbar_languages.set_title_map(qs),  # quizbar (fork)
             "shuffle_questions": qs.shuffle_questions,
             "reveal_only_in_summary": qs.reveal_only_in_summary,
             "single": single,
